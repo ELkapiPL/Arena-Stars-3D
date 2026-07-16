@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>Arena Stars 3D</title>
+  <style>
+    :root{color-scheme:dark;--panel:rgba(9,15,28,.84);--line:rgba(255,255,255,.16);--text:#fff;--muted:#b8c5df;--gold:#ffd957;--cyan:#72e6ff}
+    *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#08101f;font-family:Inter,Segoe UI,Arial,sans-serif}
+    canvas{display:block;width:100%;height:100%;cursor:crosshair;touch-action:none}
+    body.lobby-mode canvas{visibility:hidden}
+    #hud{position:fixed;inset:0;pointer-events:none;color:var(--text);text-shadow:0 2px 5px rgba(0,0,0,.75)}
+    body.lobby-mode #hud{opacity:0;visibility:hidden}
+    .top{position:absolute;left:18px;right:18px;top:16px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+    .card{background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:10px 13px;backdrop-filter:blur(8px);box-shadow:0 10px 30px rgba(0,0,0,.25)}
+    #stats{font-weight:800;line-height:1.55;min-width:180px}.small{font-size:12px;color:var(--muted);font-weight:600}
+    #healthWrap{position:absolute;left:50%;bottom:28px;transform:translateX(-50%);width:min(520px,58vw)}
+    #ammoWrap{position:absolute;right:18px;bottom:18px;width:min(310px,30vw);padding:11px 13px}
+    .labelRow{display:flex;justify-content:space-between;font-size:13px;font-weight:800;margin:0 3px 5px}.bar{height:18px;background:rgba(0,0,0,.55);border:2px solid rgba(255,255,255,.28);border-radius:999px;overflow:hidden;box-shadow:inset 0 3px 8px rgba(0,0,0,.4)}.fill{height:100%;width:100%;transition:width .1s linear;background:linear-gradient(90deg,#21d96b,#8cff7a)}#ammoFill{background:linear-gradient(90deg,#ffd34d,#ff8b2f)}#ammoFill.reloading{background:linear-gradient(90deg,#52d8ff,#8d76ff)}#ammoBar,#superBar,#hyperBar{height:12px;margin-top:7px}#superFill{background:linear-gradient(90deg,#8b5cff,#ff4bd8)}#hyperFill{background:linear-gradient(90deg,#20d9c0,#f3ff61)}#hyperFill.active{background:linear-gradient(90deg,#fff35b,#20f5d2);box-shadow:0 0 14px rgba(64,255,220,.9)}
+    #controls{position:absolute;right:18px;bottom:116px;text-align:right;font-size:13px;line-height:1.6}
+    #shop{position:absolute;left:18px;top:142px;width:260px;pointer-events:auto;text-shadow:none}#shopTitle{font-size:13px;font-weight:1000;letter-spacing:.08em;margin-bottom:8px;color:#ffe36d}
+    .upgradeBtn{display:block;width:100%;padding:9px 11px;margin:7px 0;border:0;border-radius:12px;text-align:left;color:#f7fbff;background:linear-gradient(180deg,#294b80,#1b3158);box-shadow:0 4px 0 #101d36,0 8px 18px rgba(0,0,0,.24);font-size:13px;transition:.12s;cursor:pointer}.upgradeBtn:hover{transform:translateY(-1px)}.upgradeBtn:active{transform:translateY(3px);box-shadow:0 1px 0 #101d36}.upgradeBtn:disabled{cursor:default;opacity:.48;transform:none;box-shadow:0 3px 0 #101d36}.upgradeBtn.affordable{outline:2px solid rgba(255,224,80,.7);background:linear-gradient(180deg,#3b659e,#244878)}.upgradeName{display:block;font-weight:900;font-size:14px}.upgradeMeta{display:flex;justify-content:space-between;margin-top:3px;color:#cbd9ee;font-size:11px;font-weight:700}
+    kbd{display:inline-block;min-width:24px;padding:1px 6px;margin:0 2px;border-radius:6px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.12);font:700 12px inherit;text-align:center}
+    #crosshair{position:absolute;width:24px;height:24px;margin:-12px 0 0 -12px;border:2px solid rgba(255,255,255,.85);border-radius:50%;box-shadow:0 0 0 2px rgba(0,0,0,.3),0 0 16px rgba(255,255,255,.4)}#crosshair:before,#crosshair:after{content:"";position:absolute;background:#fff;left:50%;top:50%;transform:translate(-50%,-50%)}#crosshair:before{width:4px;height:4px;border-radius:50%}#crosshair:after{width:1px;height:30px;opacity:.55}
+    #centerMsg{position:absolute;left:50%;top:20%;transform:translateX(-50%);font-size:30px;font-weight:1000;letter-spacing:.06em;text-transform:uppercase;opacity:0;transition:.25s;text-align:center}
+
+    /* Osobny ekran lobby */
+    #overlay{position:fixed;inset:0;z-index:5;color:white;display:none}
+    body.lobby-mode #overlay{display:block}
+    #lobbyView{position:absolute;inset:0;overflow:hidden;background:
+      radial-gradient(circle at 50% 56%,rgba(105,62,255,.34),transparent 29%),
+      radial-gradient(circle at 18% 16%,rgba(27,217,255,.22),transparent 26%),
+      linear-gradient(145deg,#090b24 0%,#10183b 46%,#250d43 100%)}
+    #lobbyView:before,#lobbyView:after{content:"";position:absolute;inset:-20%;pointer-events:none;background-image:radial-gradient(circle,#fff 0 1px,transparent 1.7px);background-size:72px 72px;opacity:.28;transform:rotate(9deg)}
+    #lobbyView:after{background-size:113px 113px;opacity:.16;transform:rotate(-7deg) scale(1.2)}
+    .lobbyLogo{position:absolute;z-index:2;left:50%;top:5.2%;transform:translateX(-50%);text-align:center;font-size:clamp(32px,5.3vw,68px);font-weight:1000;line-height:.84;letter-spacing:-.055em;background:linear-gradient(180deg,#fff 8%,#79e6ff 48%,#9468ff 82%);-webkit-background-clip:text;color:transparent;filter:drop-shadow(0 7px 0 rgba(0,0,0,.26))}
+    .lobbyLogo small{display:block;font-size:.18em;letter-spacing:.34em;color:#c7d9ff;-webkit-text-fill-color:#c7d9ff;margin-top:12px}
+    #lobbyTrophies{position:absolute;z-index:3;left:20px;top:18px;display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:16px;background:rgba(8,13,35,.78);border:1px solid rgba(255,255,255,.18);box-shadow:0 14px 35px rgba(0,0,0,.3);font-weight:1000}.trophyIcon{font-size:25px}.trophyText{font-size:11px;color:#b9c8eb;line-height:1.05}.trophyText strong{display:block;margin-top:4px;font-size:23px;color:var(--gold)}
+    #accountBox{position:absolute;z-index:3;right:20px;top:18px;display:flex;gap:10px}.accountStat{min-width:112px;padding:9px 13px;border-radius:15px;background:rgba(8,13,35,.76);border:1px solid rgba(255,255,255,.16);font-size:10px;font-weight:900;color:#aebfe4;text-align:right}.accountStat strong{display:block;margin-top:3px;font-size:19px;color:#fff}
+    #skinDock{position:absolute;z-index:3;left:20px;top:23%;width:220px;padding:13px;border-radius:20px;background:rgba(8,13,35,.79);border:1px solid rgba(255,255,255,.17);box-shadow:0 18px 45px rgba(0,0,0,.35)}#skinShopTitle{font-size:11px;font-weight:1000;letter-spacing:.13em;color:#8feaff;margin:0 0 10px 4px}.skinList{display:grid;gap:8px}.skinCard{position:relative;display:grid;grid-template-columns:48px 1fr;gap:9px;align-items:center;padding:8px;border:2px solid transparent;border-radius:14px;background:linear-gradient(145deg,rgba(37,55,91,.94),rgba(17,27,52,.97));text-align:left;cursor:pointer;transition:.15s}.skinCard:hover{transform:translateX(3px);border-color:rgba(255,255,255,.26)}.skinCard.selected{border-color:#56dfff;box-shadow:0 0 0 3px rgba(86,223,255,.11)}.skinPreview{height:48px;border-radius:12px;display:grid;place-items:center;font-size:25px;background:radial-gradient(circle at 40% 30%,#78efff,#5b32bb 48%,#111938 74%)}.skinCard[data-skin=classic] .skinPreview{background:radial-gradient(circle at 40% 30%,#7eeaff,#168ed6 52%,#102746 76%)}.skinName{font-weight:1000;font-size:12px}.skinDesc{font-size:9px;color:#aebddd;line-height:1.25;margin-top:2px}.skinState{display:inline-block;margin-top:4px;padding:2px 6px;border-radius:99px;background:rgba(255,255,255,.1);font-size:8px;font-weight:1000;color:#d8e6ff}.skinCard.selected .skinState{background:#56dfff;color:#092036}.skinCard.locked{border-color:rgba(255,214,87,.2);filter:saturate(.72)}.skinCard.locked .skinPreview{filter:grayscale(.42) brightness(.72)}.skinCard.affordable{border-color:#ffd957;box-shadow:0 0 0 3px rgba(255,217,87,.1)}.skinCard.affordable .skinState{background:#ffd957;color:#332400}.skinCard.locked:hover{border-color:#ffd957}.skinPrice{color:#ffe16c;font-weight:1000}#skinNotice{min-height:26px;margin:9px 4px 0;font-size:9px;line-height:1.3;font-weight:900;color:#ffd957}#skinNotice.good{color:#74f1a4}
+    #versionDock{position:absolute;z-index:3;left:20px;bottom:96px;width:220px;padding:12px;border-radius:20px;background:rgba(8,13,35,.79);border:1px solid rgba(255,255,255,.17);box-shadow:0 18px 45px rgba(0,0,0,.35)}#versionTitle{font-size:11px;font-weight:1000;letter-spacing:.13em;color:#ffe16c;margin:0 0 10px 4px}.versionCard{padding:12px;border-radius:15px;background:linear-gradient(145deg,rgba(37,55,91,.94),rgba(17,27,52,.97));border:2px solid rgba(255,255,255,.09)}.versionCard h3{margin:0 0 7px;font-size:15px}.versionBonuses{font-size:11px;line-height:1.55;color:#cbd9ee;font-weight:800}.versionPrice{margin-top:8px;color:#ffe16c;font-weight:1000;font-size:12px}.versionBuyBtn{width:100%;margin-top:10px;padding:10px;border:0;border-radius:12px;font-size:13px;font-weight:1000;color:#17182a;background:linear-gradient(180deg,#fff26b,#ffb52e);box-shadow:0 5px 0 #a95c11;cursor:pointer}.versionBuyBtn:active{transform:translateY(3px);box-shadow:0 2px 0 #a95c11}.versionBuyBtn:disabled{cursor:default;opacity:.58;transform:none;box-shadow:0 3px 0 #704212}.versionBuyBtn.affordable{outline:2px solid rgba(255,240,100,.8)}#versionNotice{min-height:28px;margin:10px 3px 0;font-size:10px;line-height:1.35;font-weight:900;color:#ffd957}#versionNotice.good{color:#74f1a4}
+
+    #rankingDock{position:absolute;z-index:3;right:24px;top:128px;bottom:112px;width:min(360px,31vw);display:flex;flex-direction:column;padding:12px;border-radius:20px;background:rgba(8,13,35,.88);border:1px solid rgba(255,255,255,.18);box-shadow:0 18px 48px rgba(0,0,0,.4);overflow:hidden}
+    .rankingHead{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:2px 4px 9px}.rankingTitle{font-size:12px;font-weight:1000;letter-spacing:.13em;color:#ffe16c}.rankingLive{font-size:9px;font-weight:1000;color:#72f0b0;white-space:nowrap}.rankingLive:before{content:"";display:inline-block;width:7px;height:7px;margin-right:5px;border-radius:50%;background:#42f39a;box-shadow:0 0 10px #42f39a;animation:livePulse 1.1s ease-in-out infinite}.onlineProfile{margin:0 3px 8px;padding:8px;border-radius:12px;background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.1)}.onlineMode{font-size:8px;font-weight:1000;letter-spacing:.1em;color:#84eaff}.onlineStatus{margin-top:4px;font-size:9px;color:#b6c5e4;font-weight:800}.onlineStatus.ok{color:#72f0b0}.onlineStatus.bad{color:#ff8da0}.nicknameRow{display:flex;gap:5px;margin-top:7px}.nicknameRow input{min-width:0;flex:1;padding:7px 8px;border:1px solid rgba(255,255,255,.17);border-radius:9px;background:rgba(0,0,0,.28);color:#fff;font:800 10px inherit;outline:none}.nicknameRow input:focus{border-color:#67e6ff;box-shadow:0 0 0 2px rgba(103,230,255,.12)}.nicknameRow button{padding:7px 8px;border:0;border-radius:9px;background:linear-gradient(180deg,#6af0ff,#3f99ff);color:#07172d;font-size:9px;font-weight:1000;cursor:pointer}.rankingMe{margin:0 3px 4px;padding:8px 10px;border-radius:12px;background:rgba(91,220,255,.11);border:1px solid rgba(91,220,255,.25);font-size:10px;color:#bfeeff;font-weight:900}.rankingMe strong{float:right;color:#fff;font-size:13px}.rankingTotal{margin:0 6px 7px;font-size:8px;color:#8fa4ca;text-align:right;font-weight:800}.rankingColumns,.rankingRow{display:grid;grid-template-columns:44px 1fr 92px;gap:6px;align-items:center}.rankingColumns{padding:6px 8px;border-radius:9px;background:rgba(255,255,255,.075);font-size:8px;font-weight:1000;color:#9fb1d5;letter-spacing:.08em}.rankingColumns span:last-child,.rankingPoints{text-align:right}.rankingBody{min-height:0;flex:1;overflow:auto;margin-top:5px;padding-right:3px;scrollbar-width:thin;scrollbar-color:#536a99 transparent}.rankingEmpty{padding:22px 10px;text-align:center;color:#91a3c5;font-size:10px;line-height:1.45}.rankingRow{min-height:29px;padding:5px 8px;border-bottom:1px solid rgba(255,255,255,.055);font-size:10px;font-weight:800;color:#dce7fb}.rankingRow:nth-child(even){background:rgba(255,255,255,.025)}.rankingRow.playerRow{position:sticky;top:0;bottom:0;z-index:2;border:1px solid #5fe2ff;border-radius:9px;background:linear-gradient(90deg,rgba(49,166,230,.48),rgba(107,78,223,.48));box-shadow:0 0 16px rgba(75,213,255,.2);color:white}.rankingPlace{color:#ffe16c;font-weight:1000}.rankingName{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.rankingPoints{color:#fff}.rankingFoot{padding:7px 4px 0;font-size:8px;line-height:1.3;text-align:center;color:#7f92b8}@keyframes livePulse{50%{opacity:.35;transform:scale(.78)}}
+    #heroStage{position:absolute;z-index:2;left:50%;top:52%;transform:translate(-50%,-50%);width:min(42vw,480px);aspect-ratio:1;display:grid;place-items:center}.heroGlow{position:absolute;width:80%;height:31%;bottom:8%;border-radius:50%;background:radial-gradient(ellipse,rgba(98,222,255,.8),rgba(94,71,255,.32) 45%,transparent 72%);filter:blur(3px)}.heroBody{position:relative;width:46%;aspect-ratio:.82;border-radius:46% 46% 34% 34%;background:linear-gradient(145deg,#6540d9,#241057 58%,#120b32);border:5px solid rgba(150,235,255,.42);box-shadow:inset 0 0 32px rgba(119,238,255,.42),0 30px 70px rgba(0,0,0,.52);animation:float 2.8s ease-in-out infinite}.heroBody:before{content:"";position:absolute;left:14%;right:14%;top:14%;height:24%;border-radius:50%;background:linear-gradient(180deg,#bdfaff,#31cce9 55%,#1369b3);box-shadow:0 0 25px #5ee7ff}.heroBody:after{content:"";position:absolute;left:-27%;top:47%;width:154%;height:18%;border-radius:999px;background:linear-gradient(90deg,#28104f,#8e5cff,#28104f);z-index:-1}.heroOrb{position:absolute;width:8%;aspect-ratio:1;border-radius:50%;background:#fff36d;box-shadow:0 0 20px #fff36d;animation:orbit 4.2s linear infinite}.heroOrb.o2{background:#5affef;box-shadow:0 0 20px #5affef;animation-delay:-1.4s}.heroOrb.o3{background:#ff6fde;box-shadow:0 0 20px #ff6fde;animation-delay:-2.8s}@keyframes float{50%{transform:translateY(-13px)}}@keyframes orbit{from{transform:rotate(0deg) translateX(180px) rotate(0deg)}to{transform:rotate(360deg) translateX(180px) rotate(-360deg)}}
+    #savedUpgrades{position:absolute;z-index:3;left:50%;bottom:24px;transform:translateX(-50%);display:flex;gap:9px;padding:9px;border-radius:18px;background:rgba(8,13,35,.75);border:1px solid rgba(255,255,255,.16)}.savedUpgrade{min-width:115px;padding:8px 10px;border-radius:12px;background:rgba(255,255,255,.065);font-size:9px;color:#aebee0;font-weight:900;text-align:center}.savedUpgrade strong{display:block;margin-top:3px;color:white;font-size:15px}.savedUpgrade span{color:#ffe16c}
+    #playBtn{position:absolute;z-index:4;right:28px;bottom:27px;min-width:235px;padding:20px 36px;border:0;border-radius:20px;font-size:28px;font-weight:1000;color:#15172b;background:linear-gradient(180deg,#fff26b,#ffb52e);box-shadow:0 10px 0 #a95c11,0 18px 38px rgba(255,167,38,.35);cursor:pointer;transition:.13s}#playBtn:hover{transform:translateY(-3px) scale(1.015)}#playBtn:active{transform:translateY(6px);box-shadow:0 4px 0 #a95c11}#playBtn:disabled{filter:grayscale(.75);opacity:.55;cursor:not-allowed;transform:none;box-shadow:0 6px 0 #6d542a}
+    .saveNote{display:none}
+
+    #gameOverView{display:none;position:absolute;inset:0;place-items:center;background:radial-gradient(circle at 50% 28%,rgba(104,54,180,.45),rgba(4,8,17,.96) 70%)}#gameOverCard{width:min(680px,94vw);padding:34px 26px;border-radius:28px;background:rgba(8,14,28,.94);border:1px solid rgba(255,255,255,.18);box-shadow:0 30px 80px rgba(0,0,0,.58);text-align:center}#gameOverView h2{font-size:clamp(36px,7vw,64px);line-height:.95;margin:0 0 14px;font-weight:1000;letter-spacing:-.04em;background:linear-gradient(180deg,#fff,#ffcc68 58%,#ff7b49);-webkit-background-clip:text;color:transparent}.badge{display:inline-block;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.13);font-size:12px;color:#b9c7e4;margin-bottom:18px}.endStats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:20px auto;max-width:520px}.endStat{padding:13px;border-radius:15px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.11);font-weight:800;color:#c9d6ee}.endStat span{display:block;margin-top:4px;font-size:24px;color:#ffe36d}#gameOverActions{display:flex;justify-content:center;gap:13px;flex-wrap:wrap;margin-top:22px}.endButton{border:0;border-radius:15px;padding:14px 26px;font-size:18px;font-weight:900;color:#11152a;background:linear-gradient(180deg,#ffe95c,#ffb52e);box-shadow:0 8px 0 #b76513;cursor:pointer}.secondaryBtn{color:#eef5ff;background:linear-gradient(180deg,#385174,#253653);box-shadow:0 8px 0 #142139}
+    #error{display:none;position:fixed;inset:20px;z-index:20;background:#27121a;color:#fff;border:2px solid #ff5578;border-radius:18px;padding:24px;overflow:auto}
+    @media(max-width:800px){#controls{display:none}#ammoWrap{right:9px;bottom:9px;width:min(260px,48vw);padding:8px 10px}#healthWrap{left:9px;bottom:9px;transform:none;width:min(420px,47vw)}.top{left:9px;right:9px;top:9px}.top .card:last-child{display:none}#shop{left:9px;top:137px;width:225px}.upgradeBtn{padding:7px 9px;margin:5px 0}#healthWrap{bottom:15px;width:84vw}.lobbyLogo{top:8%;font-size:41px}#accountBox{right:10px;top:10px;gap:5px}.accountStat{min-width:78px;padding:7px;font-size:8px}.accountStat strong{font-size:14px}#lobbyTrophies{left:10px;top:10px;padding:7px 9px}.trophyIcon{font-size:20px}.trophyText strong{font-size:18px}#skinDock{left:10px;top:24%;width:190px;padding:9px}.skinCard{grid-template-columns:40px 1fr}.skinPreview{height:40px}.skinDesc{display:none}#versionDock{left:10px;right:auto;top:auto;bottom:92px;width:190px;padding:9px}#rankingDock{right:8px;top:22%;bottom:94px;width:205px;padding:8px}.rankingColumns,.rankingRow{grid-template-columns:34px 1fr 66px}.rankingRow{font-size:8px;min-height:25px}.rankingTitle{font-size:9px}.rankingMe{font-size:8px}.rankingFoot{display:none}.versionCard{padding:8px}.versionBonuses{font-size:9px}.versionBuyBtn{padding:8px;font-size:11px}#heroStage{width:72vw;top:53%}.heroBody{width:42%}@keyframes orbit{from{transform:rotate(0deg) translateX(105px) rotate(0deg)}to{transform:rotate(360deg) translateX(105px) rotate(-360deg)}}#savedUpgrades{bottom:15px;left:10px;transform:none;flex-direction:column;gap:4px;padding:6px}.savedUpgrade{min-width:135px;padding:5px 8px;text-align:left}.savedUpgrade strong{display:inline;margin-left:6px;font-size:12px}#playBtn{right:14px;bottom:15px;min-width:170px;padding:16px 24px;font-size:23px}.saveNote{display:none}}
+  </style>
+</head>
+<body class="lobby-mode">
+  <canvas id="game"></canvas>
+  <div id="hud">
+    <div class="top">
+      <div id="stats" class="card">Punkty: <span id="score">0</span><br>Monety: <span id="coins">0</span> 🪙<br>Pucharki: <span id="trophies">0</span> 🏆<br>Fala: <span id="wave">1</span><br><span class="small">Pokonani: <span id="kills">0</span></span></div>
+      <div class="card"><b>Arena Stars 3D</b><div class="small">Mecz solo • ranking online • <span id="onlineHudCount">0</span> online</div></div>
+    </div>
+    <div id="crosshair"></div>
+    <div id="shop" class="card">
+      <div id="shopTitle">STAŁE ULEPSZENIA ZA MONETY</div>
+      <button class="upgradeBtn" data-upgrade="move"><span class="upgradeName">[1] Ruch +10%</span><span class="upgradeMeta"><span>Poziom <b data-level>0/5</b></span><span data-cost>100 🪙</span></span></button>
+      <button class="upgradeBtn" data-upgrade="fire"><span class="upgradeName">[2] Szybkostrzelność +7%</span><span class="upgradeMeta"><span>Poziom <b data-level>0/5</b></span><span data-cost>100 🪙</span></span></button>
+      <button class="upgradeBtn" data-upgrade="hp"><span class="upgradeName">[3] Maks. życie +20</span><span class="upgradeMeta"><span>Poziom <b data-level>0/5</b></span><span data-cost>100 🪙</span></span></button>
+    </div>
+    <div id="centerMsg"></div>
+    <div id="healthWrap" class="card"><div class="labelRow"><span>ZDROWIE</span><span id="healthText">150 / 150</span></div><div class="bar"><div id="healthFill" class="fill"></div></div><div class="labelRow" style="margin-top:7px"><span>SUPER <span class="small">[Q] • ładowanie 60% wolniejsze</span></span><span id="superText">0%</span></div><div id="superBar" class="bar"><div id="superFill" class="fill" style="width:0%"></div></div><div class="labelRow" style="margin-top:7px"><span>HIPERDOŁADOWANIE <span class="small">[E] • 9 s</span></span><span id="hyperText">0%</span></div><div id="hyperBar" class="bar"><div id="hyperFill" class="fill" style="width:0%"></div></div></div>
+    <div id="ammoWrap" class="card"><div class="labelRow"><span>AMUNICJA <span class="small">30 strzałów</span></span><span id="ammoText">30 / 30</span></div><div id="ammoBar" class="bar"><div id="ammoFill" class="fill"></div></div><div class="small" style="margin-top:6px;text-align:right">Automatyczne przeładowanie: 1,5 s</div></div>
+    <div id="controls" class="card"><kbd>WASD</kbd> ruch<br><kbd>MYSZ</kbd> celowanie i strzał<br><span class="small">Magazynek: 30 • przeładowanie: 1,5 s</span><br><kbd>Q</kbd> superatak<br><kbd>E</kbd> hiperdoładowanie (9 s)<br><kbd>1/2/3</kbd> kup stałe ulepszenie<br><kbd>R</kbd> restart</div>
+  </div>
+
+  <div id="overlay">
+    <div id="lobbyView">
+      <div id="lobbyTrophies"><div class="trophyIcon">🏆</div><div class="trophyText">PUCHARKI<strong id="savedTrophies">0</strong></div></div>
+      <div id="accountBox"><div class="accountStat">PUNKTY ⭐<strong id="savedPoints">0</strong></div><div class="accountStat">MONETY 🪙<strong id="savedCoins">0</strong></div></div>
+      <div class="lobbyLogo">ARENA<br>STARS 3D<small>SOLO ONLINE</small></div>
+      <aside id="skinDock">
+        <div id="skinShopTitle">PRZEBRANIA</div>
+        <div class="skinList">
+          <div class="skinCard" data-skin="classic" role="button" tabindex="0"><div class="skinPreview">💧</div><div><div class="skinName">Błękitny Bohater</div><div class="skinDesc">Klasyczny wygląd wojownika.</div><span class="skinState">WYBIERZ</span></div></div>
+          <div class="skinCard" data-skin="cosmic" role="button" tabindex="0"><div class="skinPreview">🪐</div><div><div class="skinName">Kosmiczny Strażnik</div><div class="skinDesc">Pancerz, wizjer i orbitujące gwiazdy. <span class="skinPrice">Cena: 1250 monet</span></div><span class="skinState">🔒 1250 🪙</span></div></div>
+        </div>
+        <div id="skinNotice" aria-live="polite"></div>
+      </aside>
+      <aside id="versionDock">
+        <div id="versionTitle">LEPSZE WERSJE</div>
+        <div class="versionCard">
+          <h3>Lepsza wersja I</h3>
+          <div class="versionBonuses">⚡ Ruch +3%<br>🎯 Szybkostrzelność +2%<br>❤️ Maksymalne życie +10%<br>🎨 Kolor bez zmian</div>
+          <div class="versionPrice">Cena: 150 monet 🪙</div>
+          <button id="versionOneBtn" class="versionBuyBtn">ODBLOKUJ ZA 150 🪙</button>
+        </div>
+        <div id="versionNotice" aria-live="polite"></div>
+      </aside>
+      <aside id="rankingDock" aria-label="Ranking punktów online">
+        <div class="rankingHead"><div class="rankingTitle">TOP 200 PUNKTÓW</div><div id="rankingLive" class="rankingLive">ŁĄCZENIE...</div></div>
+        <div class="onlineProfile">
+          <div class="onlineMode">KAŻDY GRA WŁASNY MECZ SOLO</div>
+          <div id="onlineStatus" class="onlineStatus">Łączenie z serwerem…</div>
+          <div class="nicknameRow"><input id="nicknameInput" maxlength="18" aria-label="Nazwa gracza" placeholder="Twoja nazwa"><button id="saveNameBtn">ZAPISZ</button></div>
+        </div>
+        <div class="rankingMe">TWOJE MIEJSCE <strong id="rankingPosition">—</strong></div>
+        <div id="rankingTotal" class="rankingTotal">Wszystkich graczy: 0</div>
+        <div class="rankingColumns"><span>MIEJSCE</span><span>GRACZ</span><span>PUNKTY</span></div>
+        <div id="rankingBody" class="rankingBody"></div>
+        <div class="rankingFoot">Widocznych jest 200 najlepszych. Liczba zapisanych profili nie ma limitu 200. Gracze nie pojawiają się na Twojej arenie.</div>
+      </aside>
+      <div id="heroStage"><div class="heroGlow"></div><div class="heroBody"></div><i class="heroOrb"></i><i class="heroOrb o2"></i><i class="heroOrb o3"></i></div>
+      <div id="savedUpgrades">
+        <div class="savedUpgrade">RUCH <span>+10% / poziom</span><strong data-persistent-level="move">Poziom 0/5</strong></div>
+        <div class="savedUpgrade">STRZAŁ <span>+7% / poziom</span><strong data-persistent-level="fire">Poziom 0/5</strong></div>
+        <div class="savedUpgrade">ŻYCIE <span>+20 / poziom</span><strong data-persistent-level="hp">Poziom 0/5</strong></div>
+      </div>
+      <div class="saveNote">Postęp zapisuje się w przeglądarce, a punkty i pucharki są wysyłane do rankingu online. Każdy gracz rozgrywa osobny mecz.</div>
+      <button id="playBtn">GRAJ ▶</button>
+    </div>
+
+    <div id="gameOverView">
+      <div id="gameOverCard">
+        <div class="badge">KONIEC MECZU • POSTĘP ZAPISANY</div>
+        <h2>ROBOTY CIĘ<br>POKONAŁY</h2>
+        <p>Wybierz następną akcję.</p>
+        <div class="endStats"><div class="endStat">Punkty ⭐<span id="finalScore">0</span></div><div class="endStat">Pokonani 🤖<span id="finalKills">0</span></div><div class="endStat">Monety 🪙<span id="finalCoins">0</span></div><div class="endStat">Pucharki 🏆<span id="finalTrophies">0</span></div></div>
+        <div id="gameOverActions"><button id="retryBtn" class="endButton">ZAGRAJ PONOWNIE</button><button id="lobbyBtn" class="endButton secondaryBtn">POWRÓT DO LOBBY</button></div>
+      </div>
+    </div>
+  </div>
+  <div id="error"></div>
+  <script src="game.js"></script>
+</body>
+</html>
