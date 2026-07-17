@@ -745,12 +745,10 @@ def create_duel_player(payload: dict[str, Any], player_id: str, x: float, z: flo
 
 
 def create_duel_bot(payload: dict[str, Any], bot_id: str, x: float, z: float, angle: float) -> dict[str, Any]:
+    # Bot jest dokładną kopią statystyk gracza: ten sam HP, ruch, szybkostrzelność i skórka.
     bot = create_duel_player(payload, bot_id, x, z, angle)
     bot.update({
-        "name": "Bot Arenowy",
-        "skin": "classic",
-        "speed": max(4.7, bot["speed"] * 0.92),
-        "fire_cooldown": max(0.24, bot["fire_cooldown"] * 1.12),
+        "name": "Bot Kopia",
         "is_bot": True,
         "strafe_dir": random.choice((-1.0, 1.0)),
         "next_turn": now() + 0.8,

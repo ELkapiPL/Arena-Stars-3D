@@ -354,6 +354,9 @@ function processDuelState(data,initial=false){
       if(Math.hypot(targetX-duelOpponent.renderX,targetZ-duelOpponent.renderZ)>5){duelOpponent.renderX=targetX;duelOpponent.renderZ=targetZ;duelOpponent.renderAngle=targetAngle;}
     }
   }else duelOpponent=null;
+  if(duelLocalBotMode&&duelOpponent&&player){
+    Object.assign(duelOpponent,{skin:profile.skin,speed:player.speed,fireCooldown:player.fireCooldown,ammo:Number.isFinite(duelOpponent.ammo)?duelOpponent.ammo:MAG_SIZE,reload:Number.isFinite(duelOpponent.reload)?duelOpponent.reload:0,fire:Number.isFinite(duelOpponent.fire)?duelOpponent.fire:0,super:Number.isFinite(duelOpponent.super)?duelOpponent.super:0,hyper:Number.isFinite(duelOpponent.hyper)?duelOpponent.hyper:0,hyperActive:Number.isFinite(duelOpponent.hyperActive)?duelOpponent.hyperActive:0});
+  }
   updateDuelRoundHud();
   if(ui.duelOpponentName)ui.duelOpponentName.textContent=other?(other.hidden?'PRZECIWNIK W KRZAKACH':`${other.name.toUpperCase()}${other.isBot?' • BOT':''}`):'OCZEKIWANIE NA PRZECIWNIKA';
   if(ui.duelOpponentHp)ui.duelOpponentHp.textContent=other?`${Math.max(0,other.hp)} / ${other.maxHp} HP`:'—';
@@ -374,24 +377,63 @@ async function sendDuelFrame(){
     if(duelNetworkFailures>18&&!duelEnded){finishDuel({winnerId:null,reason:'Utracono połączenie z serwerem pojedynku.'});}
   }finally{duelNetworkBusy=false;}
 }
+function duelChargeEntity(entity,baseAmount){
+  if(!entity)return;const amount=baseAmount*SUPER_CHARGE_MULTIPLIER;
+  entity.super=Math.min(100,(entity.super||0)+amount);
+  if((entity.hyperActive||0)<=0)entity.hyper=Math.min(100,(entity.hyper||0)+amount/HYPER_CHARGE_RATIO);
+}
+function duelBulletColor(entity,isBot=false){
+  if((entity?.hyperActive||0)>0)return [.35,1,.92];
+  if(entity?.skin==='cosmic')return [.78,.38,1];
+  return isBot?[1,.25,.48]:[.24,.85,1];
+}
 function duelPlayerShoot(){
   if(!duelActive||duelMatchStatus!=='playing'||!player||player.fire>0||player.reload>0)return;
   if(player.ammo<=0){startReload();return;}
-  player.fire=player.fireCooldown;player.ammo--;
+  const hyper=(player.hyperActive||0)>0;
+  player.fire=player.fireCooldown/(hyper?HYPER_FIRE_MULT:1);player.ammo--;
   const a=normalizeDuelAngle(player.angle),clientSeq=++duelLocalShotSeq,createdAt=performance.now();
   if(!duelLocalBotMode)duelShotQueue.push({seq:clientSeq,angle:a,createdAt});
-  duelPredictedBullets.push({clientSeq,createdAt,x:player.x+Math.sin(a)*1.05,z:player.z+Math.cos(a)*1.05,vx:Math.sin(a)*18,vz:Math.cos(a)*18,life:2.4,damage:22});
-  const color=profile.skin==='cosmic'?[.78,.38,1]:[.24,.85,1];
-  burst(player.x+Math.sin(player.angle),player.z+Math.cos(player.angle),color,5,2.7);
+  duelPredictedBullets.push({clientSeq,createdAt,x:player.x+Math.sin(a)*1.05,z:player.z+Math.cos(a)*1.05,vx:Math.sin(a)*18,vz:Math.cos(a)*18,life:2.4,damage:22,color:duelBulletColor(player,false),owner:'player'});
+  burst(player.x+Math.sin(player.angle),player.z+Math.cos(player.angle),duelBulletColor(player,false),5,2.7);
   if(player.ammo<=0)startReload();else updateUI();
 }
 function localBotDamagePlayer(amount){
-  if(!duelActive||duelEnded||!player)return;player.hp=Math.max(0,player.hp-amount);shake=Math.max(shake,.28);burst(player.x,player.z,[1,.18,.28],10,4.8);updateUI();
+  if(!duelActive||duelEnded||!player)return;
+  if((player.hyperActive||0)>0)amount*=HYPER_DAMAGE_MULT;
+  player.hp=Math.max(0,player.hp-amount);shake=Math.max(shake,.28);burst(player.x,player.z,[1,.18,.28],10,4.8);updateUI();
+}
+function spawnLocalDuelRadial(owner,isBot,pulse,total){
+  if(!owner)return;const ox=owner.renderX??owner.x,oz=owner.renderZ??owner.z,color=duelBulletColor(owner,isBot);
+  const target=isBot?duelBotBullets:duelPredictedBullets;
+  for(let i=0;i<24;i++){
+    const a=i/24*Math.PI*2,entry={x:ox+Math.sin(a)*1.0,z:oz+Math.cos(a)*1.0,vx:Math.sin(a)*14,vz:Math.cos(a)*14,life:2.5,damage:28,color,superShot:true,owner:isBot?'bot':'player'};
+    if(!isBot){entry.clientSeq=++duelLocalShotSeq;entry.createdAt=performance.now();}
+    target.push(entry);
+  }
+  burst(ox,oz,color,30,8);if(!isBot)showMessage(total>1?`HIPER SUPER ${pulse}/${total}!`:'SUPER!');
+}
+function duelUseSuper(owner,isBot=false){
+  if(!owner||(owner.super||0)<100)return false;owner.super=0;
+  const pulses=(owner.hyperActive||0)>0?3:1;
+  spawnLocalDuelRadial(owner,isBot,1,pulses);
+  if(pulses>1){
+    setTimeout(()=>{if(duelActive&&!duelEnded)spawnLocalDuelRadial(owner,isBot,2,3);},170);
+    setTimeout(()=>{if(duelActive&&!duelEnded)spawnLocalDuelRadial(owner,isBot,3,3);},340);
+  }
+  return true;
+}
+function duelActivateHyper(owner,isBot=false){
+  if(!owner||(owner.hyper||0)<100||(owner.hyperActive||0)>0)return false;
+  owner.hyper=0;owner.hyperActive=HYPER_DURATION;
+  const ox=owner.renderX??owner.x,oz=owner.renderZ??owner.z;burst(ox,oz,[.25,1,.82],40,10);
+  if(!isBot)showMessage('HIPERDOŁADOWANIE: 9 SEKUND!');
+  return true;
 }
 function resetLocalDuelRound(){
   if(!player||!duelOpponent)return;
   player.x=0;player.z=12;player.angle=Math.PI;player.netX=0;player.netZ=12;player.hp=player.maxHp;player.ammo=MAG_SIZE;player.reload=0;player.fire=0;
-  Object.assign(duelOpponent,{x:0,z:-12,renderX:0,renderZ:-12,targetX:0,targetZ:-12,angle:0,renderAngle:0,targetAngle:0,hp:duelOpponent.maxHp,hidden:false,vx:0,vz:0});
+  Object.assign(duelOpponent,{x:0,z:-12,renderX:0,renderZ:-12,targetX:0,targetZ:-12,angle:0,renderAngle:0,targetAngle:0,hp:duelOpponent.maxHp,hidden:false,vx:0,vz:0,ammo:MAG_SIZE,reload:0,fire:0});
   duelPredictedBullets=[];duelServerBullets=[];duelBotBullets=[];duelShotQueue=[];duelVisualHitSeqs.clear();
   duelBotShotTimer=.8;duelBotTurnTimer=.4;duelBotStuck=0;duelBotReveal=0;duelRoundResolving=false;
   duelMatchStatus='countdown';duelStartIn=3;duelStartDeadline=performance.now()+3000;updateDuelRoundHud();updateUI();
@@ -409,32 +451,49 @@ function resolveLocalDuelRound(){
   duelRound++;resetLocalDuelRound();
 }
 function spawnLocalBotBullet(){
-  if(!duelOpponent||!player)return;const ox=duelOpponent.renderX??duelOpponent.x,oz=duelOpponent.renderZ??duelOpponent.z;
-  const a=normalizeDuelAngle(Math.atan2(player.x-ox,player.z-oz)+(.035*(Math.random()*2-1)));
-  duelBotBullets.push({x:ox+Math.sin(a)*1.05,z:oz+Math.cos(a)*1.05,vx:Math.sin(a)*15.5,vz:Math.cos(a)*15.5,life:2.6,damage:18});
-  duelBotReveal=.9;burst(ox+Math.sin(a),oz+Math.cos(a),[1,.28,.48],4,2.3);
+  const bot=duelOpponent;if(!bot||!player||bot.fire>0||bot.reload>0)return false;
+  if((bot.ammo??MAG_SIZE)<=0){bot.reload=RELOAD_TIME;bot.fire=0;return false;}
+  const ox=bot.renderX??bot.x,oz=bot.renderZ??bot.z;
+  const a=normalizeDuelAngle(Math.atan2(player.x-ox,player.z-oz)+(.025*(Math.random()*2-1)));
+  const hyper=(bot.hyperActive||0)>0;
+  bot.fire=bot.fireCooldown/(hyper?HYPER_FIRE_MULT:1);bot.ammo--;
+  duelBotBullets.push({x:ox+Math.sin(a)*1.05,z:oz+Math.cos(a)*1.05,vx:Math.sin(a)*18,vz:Math.cos(a)*18,life:2.4,damage:22,color:duelBulletColor(bot,true),owner:'bot'});
+  duelBotReveal=.9;burst(ox+Math.sin(a),oz+Math.cos(a),duelBulletColor(bot,true),4,2.3);
+  if(bot.ammo<=0){bot.reload=RELOAD_TIME;bot.fire=0;}
+  return true;
 }
 function updateLocalDuelBot(dt){
   const bot=duelOpponent;if(!duelLocalBotMode||!bot||!player||duelMatchStatus!=='playing'||duelEnded)return;
-  bot.hidden=false;bot.isBot=true;bot.r=DUEL_RADIUS;bot.maxHp=Math.max(1,Number(bot.maxHp)||150);bot.hp=Math.max(0,Number(bot.hp)||0);
+  bot.hidden=false;bot.isBot=true;bot.r=DUEL_RADIUS;bot.maxHp=Math.max(1,Number(bot.maxHp)||player.maxHp);bot.hp=Math.max(0,Number(bot.hp)||0);
+  // Bot jest kopią gracza: te same ulepszenia, skórka, ruch, szybkostrzelność, magazynek i moce.
+  bot.skin=profile.skin;bot.speed=player.speed;bot.fireCooldown=player.fireCooldown;
+  if(!Number.isFinite(bot.ammo))bot.ammo=MAG_SIZE;if(!Number.isFinite(bot.reload))bot.reload=0;if(!Number.isFinite(bot.fire))bot.fire=0;
+  if(!Number.isFinite(bot.super))bot.super=0;if(!Number.isFinite(bot.hyper))bot.hyper=0;if(!Number.isFinite(bot.hyperActive))bot.hyperActive=0;
+  bot.fire=Math.max(0,bot.fire-dt);
+  if(bot.reload>0){bot.reload=Math.max(0,bot.reload-dt);if(bot.reload===0)bot.ammo=MAG_SIZE;}
+  if(bot.hyperActive>0)bot.hyperActive=Math.max(0,bot.hyperActive-dt);
+  if(bot.hyper>=100&&bot.hyperActive<=0)duelActivateHyper(bot,true);
   let ox=Number(bot.renderX??bot.x)||0,oz=Number(bot.renderZ??bot.z)||-12;
   const dx=player.x-ox,dz=player.z-oz,dist=Math.max(.001,Math.hypot(dx,dz)),nx=dx/dist,nz=dz/dist;
   duelBotTurnTimer-=dt;if(duelBotTurnTimer<=0){duelBotTurnTimer=.65+Math.random()*.75;duelBotStrafe=Math.random()<.5?-1:1;}
   let wantX,wantZ;if(dist>9.2){wantX=nx;wantZ=nz;}else if(dist<4.8){wantX=-nx;wantZ=-nz;}else{wantX=-nz*duelBotStrafe+nx*.12;wantZ=nx*duelBotStrafe+nz*.12;const l=Math.hypot(wantX,wantZ)||1;wantX/=l;wantZ/=l;}
-  const base=Math.atan2(wantX,wantZ),offsets=[0,.38,-.38,.78,-.78,1.25,-1.25,Math.PI];let best=null;
-  for(const off of offsets){const a=base+off,mx=Math.sin(a),mz=Math.cos(a),cand={x:ox+mx*5.25*dt,z:oz+mz*5.25*dt,r:DUEL_RADIUS};resolveDuelEntity(cand);const moved=Math.hypot(cand.x-ox,cand.z-oz),newDist=Math.hypot(player.x-cand.x,player.z-cand.z);let score=moved*30-Math.abs(newDist-7.0)*.09;if(duelLineBlocked(cand.x,cand.z,player.x,player.z,.08))score-=.18;if(!best||score>best.score)best={score,x:cand.x,z:cand.z};}
+  const base=Math.atan2(wantX,wantZ),offsets=[0,.38,-.38,.78,-.78,1.25,-1.25,Math.PI],moveSpeed=bot.speed*((bot.hyperActive||0)>0?HYPER_SPEED_MULT:1);let best=null;
+  for(const off of offsets){const a=base+off,mx=Math.sin(a),mz=Math.cos(a),cand={x:ox+mx*moveSpeed*dt,z:oz+mz*moveSpeed*dt,r:DUEL_RADIUS};resolveDuelEntity(cand);const moved=Math.hypot(cand.x-ox,cand.z-oz),newDist=Math.hypot(player.x-cand.x,player.z-cand.z);let score=moved*30-Math.abs(newDist-7.0)*.09;if(duelLineBlocked(cand.x,cand.z,player.x,player.z,.08))score-=.18;if(!best||score>best.score)best={score,x:cand.x,z:cand.z};}
   const oldX=ox,oldZ=oz;if(best){ox=best.x;oz=best.z;}const moved=Math.hypot(ox-oldX,oz-oldZ);duelBotStuck=moved<.002?duelBotStuck+dt:Math.max(0,duelBotStuck-dt*2);
   if(duelBotStuck>.25){duelBotStuck=0;duelBotStrafe*=-1;const escape={x:ox-nz*duelBotStrafe*1.0,z:oz+nx*duelBotStrafe*1.0,r:DUEL_RADIUS};resolveDuelEntity(escape);ox=escape.x;oz=escape.z;}
   bot.x=bot.targetX=bot.renderX=ox;bot.z=bot.targetZ=bot.renderZ=oz;bot.vx=(ox-oldX)/Math.max(dt,.001);bot.vz=(oz-oldZ)/Math.max(dt,.001);bot.angle=bot.targetAngle=bot.renderAngle=normalizeDuelAngle(Math.atan2(player.x-ox,player.z-oz));bot.inBush=duelPointInBush(ox,oz);
   duelBotReveal=Math.max(0,duelBotReveal-dt);bot.hidden=bot.inBush&&duelBotReveal<=0&&dist>4.5;
-  duelBotShotTimer-=dt;if(duelBotShotTimer<=0&&dist<16.5&&!duelLineBlocked(ox,oz,player.x,player.z,.17)){duelBotShotTimer=.62+Math.random()*.28;spawnLocalBotBullet();}
-  for(let i=duelBotBullets.length-1;i>=0;i--){const b=duelBotBullets[i],x0=b.x,z0=b.z,x1=x0+b.vx*dt,z1=z0+b.vz*dt;b.life-=dt;const wt=duelFirstWallHit(x0,z0,x1,z1,.18),ht=duelSegmentCircleHit(x0,z0,x1,z1,player.x,player.z,DUEL_RADIUS+.20);if(ht!==null&&(wt===null||ht<=wt)){b.x=x0+(x1-x0)*ht;b.z=z0+(z1-z0)*ht;burst(b.x,b.z,[1,.25,.48],6,3);duelBotBullets.splice(i,1);localBotDamagePlayer(b.damage);continue;}if(wt!==null||b.life<=0){if(wt!==null)burst(x0+(x1-x0)*wt,z0+(z1-z0)*wt,[1,.25,.48],4,2);duelBotBullets.splice(i,1);continue;}b.x=x1;b.z=z1;}
+  // Używa superataku na bliskim dystansie, dokładnie z tym samym potrójnym superem podczas hiperdoładowania.
+  if(bot.super>=100&&dist<7.2&&!duelLineBlocked(ox,oz,player.x,player.z,.17))duelUseSuper(bot,true);
+  if(dist<16.5&&!duelLineBlocked(ox,oz,player.x,player.z,.17))spawnLocalBotBullet();
+  for(let i=duelBotBullets.length-1;i>=0;i--){const b=duelBotBullets[i],x0=b.x,z0=b.z,x1=x0+b.vx*dt,z1=z0+b.vz*dt;b.life-=dt;const wt=duelFirstWallHit(x0,z0,x1,z1,.18),ht=duelSegmentCircleHit(x0,z0,x1,z1,player.x,player.z,DUEL_RADIUS+.20);if(ht!==null&&(wt===null||ht<=wt)){b.x=x0+(x1-x0)*ht;b.z=z0+(z1-z0)*ht;burst(b.x,b.z,b.color||[1,.25,.48],6,3);duelBotBullets.splice(i,1);localBotDamagePlayer(b.damage);duelChargeEntity(bot,3.5);continue;}if(wt!==null||b.life<=0){if(wt!==null)burst(x0+(x1-x0)*wt,z0+(z1-z0)*wt,b.color||[1,.25,.48],4,2);duelBotBullets.splice(i,1);continue;}b.x=x1;b.z=z1;}
   if(ui.duelOpponentHp)ui.duelOpponentHp.textContent=`${Math.max(0,Math.ceil(bot.hp))} / ${bot.maxHp} HP`;
 }
 function updateDuel(dt){
   if(!duelActive||!player)return;
   player.fire=Math.max(0,player.fire-dt);
   if(player.reload>0){player.reload=Math.max(0,player.reload-dt);if(player.reload===0){player.ammo=MAG_SIZE;showMessage('AMUNICJA GOTOWA!');}updateUI();}
+  if((player.hyperActive||0)>0){player.hyperActive=Math.max(0,player.hyperActive-dt);if(player.hyperActive===0)showMessage('HIPERDOŁADOWANIE ZAKOŃCZONE');updateUI();}
   if(duelMatchStatus==='countdown'){
     const nowMs=performance.now();
     if(!duelStartDeadline)duelStartDeadline=nowMs+Math.max(0,duelStartIn)*1000;
@@ -447,7 +506,7 @@ function updateDuel(dt){
     }
   }else if(duelMatchStatus==='playing'){
     let dx=(keys.KeyD?1:0)-(keys.KeyA?1:0),dz=(keys.KeyS?1:0)-(keys.KeyW?1:0),len=Math.hypot(dx,dz);
-    if(len){dx/=len;dz/=len;player.x+=dx*player.speed*dt;player.z+=dz*player.speed*dt;resolveDuelEntity(player);}
+    if(len){dx/=len;dz/=len;const moveSpeed=player.speed*((player.hyperActive||0)>0?HYPER_SPEED_MULT:1);player.x+=dx*moveSpeed*dt;player.z+=dz*moveSpeed*dt;resolveDuelEntity(player);}
     // Serwer koryguje tylko większe odchylenia. Małe różnice ignorujemy, aby nie było gumowania ruchu.
     if(Number.isFinite(player.netX)&&Number.isFinite(player.netZ)){
       const err=Math.hypot(player.netX-player.x,player.netZ-player.z);
@@ -476,7 +535,7 @@ function updateDuel(dt){
     if(duelOpponent&&!duelOpponent.hidden){const ox=duelOpponent.renderX??duelOpponent.x,oz=duelOpponent.renderZ??duelOpponent.z;hitT=duelSegmentCircleHit(x0,z0,x1,z1,ox,oz,DUEL_RADIUS+.22);}
     if(hitT!==null&&(wallT===null||hitT<=wallT)){
       b.x=x0+(x1-x0)*hitT;b.z=z0+(z1-z0)*hitT;burst(b.x,b.z,profile.skin==='cosmic'?[.78,.38,1]:[.24,.85,1],7,3.4);
-      if(duelLocalBotMode&&duelOpponent){duelOpponent.hp=Math.max(0,duelOpponent.hp-(b.damage||22));duelBotReveal=.9;if(ui.duelOpponentHp)ui.duelOpponentHp.textContent=`${Math.ceil(duelOpponent.hp)} / ${duelOpponent.maxHp} HP`;}
+      if(duelLocalBotMode&&duelOpponent){let damage=b.damage||22;if((duelOpponent.hyperActive||0)>0)damage*=HYPER_DAMAGE_MULT;duelOpponent.hp=Math.max(0,duelOpponent.hp-damage);duelChargeEntity(player,3.5);duelBotReveal=.9;if(ui.duelOpponentHp)ui.duelOpponentHp.textContent=`${Math.ceil(duelOpponent.hp)} / ${duelOpponent.maxHp} HP`;}
       else duelVisualHitSeqs.add(b.clientSeq);
       duelPredictedBullets.splice(i,1);continue;
     }
@@ -552,7 +611,7 @@ let upgrades={...profile.upgrades};
 let running=false,runCommitted=false,last=performance.now(),score=0,wave=1,kills=0,walletCoins=profile.coins,runCoins=0,trophies=0,survivalTime=0,waveClock=0,spawnClock=0,shake=0,messageClock=0;
 let player,enemies=[],bullets=[],particles=[],stars=[],pickups=[],coins=[];
 let selectedMode=profile.mode==='duel'?'duel':'solo',duelSearching=false,duelActive=false,duelEnded=false,duelMatchId='',duelOpponent=null,duelServerBullets=[],duelPredictedBullets=[],duelShotQueue=[],duelVisualHitSeqs=new Set(),duelLocalShotSeq=0,duelNetworkBusy=false,duelNetworkTimer=0,duelJoinTimer=0,duelNetworkFailures=0,duelMatchStatus='',duelStartIn=0,duelStartDeadline=0,duelLastStateAt=performance.now(),duelRtt=0,duelFrameSeq=0,duelLocalBotMode=false,duelBotBullets=[],duelBotTurnTimer=0,duelBotShotTimer=.8,duelBotStrafe=1,duelBotStuck=0,duelBotReveal=0,duelRound=1,duelYourWins=0,duelOpponentWins=0,duelRoundDraws=0,duelRoundEventSeq=0,duelRoundResolving=false;
-window.__arenaDebug=()=>({duelActive,duelLocalBotMode,duelMatchStatus,duelRound,duelYourWins,duelOpponentWins,duelRoundDraws,player:player?{x:player.x,z:player.z,hp:player.hp}:null,opponent:duelOpponent?{x:duelOpponent.renderX??duelOpponent.x,z:duelOpponent.renderZ??duelOpponent.z,hp:duelOpponent.hp,hidden:duelOpponent.hidden,isBot:duelOpponent.isBot}:null,playerBullets:duelPredictedBullets.length,botBullets:duelBotBullets.length});
+window.__arenaDebug=()=>({duelActive,duelLocalBotMode,duelMatchStatus,duelRound,duelYourWins,duelOpponentWins,duelRoundDraws,player:player?{x:player.x,z:player.z,hp:player.hp}:null,opponent:duelOpponent?{x:duelOpponent.renderX??duelOpponent.x,z:duelOpponent.renderZ??duelOpponent.z,hp:duelOpponent.hp,hidden:duelOpponent.hidden,isBot:duelOpponent.isBot}:null,playerBullets:duelPredictedBullets.length,botBullets:duelBotBullets.length,botAmmo:duelOpponent?.ammo,botReload:duelOpponent?.reload,botSuper:duelOpponent?.super,botHyper:duelOpponent?.hyper,botHyperActive:duelOpponent?.hyperActive});
 
 const obstacles=[
   {x:-6,z:-5,w:3.6,d:2.3,h:1.7,c:[.43,.29,.21]}, {x:6,z:5,w:3.6,d:2.3,h:1.7,c:[.43,.29,.21]},
@@ -691,8 +750,8 @@ function startReload(){if(!running||!player||player.reload>0||player.ammo>=MAG_S
 function playerShoot(){if(duelActive){duelPlayerShoot();return;}if(!running||player.fire>0||player.reload>0)return;if(player.ammo<=0){startReload();return;}const hyper=(player.hyperActive||0)>0;player.fire=player.fireCooldown/(hyper?HYPER_FIRE_MULT:1);player.ammo--;const cosmic=profile.skin==='cosmic',shotColor=hyper?[.35,1,.92]:(cosmic?[.78,.38,1]:[.24,.85,1]),flashColor=hyper?[1,.95,.35]:(cosmic?[.35,1,1]:[.35,.9,1]);shoot('player',player.x+Math.sin(player.angle)*1.05,player.z+Math.cos(player.angle)*1.05,player.angle,18,22,shotColor,.21,.025);burst(player.x+Math.sin(player.angle),player.z+Math.cos(player.angle),flashColor,4,2.5);if(player.ammo<=0)startReload();else updateUI();}
 function addCharge(baseAmount){if(!player)return;const amount=baseAmount*SUPER_CHARGE_MULTIPLIER;player.super=Math.min(100,player.super+amount);if((player.hyperActive||0)<=0)player.hyper=Math.min(100,player.hyper+amount/HYPER_CHARGE_RATIO);}
 function superPulse(pulse,total){if(!running||!player)return;const color=total>1?[.25,1,.88]:[1,.35,.93];for(let i=0;i<24;i++)shoot('player',player.x,player.z,i/24*Math.PI*2,14,28,color,.24,0);for(const e of enemies){const d=Math.hypot(e.x-player.x,e.z-player.z);if(d<5.5){e.hp-=45;const k=(5.5-d)/5.5;e.x+=(e.x-player.x)/(d||1)*k*3;e.z+=(e.z-player.z)/(d||1)*k*3;}}burst(player.x,player.z,color,32,9);shake=Math.max(shake,.55);if(total>1)showMessage(`HIPER SUPER ${pulse}/${total}!`);}
-function superAttack(){if(duelActive){showMessage('SUPER NIEDOSTĘPNY W 1V1');return;}if(!running||player.super<100)return;player.super=0;player.inv=.6;const pulses=(player.hyperActive||0)>0?3:1,caster=player;if(pulses===1){showMessage('SUPER!');superPulse(1,1);}else{/* Liczba fal jest ustalana w chwili użycia. Koniec hiperdoładowania nie anuluje fal 2 i 3. */superPulse(1,3);setTimeout(()=>{if(running&&player===caster)superPulse(2,3);},170);setTimeout(()=>{if(running&&player===caster)superPulse(3,3);},340);}updateUI();}
-function activateHyper(){if(duelActive){showMessage('HIPER NIEDOSTĘPNY W 1V1');return;}if(!running||!player||player.hyper<100||player.hyperActive>0)return;player.hyper=0;player.hyperActive=HYPER_DURATION;player.inv=Math.max(player.inv,.45);showMessage('HIPERDOŁADOWANIE: 9 SEKUND!');burst(player.x,player.z,[.25,1,.82],40,10);shake=.4;updateUI();}
+function superAttack(){if(duelActive){if(duelLocalBotMode&&duelMatchStatus==='playing'){duelUseSuper(player,false);updateUI();}else showMessage('SUPER ONLINE BĘDZIE DODANY PÓŹNIEJ');return;}if(!running||player.super<100)return;player.super=0;player.inv=.6;const pulses=(player.hyperActive||0)>0?3:1,caster=player;if(pulses===1){showMessage('SUPER!');superPulse(1,1);}else{/* Liczba fal jest ustalana w chwili użycia. Koniec hiperdoładowania nie anuluje fal 2 i 3. */superPulse(1,3);setTimeout(()=>{if(running&&player===caster)superPulse(2,3);},170);setTimeout(()=>{if(running&&player===caster)superPulse(3,3);},340);}updateUI();}
+function activateHyper(){if(duelActive){if(duelLocalBotMode&&duelMatchStatus==='playing'){duelActivateHyper(player,false);updateUI();}else showMessage('HIPER ONLINE BĘDZIE DODANY PÓŹNIEJ');return;}if(!running||!player||player.hyper<100||player.hyperActive>0)return;player.hyper=0;player.hyperActive=HYPER_DURATION;player.inv=Math.max(player.inv,.45);showMessage('HIPERDOŁADOWANIE: 9 SEKUND!');burst(player.x,player.z,[.25,1,.82],40,10);shake=.4;updateUI();}
 function spawnCoins(x,z,count){for(let i=0;i<count;i++){const a=(i/count)*Math.PI*2+rnd(-.3,.3),power=rnd(1.8,4.2);coins.push({x,z,r:.22,vx:Math.cos(a)*power,vz:Math.sin(a)*power,t:rnd(0,6.28),life:25});}}
 function enemyDeath(e){score+=e.type==='tank'?350:e.type==='shooter'?180:120;kills++;addCharge(e.type==='tank'?18:10);burst(e.x,e.z,e.color,e.type==='tank'?24:15,e.type==='tank'?8:5);spawnCoins(e.x,e.z,e.coinReward||1);stars.push({x:e.x,z:e.z,y:.45,t:Math.random()*6.28,life:10});if(kills%7===0)pickups.push({x:e.x,z:e.z,type:'heal',life:14,t:0});updateUI();}
 function damagePlayer(d){if(player.inv>0)return;if((player.hyperActive||0)>0)d*=HYPER_DAMAGE_MULT;player.hp-=d;player.inv=.55;player.regen=4;shake=.35;burst(player.x,player.z,[1,.15,.2],16,6);updateUI();if(player.hp<=0)gameOver();}
@@ -777,7 +836,7 @@ function render(){
     healthBar(ox,oz,o.hp,o.maxHp,2.05,1.25);
   }
   if(!duelActive)for(const e of enemies){draw(mesh.cyl,e.x,.11,e.z,e.r*1.18,.04,e.r*1.18,0,e.color,.65);const c=e.hit>0?[1,1,1]:e.color;draw(mesh.sphere,e.x,e.r*.95,e.z,e.r,e.r*1.05,e.r,0,c);draw(mesh.sphere,e.x,e.r*1.14,e.z,e.r*.62,e.r*.63,e.r*.62,0,[Math.min(1,c[0]+.22),Math.min(1,c[1]+.22),Math.min(1,c[2]+.22)]);if(e.type==='shooter')draw(mesh.cube,e.x+Math.sin(e.angle)*e.r*.95,e.r*.95,e.z+Math.cos(e.angle)*e.r*.95,.16,.16,.58,e.angle,[.18,.16,.19]);if(e.type==='tank'){draw(mesh.cube,e.x,e.r*1.05,e.z,e.r*.95,.24,e.r*.95,0,[.25,.11,.31]);}for(let lv=0;lv<(e.level||1);lv++)draw(mesh.sphere,e.x+(lv-((e.level||1)-1)/2)*.24,e.r*2.28,e.z,.08,.08,.08,0,[1,.78,.12]);healthBar(e.x,e.z,e.hp,e.maxHp,e.r*2.35,e.r*.9);}
-  if(duelActive){for(const b of duelServerBullets){const mine=b.ownerId===playerId,c=mine?(profile.skin==='cosmic'?[.78,.38,1]:[.24,.85,1]):[1,.25,.48];draw(mesh.sphere,b.renderX??b.x,.72,b.renderZ??b.z,.21,.21,.21,0,c);}for(const b of duelBotBullets)draw(mesh.sphere,b.x,.72,b.z,.21,.21,.21,0,[1,.25,.48]);const pc=profile.skin==='cosmic'?[.78,.38,1]:[.24,.85,1];for(const b of duelPredictedBullets)draw(mesh.sphere,b.x,.72,b.z,.20,.20,.20,0,pc,.78);}else for(const b of bullets)draw(mesh.sphere,b.x,b.y,b.z,b.size,b.size,b.size,0,b.color);
+  if(duelActive){for(const b of duelServerBullets){const mine=b.ownerId===playerId,c=mine?(profile.skin==='cosmic'?[.78,.38,1]:[.24,.85,1]):[1,.25,.48];draw(mesh.sphere,b.renderX??b.x,.72,b.renderZ??b.z,.21,.21,.21,0,c);}for(const b of duelBotBullets)draw(mesh.sphere,b.x,.72,b.z,.21,.21,.21,0,b.color||[1,.25,.48]);const pc=profile.skin==='cosmic'?[.78,.38,1]:[.24,.85,1];for(const b of duelPredictedBullets)draw(mesh.sphere,b.x,.72,b.z,.20,.20,.20,0,b.color||pc,.78);}else for(const b of bullets)draw(mesh.sphere,b.x,b.y,b.z,b.size,b.size,b.size,0,b.color);
   for(const p of particles)draw(mesh.cube,p.x,p.y,p.z,p.size,p.size,p.size,0,p.color,Math.max(0,p.life*2));
 }
 function loop(now){const dt=Math.min(.033,(now-last)/1000);last=now;update(dt);render();requestAnimationFrame(loop);}requestAnimationFrame(loop);
