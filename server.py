@@ -494,7 +494,7 @@ def duel_payload(match: dict[str, Any], player_id: str) -> dict[str, Any]:
         "serverTime": round(current, 4),
         "stateSeq": int(match.get("state_seq", 0)),
         "ackShotSeq": int(match["players"].get(player_id, {}).get("last_client_shot_seq", 0)),
-        "build": "rundy-best-of-3-hp350-v1",
+        "build": "mirror-view-shot-channel-v1",
     }
 
 
@@ -521,6 +521,7 @@ def reset_duel_round(match: dict[str, Any]) -> None:
         player["last_shot"] = 0.0
         player["last_move"] = now()
         player["last_client_shot_seq"] = 0
+        player["last_client_shot_time"] = 0.0
         player["revealed_until"] = 0.0
         player["last_seen"] = now()
         if player.get("is_bot"):
@@ -751,6 +752,7 @@ def create_duel_player(payload: dict[str, Any], player_id: str, x: float, z: flo
         "last_move": now(),
         "vx": 0.0, "vz": 0.0, "revealed_until": 0.0,
         "last_client_shot_seq": 0,
+        "last_client_shot_time": 0.0,
         "is_bot": False,
     }
 
@@ -863,6 +865,62 @@ def duel_state(match_id: str, player_id: str) -> dict[str, Any] | None:
     return duel_payload(match, player_id)
 
 
+def process_duel_shots(match: dict[str, Any], player: dict[str, Any], shots: Any, current: float) -> int:
+    """Przetwarza strzały osobno od ruchu, żeby opóźniony request pozycji nie blokował ognia."""
+    if not isinstance(shots, list) or match.get("status") != "playing":
+        return int(player.get("last_client_shot_seq", 0))
+    fresh: list[tuple[int, float, dict[str, Any]]] = []
+    last_seq = int(player.get("last_client_shot_seq", 0))
+    for shot in shots[:8]:
+        if not isinstance(shot, dict):
+            continue
+        seq = clean_number(shot.get("seq"), 2_000_000_000)
+        if seq <= last_seq:
+            continue
+        try:
+            client_time = float(shot.get("clientTime") or 0.0)
+        except (TypeError, ValueError):
+            client_time = 0.0
+        fresh.append((seq, client_time, shot))
+    fresh.sort(key=lambda item: item[0])
+    last_client_time = float(player.get("last_client_shot_time", 0.0))
+    accepted = 0
+    for seq, client_time, shot in fresh:
+        # Klient wysyła czas w milisekundach. Używamy tylko odstępu między
+        # strzałami, a nie zegara absolutnego, więc różne strefy/czasy nie przeszkadzają.
+        spacing_ok = not last_client_time or not client_time or (client_time - last_client_time) >= player["fire_cooldown"] * 1000.0 * 0.72
+        server_spacing_ok = current - float(player.get("last_shot", 0.0)) >= player["fire_cooldown"] * 0.42
+        if not (spacing_ok or server_spacing_ok):
+            continue
+        angle = normalize_duel_angle(shot.get("angle"), player["angle"])
+        spawn_duel_bullet(match, player, angle, seq)
+        player["last_client_shot_seq"] = seq
+        player["last_client_shot_time"] = client_time or (last_client_time + player["fire_cooldown"] * 1000.0)
+        player["last_shot"] = current
+        player["revealed_until"] = current + 0.85
+        last_client_time = float(player["last_client_shot_time"])
+        accepted += 1
+        if accepted >= 6:
+            break
+    return int(player.get("last_client_shot_seq", 0))
+
+
+def duel_shoot(payload: dict[str, Any]) -> dict[str, Any] | None:
+    match_id = clean_id(payload.get("matchId"))
+    player_id = clean_id(payload.get("playerId"))
+    match = duel_matches.get(match_id)
+    if not match or player_id not in match["players"]:
+        return None
+    current = now()
+    advance_duel(match)
+    player = match["players"][player_id]
+    player["last_seen"] = current
+    ack = process_duel_shots(match, player, payload.get("shots"), current)
+    advance_duel(match)
+    match["state_seq"] = int(match.get("state_seq", 0)) + 1
+    return {"ok": True, "ackShotSeq": ack, "stateSeq": int(match.get("state_seq", 0))}
+
+
 def duel_action(payload: dict[str, Any]) -> dict[str, Any] | None:
     cleanup_duels()
     match_id = clean_id(payload.get("matchId"))
@@ -899,22 +957,8 @@ def duel_action(payload: dict[str, Any]) -> dict[str, Any] | None:
 
     shots = payload.get("shots")
     if not isinstance(shots, list):
-        shots = [{"seq": int(player.get("last_client_shot_seq", 0)) + 1, "angle": payload.get("angle")}] if payload.get("shoot") else []
-    fresh: list[tuple[int, dict[str, Any]]] = []
-    for shot in shots[:8]:
-        if not isinstance(shot, dict):
-            continue
-        seq = clean_number(shot.get("seq"), 2_000_000_000)
-        if seq > int(player.get("last_client_shot_seq", 0)):
-            fresh.append((seq, shot))
-    fresh.sort(key=lambda item: item[0])
-    if fresh and match["status"] == "playing" and current - player["last_shot"] >= player["fire_cooldown"] * 0.90:
-        seq, shot = fresh[0]
-        player["last_shot"] = current
-        player["last_client_shot_seq"] = seq
-        player["revealed_until"] = current + 0.85
-        angle = normalize_duel_angle(shot.get("angle"), player["angle"])
-        spawn_duel_bullet(match, player, angle, seq)
+        shots = [{"seq": int(player.get("last_client_shot_seq", 0)) + 1, "angle": payload.get("angle"), "clientTime": 0}] if payload.get("shoot") else []
+    process_duel_shots(match, player, shots, current)
     advance_duel(match)
     match["state_seq"] = int(match.get("state_seq", 0)) + 1
     return duel_payload(match, player_id)
@@ -1009,7 +1053,7 @@ class Handler(BaseHTTPRequestHandler):
                     with db_connect() as conn, conn.cursor() as cur:
                         cur.execute("SELECT 1")
                         cur.fetchone()
-                self.send_json({"ok": True, "storage": "neon" if DATABASE_URL else "json", "build": "rundy-best-of-3-hp350-v1"})
+                self.send_json({"ok": True, "storage": "neon" if DATABASE_URL else "json", "build": "mirror-view-shot-channel-v1"})
             except Exception as exc:
                 self.send_json({"ok": False, "error": str(exc)}, HTTPStatus.SERVICE_UNAVAILABLE)
             return
@@ -1056,6 +1100,18 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as exc:
                 print(f"Błąd aktualizacji pojedynku: {exc}")
                 self.send_json({"error": "Nie udało się zaktualizować pojedynku."}, HTTPStatus.INTERNAL_SERVER_ERROR)
+            return
+        if parsed.path == "/api/duel/shoot":
+            try:
+                with lock:
+                    result = duel_shoot(payload)
+                if result is None:
+                    self.send_json({"error": "Nie znaleziono pojedynku."}, HTTPStatus.NOT_FOUND)
+                else:
+                    self.send_json(result)
+            except Exception as exc:
+                print(f"Błąd strzału pojedynku: {exc}")
+                self.send_json({"error": "Nie udało się wysłać strzału."}, HTTPStatus.INTERNAL_SERVER_ERROR)
             return
         if parsed.path == "/api/duel/leave":
             try:
