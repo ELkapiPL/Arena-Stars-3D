@@ -119,6 +119,91 @@
       #controls{display:none}
     }
 
+
+    /* HUD bez nakładania paneli — układ strefowy */
+    #playerHudStack{
+      position:absolute;
+      right:18px;
+      bottom:18px;
+      width:min(300px,28vw);
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+      align-items:stretch;
+      pointer-events:none;
+    }
+    #playerHudStack #healthWrap,
+    #playerHudStack #ammoWrap{
+      position:relative;
+      inset:auto;
+      left:auto;
+      right:auto;
+      top:auto;
+      bottom:auto;
+      transform:none;
+      width:100%;
+      margin:0;
+    }
+    #controls{
+      left:18px;
+      right:auto;
+      bottom:18px;
+      max-width:250px;
+      text-align:left;
+    }
+    body.duel-mode #duelOpponentHud{
+      left:18px;
+      right:auto;
+      top:16px;
+      bottom:auto;
+    }
+    .top>.card:last-child{
+      margin-left:auto;
+    }
+    #shop{
+      max-height:calc(100vh - 310px);
+      overflow:auto;
+    }
+
+    /* Na niższych ekranach chowamy instrukcję, zamiast nakładać ją na inne panele. */
+    @media (max-height:720px) and (min-width:801px){
+      #controls{display:none}
+      #shop{max-height:calc(100vh - 190px)}
+    }
+
+    @media(max-width:800px){
+      #playerHudStack{
+        right:8px;
+        bottom:8px;
+        width:min(250px,58vw);
+        gap:7px;
+      }
+      #playerHudStack #healthWrap,
+      #playerHudStack #ammoWrap{
+        position:relative;
+        inset:auto;
+        width:100%;
+        transform:none;
+        padding:6px 8px;
+      }
+      body.duel-mode #duelOpponentHud{
+        left:8px;
+        top:8px;
+        max-width:47vw;
+      }
+      #controls{display:none}
+    }
+
+    @media(max-width:520px){
+      #playerHudStack{
+        width:min(220px,62vw);
+      }
+      body.duel-mode #duelOpponentHud{
+        min-width:140px;
+        max-width:40vw;
+      }
+    }
+
   </style>
 </head>
 <body class="lobby-mode">
@@ -136,8 +221,10 @@
       <button class="upgradeBtn" data-upgrade="hp"><span class="upgradeName">[3] Maks. życie +20</span><span class="upgradeMeta"><span>Poziom <b data-level>0/5</b></span><span data-cost>100 🪙</span></span></button>
     </div>
     <div id="centerMsg"></div>
-    <div id="healthWrap" class="card"><div class="labelRow"><span>ZDROWIE</span><span id="healthText">150 / 150</span></div><div class="bar"><div id="healthFill" class="fill"></div></div><div class="labelRow" style="margin-top:7px"><span>SUPER <span class="small">[Q] • ładowanie 60% wolniejsze</span></span><span id="superText">0%</span></div><div id="superBar" class="bar"><div id="superFill" class="fill" style="width:0%"></div></div><div class="labelRow" style="margin-top:7px"><span>HIPERDOŁADOWANIE <span class="small">[E] • 9 s</span></span><span id="hyperText">0%</span></div><div id="hyperBar" class="bar"><div id="hyperFill" class="fill" style="width:0%"></div></div></div>
-    <div id="ammoWrap" class="card"><div class="labelRow"><span>AMUNICJA <span class="small">30 strzałów</span></span><span id="ammoText">30 / 30</span></div><div id="ammoBar" class="bar"><div id="ammoFill" class="fill"></div></div><div class="small" style="margin-top:6px;text-align:right">Automatyczne przeładowanie: 1,5 s</div></div>
+    <div id="playerHudStack">
+      <div id="ammoWrap" class="card"><div class="labelRow"><span>AMUNICJA <span class="small">30 strzałów</span></span><span id="ammoText">30 / 30</span></div><div id="ammoBar" class="bar"><div id="ammoFill" class="fill"></div></div><div class="small" style="margin-top:6px;text-align:right">Automatyczne przeładowanie: 1,5 s</div></div>
+      <div id="healthWrap" class="card"><div class="labelRow"><span>ZDROWIE</span><span id="healthText">150 / 150</span></div><div class="bar"><div id="healthFill" class="fill"></div></div><div class="labelRow" style="margin-top:7px"><span>SUPER <span class="small">[Q] • ładowanie 60% wolniejsze</span></span><span id="superText">0%</span></div><div id="superBar" class="bar"><div id="superFill" class="fill" style="width:0%"></div></div><div class="labelRow" style="margin-top:7px"><span>HIPERDOŁADOWANIE <span class="small">[E] • 9 s</span></span><span id="hyperText">0%</span></div><div id="hyperBar" class="bar"><div id="hyperFill" class="fill" style="width:0%"></div></div></div>
+    </div>
     <div id="controls" class="card"><kbd>WASD</kbd> ruch<br><kbd>MYSZ</kbd> celowanie i strzał<br><span class="small">Magazynek: 30 • przeładowanie: 1,5 s</span><br><kbd>Q</kbd> superatak<br><kbd>E</kbd> hiperdoładowanie (9 s)<br><kbd>1/2/3</kbd> kup stałe ulepszenie<br><kbd>R</kbd> restart</div>
   </div>
 
@@ -204,6 +291,6 @@
     </div>
   </div>
   <div id="error"></div>
-  <script src="game.js?v=hud-przezroczysty-v1"></script>
+  <script src="game.js?v=hud-bez-nakladania-v2"></script>
 </body>
 </html>
