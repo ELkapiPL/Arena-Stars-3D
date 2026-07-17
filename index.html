@@ -231,6 +231,19 @@
     #chatOverlay{position:fixed;inset:0;z-index:900;display:none;background:rgba(1,5,15,.68);backdrop-filter:blur(5px);color:#fff}#chatOverlay.open{display:flex;align-items:center;justify-content:center}.chatCard{width:min(980px,94vw);height:min(680px,88vh);display:grid;grid-template-columns:290px 1fr;overflow:hidden;border-radius:22px;background:#091329;border:1px solid rgba(255,255,255,.18);box-shadow:0 30px 90px rgba(0,0,0,.6)}.chatSidebar{padding:16px;border-right:1px solid rgba(255,255,255,.12);overflow:hidden;display:flex;flex-direction:column}.chatTop{display:flex;align-items:center;justify-content:space-between;gap:10px}.chatTop h2{margin:0}.chatClose{border:0;border-radius:9px;background:rgba(255,255,255,.1);color:#fff;padding:7px 10px;cursor:pointer}.chatSearch{margin:13px 0;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:#071022;color:#fff}.chatUsers{overflow:auto;display:grid;gap:6px}.chatUser{display:flex;align-items:center;gap:8px;padding:8px;border-radius:10px;background:rgba(255,255,255,.055);font-size:12px;cursor:pointer}.chatUser.online:after{content:'ONLINE';margin-left:auto;color:#65f1aa;font-size:8px;font-weight:1000}.chatMain{display:grid;grid-template-rows:auto 1fr auto;min-width:0}.chatHeader{padding:15px 18px;border-bottom:1px solid rgba(255,255,255,.12);font-size:12px;color:#b8cae8}.chatMessages{padding:15px 18px;overflow:auto;display:flex;flex-direction:column;gap:9px}.chatMessage{max-width:82%;padding:9px 11px;border-radius:13px;background:rgba(255,255,255,.08);font-size:13px;line-height:1.4}.chatMessage.mine{align-self:flex-end;background:rgba(55,143,255,.27)}.chatMeta{font-size:9px;color:#9eb3d4;margin-bottom:4px;font-weight:900}.chatComposer{padding:13px 16px;border-top:1px solid rgba(255,255,255,.12);display:grid;grid-template-columns:1fr auto;gap:9px}.chatComposer textarea{resize:none;height:58px;padding:10px;border-radius:11px;border:1px solid rgba(255,255,255,.15);background:#071022;color:#fff}.chatSend{border:0;border-radius:11px;padding:0 20px;background:#59e5ff;color:#07152c;font-weight:1000;cursor:pointer}.chatStatus{padding:0 16px 10px;color:#ffd36c;font-size:11px}
     @media(max-width:760px){.chatCard{grid-template-columns:150px 1fr;height:92vh;width:96vw}.chatSidebar{padding:9px}#chatOpenBtn{left:auto;right:10px;top:122px;bottom:auto;padding:10px 13px;font-size:12px}.chatMessage{max-width:95%}}
 
+
+    .chatModeSwitch{display:grid;grid-template-columns:1fr;gap:8px;margin:14px 0}
+    .chatModeBtn{border:1px solid rgba(255,255,255,.14);border-radius:11px;padding:10px 8px;background:rgba(255,255,255,.06);color:#c9d9f4;font-weight:1000;cursor:pointer;text-align:left}
+    .chatModeBtn.active{background:linear-gradient(135deg,rgba(58,211,255,.32),rgba(83,100,255,.28));border-color:#55dcff;color:#fff}
+    .chatPublicInfo{padding:12px;border-radius:12px;background:rgba(71,218,255,.10);border:1px solid rgba(71,218,255,.22);font-size:12px;line-height:1.45;color:#cbefff}
+    .chatPrivatePicker[hidden]{display:none!important}
+    .chatPrivatePicker{min-height:0;overflow:hidden;display:flex;flex-direction:column}
+    .chatUser{position:relative}
+    .chatUser input{accent-color:#55dcff}
+    .chatUser.selected{outline:2px solid #55dcff;background:rgba(55,143,255,.22)}
+    .chatUser:not(.online):after{content:'OFFLINE';margin-left:auto;color:#8fa2c2;font-size:8px;font-weight:1000}
+    .chatUser.online:after{content:'ONLINE';margin-left:auto;color:#65f1aa;font-size:8px;font-weight:1000}
+
   </style>
 </head>
 <body class="lobby-mode">
@@ -332,7 +345,31 @@
   </div>
 
   <div id="chatOverlay">
-    <section class="chatCard"><aside class="chatSidebar"><div class="chatTop"><h2>Czat</h2><button id="chatCloseBtn" class="chatClose">✕</button></div><input id="chatSearch" class="chatSearch" placeholder="Szukaj konta"><div class="adminHint">Zaznacz jedną albo wiele osób.</div><div id="chatUsers" class="chatUsers"></div></aside><main class="chatMain"><div id="chatHeader" class="chatHeader">Wybierz odbiorców po lewej stronie.</div><div id="chatMessages" class="chatMessages"></div><div><div class="chatComposer"><textarea id="chatInput" maxlength="300" placeholder="Napisz wiadomość..."></textarea><button id="chatSendBtn" class="chatSend">WYŚLIJ</button></div><div id="chatStatus" class="chatStatus"></div></div></main></section>
+    <section class="chatCard">
+      <aside class="chatSidebar">
+        <div class="chatTop"><h2>Czat</h2><button id="chatCloseBtn" class="chatClose">✕</button></div>
+        <div class="chatModeSwitch">
+          <button id="chatModeAll" class="chatModeBtn active">🌍 CAŁY SERWER</button>
+          <button id="chatModePrivate" class="chatModeBtn">🔒 PRYWATNIE</button>
+        </div>
+        <div id="chatPublicInfo" class="chatPublicInfo">
+          Każda wysłana wiadomość będzie widoczna dla wszystkich zalogowanych użytkowników.
+        </div>
+        <div id="chatPrivatePicker" class="chatPrivatePicker" hidden>
+          <input id="chatSearch" class="chatSearch" placeholder="Wyszukaj nazwę konta">
+          <div class="adminHint"><b>Wybierz jedną osobę.</b><br>Może być offline — wiadomość zaczeka na serwerze.</div>
+          <div id="chatUsers" class="chatUsers"></div>
+        </div>
+      </aside>
+      <main class="chatMain">
+        <div id="chatHeader" class="chatHeader">🌍 Piszesz na cały serwer</div>
+        <div id="chatMessages" class="chatMessages"></div>
+        <div>
+          <div class="chatComposer"><textarea id="chatInput" maxlength="300" placeholder="Napisz wiadomość na cały serwer..."></textarea><button id="chatSendBtn" class="chatSend">WYŚLIJ</button></div>
+          <div id="chatStatus" class="chatStatus"></div>
+        </div>
+      </main>
+    </section>
   </div>
 
   <div id="adminOverlay" aria-hidden="true">
@@ -393,6 +430,6 @@
   </div>
 
   <div id="error"></div>
-  <script src="game.js?v=accounts-chat-bans-visible-chat-v2"></script>
+  <script src="game.js?v=chat-global-private-offline-v3"></script>
 </body>
 </html>

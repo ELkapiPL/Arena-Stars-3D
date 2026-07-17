@@ -940,8 +940,8 @@ for(const card of ui.skinCards){card.addEventListener('click',()=>selectSkin(car
 
 // ---------- Konta użytkowników, sesje i czat ----------
 const authUI={overlay:$('authOverlay'),card:$('authCard'),banCard:$('banCard'),msg:$('authMsg'),registerUser:$('registerUsername'),registerPassword:$('registerPassword'),registerBtn:$('registerBtn'),loginUser:$('loginUsername'),loginPassword:$('loginPassword'),loginBtn:$('loginBtn'),banReason:$('banReason'),banUntil:$('banUntil'),accountUsername:$('accountUsername'),logout:$('accountLogoutBtn')};
-const chatUI={overlay:$('chatOverlay'),open:$('chatOpenBtn'),close:$('chatCloseBtn'),users:$('chatUsers'),search:$('chatSearch'),header:$('chatHeader'),messages:$('chatMessages'),input:$('chatInput'),send:$('chatSendBtn'),status:$('chatStatus'),badge:$('chatBadge')};
-let currentAccount=null,authFinished=false,chatSelected=new Set(),chatPollTimer=0,chatKnownLast=0,chatUnread=0;
+const chatUI={overlay:$('chatOverlay'),open:$('chatOpenBtn'),close:$('chatCloseBtn'),users:$('chatUsers'),search:$('chatSearch'),header:$('chatHeader'),messages:$('chatMessages'),input:$('chatInput'),send:$('chatSendBtn'),status:$('chatStatus'),badge:$('chatBadge'),modeAll:$('chatModeAll'),modePrivate:$('chatModePrivate'),publicInfo:$('chatPublicInfo'),privatePicker:$('chatPrivatePicker')};
+let currentAccount=null,authFinished=false,chatMode='broadcast',chatRecipientId='',chatRecipientName='',chatPollTimer=0,chatKnownLast=0,chatUnread=0;
 function authMessage(text,bad=false){if(authUI.msg){authUI.msg.textContent=text||'';authUI.msg.style.color=bad?'#ff7890':'#ffdd75';}}
 function showAccountBan(data){if(!authUI.overlay)return;authUI.overlay.classList.remove('hidden');authUI.card.style.display='none';authUI.banCard.style.display='block';authUI.banReason.textContent=data.banReason||'Blokada konta';const until=Number(data.bannedUntil)||0;authUI.banUntil.textContent=until?`Koniec blokady: ${new Date(until*1000).toLocaleString('pl-PL')}`:'Blokada aktywna';}
 function setAuthPane(name){document.querySelectorAll('.authTab').forEach(x=>x.classList.toggle('active',x.dataset.authTab===name));document.querySelectorAll('.authPane').forEach(x=>x.classList.toggle('active',x.dataset.authPane===name));authMessage('');}
@@ -952,12 +952,95 @@ async function authSubmit(kind){authMessage('Łączenie z serwerem…');const re
 document.querySelectorAll('.authTab').forEach(x=>x.addEventListener('click',()=>setAuthPane(x.dataset.authTab)));authUI.registerBtn?.addEventListener('click',()=>authSubmit('register'));authUI.loginBtn?.addEventListener('click',()=>authSubmit('login'));authUI.logout?.addEventListener('click',async()=>{await api('/api/auth/logout',{method:'POST',body:'{}'}).catch(()=>{});location.reload();});
 
 function chatEscape(value){return escapeRankingName(String(value||''));}
-function selectedChatNames(){return [...chatSelected].map(id=>chatUI.users?.querySelector(`[data-chat-user="${CSS.escape(id)}"] .chatUserName`)?.textContent).filter(Boolean);}
-async function loadChatUsers(){if(!currentAccount||!chatUI.users)return;try{const r=await api(`/api/chat/users?q=${encodeURIComponent(chatUI.search?.value||'')}`);chatUI.users.innerHTML=(r.users||[]).map(u=>`<label class="chatUser${u.online?' online':''}" data-chat-user="${u.id}"><input type="checkbox" ${chatSelected.has(u.id)?'checked':''}><span class="chatUserName">${chatEscape(u.username)}</span></label>`).join('')||'<div class="adminHint">Brak innych kont.</div>';chatUI.users.querySelectorAll('[data-chat-user]').forEach(row=>{row.querySelector('input').addEventListener('change',e=>{e.target.checked?chatSelected.add(row.dataset.chatUser):chatSelected.delete(row.dataset.chatUser);chatUI.header.textContent=chatSelected.size?`Piszesz do: ${selectedChatNames().join(', ')}`:'Wybierz odbiorców po lewej stronie.';});});}catch(e){chatUI.status.textContent='Nie udało się pobrać listy kont.';}}
-function renderChat(messages){if(!chatUI.messages)return;const atBottom=chatUI.messages.scrollTop+chatUI.messages.clientHeight>=chatUI.messages.scrollHeight-50;chatUI.messages.innerHTML=(messages||[]).map(m=>{const mine=m.senderId===playerId,rec=(m.recipients||[]).map(x=>x.username).join(', ');return `<div class="chatMessage${mine?' mine':''}"><div class="chatMeta">${mine?'TY → '+chatEscape(rec):chatEscape(m.sender)} • ${new Date(Number(m.createdAt)*1000).toLocaleTimeString('pl-PL',{hour:'2-digit',minute:'2-digit'})}</div>${chatEscape(m.body)}</div>`;}).join('')||'<div class="adminHint">Nie masz jeszcze wiadomości.</div>';if(atBottom)chatUI.messages.scrollTop=chatUI.messages.scrollHeight;const last=Math.max(...(messages||[]).map(x=>Number(x.id)||0),0);if(!chatUI.overlay.classList.contains('open')&&last>chatKnownLast&&chatKnownLast){chatUnread++;chatUI.badge.style.display='inline-grid';chatUI.badge.textContent=String(chatUnread);}chatKnownLast=Math.max(chatKnownLast,last);}
+function setChatMode(mode){
+  chatMode=mode==='private'?'private':'broadcast';
+  chatUI.modeAll?.classList.toggle('active',chatMode==='broadcast');
+  chatUI.modePrivate?.classList.toggle('active',chatMode==='private');
+  if(chatUI.publicInfo)chatUI.publicInfo.hidden=chatMode!=='broadcast';
+  if(chatUI.privatePicker)chatUI.privatePicker.hidden=chatMode!=='private';
+  if(chatMode==='broadcast'){
+    chatRecipientId='';
+    chatRecipientName='';
+    if(chatUI.input)chatUI.input.placeholder='Napisz wiadomość na cały serwer...';
+  }else{
+    if(chatUI.input)chatUI.input.placeholder=chatRecipientId?`Napisz prywatnie do ${chatRecipientName}...`:'Najpierw wybierz odbiorcę...';
+    loadChatUsers();
+  }
+  updateChatHeader();
+}
+function updateChatHeader(){
+  if(!chatUI.header)return;
+  chatUI.header.textContent=chatMode==='broadcast'
+    ?'🌍 Piszesz na cały serwer'
+    :(chatRecipientId?`🔒 Prywatnie do: ${chatRecipientName}`:'🔒 Wybierz jedną osobę — może być offline');
+}
+async function loadChatUsers(){
+  if(!currentAccount||!chatUI.users||chatMode!=='private')return;
+  try{
+    const r=await api(`/api/chat/users?q=${encodeURIComponent(chatUI.search?.value||'')}`);
+    const users=r.users||[];
+    chatUI.users.innerHTML=users.map(u=>`<label class="chatUser${u.online?' online':''}${chatRecipientId===u.id?' selected':''}" data-chat-user="${u.id}" data-chat-name="${chatEscape(u.username)}"><input type="radio" name="chatRecipient" ${chatRecipientId===u.id?'checked':''}><span class="chatUserName">${chatEscape(u.username)}</span></label>`).join('')||'<div class="adminHint">Nie znaleziono takiego konta.</div>';
+    chatUI.users.querySelectorAll('[data-chat-user]').forEach(row=>{
+      row.addEventListener('click',()=>{
+        chatRecipientId=row.dataset.chatUser||'';
+        chatRecipientName=row.querySelector('.chatUserName')?.textContent||'';
+        chatUI.users.querySelectorAll('.chatUser').forEach(x=>x.classList.toggle('selected',x===row));
+        chatUI.users.querySelectorAll('input[type="radio"]').forEach(x=>x.checked=x.closest('.chatUser')===row);
+        if(chatUI.input)chatUI.input.placeholder=`Napisz prywatnie do ${chatRecipientName}...`;
+        updateChatHeader();
+      });
+    });
+    updateChatHeader();
+  }catch(e){
+    chatUI.status.textContent='Nie udało się pobrać listy kont.';
+  }
+}
 async function loadChatMessages(){if(!currentAccount)return;try{const r=await api('/api/chat/messages');renderChat(r.messages||[]);}catch(e){if(e.status!==423)chatUI.status.textContent='Czat chwilowo niedostępny.';}}
 function startChatPolling(){clearInterval(chatPollTimer);loadChatUsers();loadChatMessages();chatPollTimer=setInterval(()=>{if(!document.hidden){loadChatMessages();if(chatUI.overlay.classList.contains('open'))loadChatUsers();}},2500);}
-chatUI.open?.addEventListener('click',()=>{chatUI.overlay.classList.add('open');chatUnread=0;chatUI.badge.style.display='none';loadChatUsers();loadChatMessages();});chatUI.close?.addEventListener('click',()=>chatUI.overlay.classList.remove('open'));chatUI.search?.addEventListener('input',()=>loadChatUsers());chatUI.send?.addEventListener('click',async()=>{const body=chatUI.input.value.trim();if(!body||!chatSelected.size){chatUI.status.textContent='Wybierz odbiorców i wpisz wiadomość.';return;}try{await api('/api/chat/send',{method:'POST',body:JSON.stringify({recipients:[...chatSelected],body})});chatUI.input.value='';chatUI.status.textContent='Wiadomość wysłana.';await loadChatMessages();}catch(e){chatUI.status.textContent=e.message||'Nie udało się wysłać.';}});chatUI.input?.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();chatUI.send.click();}});
+chatUI.open?.addEventListener('click',()=>{
+  chatUI.overlay.classList.add('open');
+  chatUnread=0;
+  chatUI.badge.style.display='none';
+  chatUI.status.textContent='';
+  setChatMode('broadcast');
+  loadChatMessages();
+});
+chatUI.close?.addEventListener('click',()=>chatUI.overlay.classList.remove('open'));
+chatUI.modeAll?.addEventListener('click',()=>setChatMode('broadcast'));
+chatUI.modePrivate?.addEventListener('click',()=>setChatMode('private'));
+chatUI.search?.addEventListener('input',()=>loadChatUsers());
+chatUI.send?.addEventListener('click',async()=>{
+  const body=chatUI.input.value.trim();
+  if(!body){chatUI.status.textContent='Wpisz wiadomość.';return;}
+  const broadcast=chatMode==='broadcast';
+  if(!broadcast&&!chatRecipientId){
+    chatUI.status.textContent='Wybierz jedną osobę. Może być offline.';
+    return;
+  }
+  try{
+    await api('/api/chat/send',{
+      method:'POST',
+      body:JSON.stringify({
+        recipients:broadcast?[]:[chatRecipientId],
+        broadcast,
+        body
+      })
+    });
+    chatUI.input.value='';
+    chatUI.status.textContent=broadcast
+      ?'Wiadomość wysłana na cały serwer.'
+      :`Wiadomość prywatna wysłana do ${chatRecipientName}.`;
+    await loadChatMessages();
+  }catch(e){
+    chatUI.status.textContent=e.message||'Nie udało się wysłać.';
+  }
+});
+chatUI.input?.addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&!e.shiftKey){
+    e.preventDefault();
+    chatUI.send.click();
+  }
+});
 
 
 // ---------- Panel administratora ----------

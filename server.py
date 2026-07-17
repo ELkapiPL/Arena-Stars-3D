@@ -634,54 +634,122 @@ def chat_users(current_id: str, query: str = "") -> list[dict[str, Any]]:
     return [{**account_public(r),"online":clean_id(r.get("account_id")) in active_players} for r in rows]
 
 
-def chat_send(sender: dict[str, Any], recipients_value: Any, body_value: Any) -> dict[str, Any]:
+def chat_send(sender: dict[str, Any], recipients_value: Any, body_value: Any, broadcast_value: Any = False) -> dict[str, Any]:
     global local_chat_seq
     body = " ".join(str(body_value or "").strip().split())[:CHAT_MAX_MESSAGE]
-    if not body: raise ValueError("Wiadomość jest pusta.")
+    if not body:
+        raise ValueError("Wiadomość jest pusta.")
     if contains_profanity(body):
         hours = float(game_config.get("profanityBanHours", 2.0))
-        banned = set_account_ban(sender["account_id"], hours*3600, "Automatyczny ban: przeklinanie na czacie")
-        return {"banned":True,**banned}
-    raw = recipients_value if isinstance(recipients_value,list) else []
-    recipients=[]
+        banned = set_account_ban(sender["account_id"], hours * 3600, "Automatyczny ban: przeklinanie na czacie")
+        return {"banned": True, **banned}
+
+    broadcast = broadcast_value is True or str(broadcast_value).strip().casefold() in {"1", "true", "yes", "tak"}
+    batch_id = ("all-" if broadcast else "private-") + secrets.token_hex(12)
+    created = now()
+
+    if broadcast:
+        if DATABASE_URL:
+            with db_connect() as conn, conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO chat_messages (batch_id,sender_id,recipient_id,body,created_at,is_broadcast) VALUES (%s,%s,NULL,%s,TO_TIMESTAMP(%s),TRUE)",
+                    (batch_id, sender["account_id"], body, created),
+                )
+        else:
+            local_chat_seq += 1
+            local_chat_messages.append({
+                "id": local_chat_seq,
+                "batch_id": batch_id,
+                "sender_id": sender["account_id"],
+                "recipient_id": None,
+                "body": body,
+                "created_at": created,
+                "is_broadcast": True,
+            })
+            save_account_storage()
+        return {"ok": True, "batchId": batch_id, "broadcast": True, "recipients": []}
+
+    raw = recipients_value if isinstance(recipients_value, list) else []
+    recipients: list[str] = []
     for value in raw:
-        rid=clean_id(value)
-        if rid and rid != sender["account_id"] and rid not in recipients and account_get(rid): recipients.append(rid)
-        if len(recipients)>=CHAT_MAX_RECIPIENTS: break
-    if not recipients: raise ValueError("Wybierz co najmniej jednego odbiorcę.")
-    batch_id=secrets.token_hex(12); created=now()
+        rid = clean_id(value)
+        if rid and rid != sender["account_id"] and account_get(rid):
+            recipients = [rid]
+            break
+    if not recipients:
+        raise ValueError("Wybierz jednego odbiorcę albo przełącz czat na cały serwer.")
+
     if DATABASE_URL:
         with db_connect() as conn, conn.cursor() as cur:
             for rid in recipients:
-                cur.execute("INSERT INTO chat_messages (batch_id,sender_id,recipient_id,body,created_at) VALUES (%s,%s,%s,%s,TO_TIMESTAMP(%s))", (batch_id,sender["account_id"],rid,body,created))
+                cur.execute(
+                    "INSERT INTO chat_messages (batch_id,sender_id,recipient_id,body,created_at,is_broadcast) VALUES (%s,%s,%s,%s,TO_TIMESTAMP(%s),FALSE)",
+                    (batch_id, sender["account_id"], rid, body, created),
+                )
     else:
         for rid in recipients:
-            local_chat_seq+=1; local_chat_messages.append({"id":local_chat_seq,"batch_id":batch_id,"sender_id":sender["account_id"],"recipient_id":rid,"body":body,"created_at":created})
+            local_chat_seq += 1
+            local_chat_messages.append({
+                "id": local_chat_seq,
+                "batch_id": batch_id,
+                "sender_id": sender["account_id"],
+                "recipient_id": rid,
+                "body": body,
+                "created_at": created,
+                "is_broadcast": False,
+            })
         save_account_storage()
-    return {"ok":True,"batchId":batch_id,"recipients":recipients}
+    return {"ok": True, "batchId": batch_id, "broadcast": False, "recipients": recipients}
 
 
 def chat_history(account_id: str, limit: int = CHAT_HISTORY_LIMIT) -> list[dict[str, Any]]:
-    records=[]
+    records: list[dict[str, Any]] = []
     if DATABASE_URL:
         with db_connect() as conn, conn.cursor() as cur:
-            cur.execute("""SELECT m.id,m.batch_id,m.sender_id,s.username,m.recipient_id,r.username,m.body,EXTRACT(EPOCH FROM m.created_at)
-                           FROM chat_messages m JOIN accounts s ON s.account_id=m.sender_id JOIN accounts r ON r.account_id=m.recipient_id
-                           WHERE m.sender_id=%s OR m.recipient_id=%s ORDER BY m.id DESC LIMIT %s""", (account_id,account_id,limit*3))
-            records=[{"id":x[0],"batch_id":x[1],"sender_id":x[2],"sender_name":x[3],"recipient_id":x[4],"recipient_name":x[5],"body":x[6],"created_at":float(x[7])} for x in cur.fetchall()][::-1]
+            cur.execute(
+                """SELECT m.id,m.batch_id,m.sender_id,s.username,m.recipient_id,r.username,m.body,
+                          EXTRACT(EPOCH FROM m.created_at),COALESCE(m.is_broadcast,FALSE)
+                   FROM chat_messages m
+                   JOIN accounts s ON s.account_id=m.sender_id
+                   LEFT JOIN accounts r ON r.account_id=m.recipient_id
+                   WHERE m.sender_id=%s OR m.recipient_id=%s OR COALESCE(m.is_broadcast,FALSE)=TRUE
+                   ORDER BY m.id DESC LIMIT %s""",
+                (account_id, account_id, limit * 4),
+            )
+            records = [{
+                "id": x[0], "batch_id": x[1], "sender_id": x[2], "sender_name": x[3],
+                "recipient_id": x[4], "recipient_name": x[5] or "", "body": x[6],
+                "created_at": float(x[7]), "is_broadcast": bool(x[8]),
+            } for x in cur.fetchall()][::-1]
     else:
-        name_map={aid:str(r.get("username") or "") for aid,r in local_accounts.items()}
+        name_map = {aid: str(r.get("username") or "") for aid, r in local_accounts.items()}
         for m in local_chat_messages:
-            if m.get("sender_id")==account_id or m.get("recipient_id")==account_id:
-                records.append({**m,"sender_name":name_map.get(m.get("sender_id"),"?"),"recipient_name":name_map.get(m.get("recipient_id"),"?")})
-        records=records[-limit*3:]
-    grouped={}
-    order=[]
+            is_broadcast = bool(m.get("is_broadcast")) or str(m.get("batch_id", "")).startswith("all-")
+            if is_broadcast or m.get("sender_id") == account_id or m.get("recipient_id") == account_id:
+                records.append({
+                    **m,
+                    "sender_name": name_map.get(m.get("sender_id"), "?"),
+                    "recipient_name": name_map.get(m.get("recipient_id"), ""),
+                    "is_broadcast": is_broadcast,
+                })
+        records = records[-limit * 4:]
+
+    grouped: dict[Any, dict[str, Any]] = {}
+    order: list[Any] = []
     for m in records:
-        key=(m["batch_id"],m["sender_id"],m["body"],int(m["created_at"]))
+        key = (m["batch_id"], m["sender_id"], m["body"], int(m["created_at"]))
         if key not in grouped:
-            grouped[key]={"id":m["id"],"batchId":m["batch_id"],"senderId":m["sender_id"],"sender":m["sender_name"],"recipients":[],"body":m["body"],"createdAt":m["created_at"]}; order.append(key)
-        grouped[key]["recipients"].append({"id":m["recipient_id"],"username":m["recipient_name"]})
+            grouped[key] = {
+                "id": m["id"], "batchId": m["batch_id"], "senderId": m["sender_id"],
+                "sender": m["sender_name"], "recipients": [], "body": m["body"],
+                "createdAt": m["created_at"], "broadcast": bool(m.get("is_broadcast")),
+            }
+            order.append(key)
+        if m.get("is_broadcast"):
+            grouped[key]["broadcast"] = True
+            grouped[key]["recipients"] = [{"id": "*", "username": "WSZYSCY"}]
+        elif m.get("recipient_id"):
+            grouped[key]["recipients"].append({"id": m["recipient_id"], "username": m["recipient_name"]})
         grouped[key]["id"] = max(grouped[key]["id"], m["id"])
     return [grouped[k] for k in order][-limit:]
 
@@ -774,12 +842,15 @@ def init_database() -> None:
                 id BIGSERIAL PRIMARY KEY,
                 batch_id VARCHAR(64) NOT NULL,
                 sender_id VARCHAR(80) NOT NULL REFERENCES accounts(account_id) ON DELETE CASCADE,
-                recipient_id VARCHAR(80) NOT NULL REFERENCES accounts(account_id) ON DELETE CASCADE,
+                recipient_id VARCHAR(80) REFERENCES accounts(account_id) ON DELETE CASCADE,
                 body VARCHAR(300) NOT NULL,
-                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                is_broadcast BOOLEAN NOT NULL DEFAULT FALSE
             )
             """
         )
+        cur.execute("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS is_broadcast BOOLEAN NOT NULL DEFAULT FALSE")
+        cur.execute("ALTER TABLE chat_messages ALTER COLUMN recipient_id DROP NOT NULL")
         cur.execute("CREATE INDEX IF NOT EXISTS players_ranking_idx ON players (points DESC, trophies DESC, player_id ASC)")
         cur.execute("CREATE INDEX IF NOT EXISTS account_sessions_expiry_idx ON account_sessions (expires_at)")
         cur.execute("CREATE INDEX IF NOT EXISTS chat_messages_users_idx ON chat_messages (sender_id, recipient_id, id DESC)")
@@ -1216,7 +1287,7 @@ def duel_payload(match: dict[str, Any], player_id: str) -> dict[str, Any]:
         "serverTime": round(current, 4),
         "stateSeq": int(match.get("state_seq", 0)),
         "ackShotSeq": int(match["players"].get(player_id, {}).get("last_client_shot_seq", 0)),
-        "build": "accounts-chat-bans-v1",
+        "build": "chat-global-private-offline-v3",
     }
 
 
@@ -1902,7 +1973,7 @@ class Handler(BaseHTTPRequestHandler):
                     with db_connect() as conn, conn.cursor() as cur:
                         cur.execute("SELECT 1")
                         cur.fetchone()
-                self.send_json({"ok": True, "storage": "neon" if DATABASE_URL else "json", "build": "accounts-chat-bans-v1"})
+                self.send_json({"ok": True, "storage": "neon" if DATABASE_URL else "json", "build": "chat-global-private-offline-v3"})
             except Exception as exc:
                 self.send_json({"ok": False, "error": str(exc)}, HTTPStatus.SERVICE_UNAVAILABLE)
             return
@@ -1938,7 +2009,7 @@ class Handler(BaseHTTPRequestHandler):
             account=self.require_account()
             if not account: return
             try:
-                result=chat_send(account,payload.get("recipients"),payload.get("body"))
+                result=chat_send(account,payload.get("recipients"),payload.get("body"),payload.get("broadcast"))
                 if result.get("banned"): self.send_json({"error":"Automatyczny ban za przeklinanie.",**result},HTTPStatus.LOCKED)
                 else: self.send_json(result)
             except ValueError as exc: self.send_json({"error":str(exc)},HTTPStatus.BAD_REQUEST)
