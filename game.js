@@ -15,7 +15,7 @@ const ui = {
   overlay:$('overlay'), lobbyView:$('lobbyView'), gameOverView:$('gameOverView'), playBtn:$('playBtn'), retryBtn:$('retryBtn'), lobbyBtn:$('lobbyBtn'),
   score:$('score'), wave:$('wave'), kills:$('kills'), coins:$('coins'), trophies:$('trophies'), healthText:$('healthText'), healthFill:$('healthFill'), ammoText:$('ammoText'), ammoFill:$('ammoFill'),
   superText:$('superText'), superFill:$('superFill'), hyperText:$('hyperText'), hyperFill:$('hyperFill'), finalScore:$('finalScore'), finalKills:$('finalKills'), finalCoins:$('finalCoins'), finalTrophies:$('finalTrophies'),
-  savedTrophies:$('savedTrophies'), savedPoints:$('savedPoints'), savedCoins:$('savedCoins'), skinNotice:$('skinNotice'), versionOneBtn:$('versionOneBtn'), versionNotice:$('versionNotice'), rankingBody:$('rankingBody'), rankingPosition:$('rankingPosition'), rankingLive:$('rankingLive'), rankingTotal:$('rankingTotal'), nicknameInput:$('nicknameInput'), saveNameBtn:$('saveNameBtn'), onlineStatus:$('onlineStatus'), onlineHudCount:$('onlineHudCount'),
+  savedTrophies:$('savedTrophies'), savedPoints:$('savedPoints'), savedCoins:$('savedCoins'), skinNotice:$('skinNotice'), versionOneBtn:$('versionOneBtn'), versionNotice:$('versionNotice'), rankingBody:$('rankingBody'), rankingPosition:$('rankingPosition'), rankingLive:$('rankingLive'), rankingTotal:$('rankingTotal'), nicknameInput:$('nicknameInput'), saveNameBtn:$('saveNameBtn'), onlineStatus:$('onlineStatus'), onlineHudCount:$('onlineHudCount'), modeBtn:$('modeBtn'), modeMenu:$('modeMenu'), soloModeOption:$('soloModeOption'), duelModeOption:$('duelModeOption'), duelQueueView:$('duelQueueView'), duelQueueText:$('duelQueueText'), duelCancelBtn:$('duelCancelBtn'), duelOpponentName:$('duelOpponentName'), duelOpponentHp:$('duelOpponentHp'), hudModeText:$('hudModeText'), gameOverTitle:$('gameOverTitle'), gameOverBadge:$('gameOverBadge'), endStats:$('endStats'),
   crosshair:$('crosshair'), centerMsg:$('centerMsg'),
   upgradeButtons:[...document.querySelectorAll('[data-upgrade]')],
   persistentLevelEls:[...document.querySelectorAll('[data-persistent-level]')],
@@ -99,9 +99,10 @@ function loadProgress(){
       skin:requestedSkin==='cosmic'&&ownedSkins.cosmic?'cosmic':'classic',
       ownedSkins,
       heroVersion1:data.heroVersion1===true,
+      mode:data.mode==='duel'?'duel':'solo',
       upgrades:{move:safeUpgradeLevel(saved.move),fire:safeUpgradeLevel(saved.fire),hp:safeUpgradeLevel(saved.hp)}
     };
-  }catch(_){return {name:'Gracz',trophies:0,points:0,coins:0,skin:'classic',ownedSkins:{classic:true,cosmic:false},heroVersion1:false,upgrades:{move:0,fire:0,hp:0}};}
+  }catch(_){return {name:'Gracz',trophies:0,points:0,coins:0,skin:'classic',ownedSkins:{classic:true,cosmic:false},heroVersion1:false,mode:'solo',upgrades:{move:0,fire:0,hp:0}};}
 }
 let profile=loadProgress();
 function saveProgress(){try{localStorage.setItem(SAVE_KEY,JSON.stringify(profile));}catch(_){} }
@@ -110,20 +111,25 @@ function getPlayerId(){
   catch(_){return `gracz-${Date.now()}-${Math.random().toString(16).slice(2)}`;}
 }
 const playerId=getPlayerId();
-let rankingRows=[],rankingCenterOnNextRender=true,onlineConnected=false,onlineCount=0,rankingBusy=false,myRankingPosition=null,totalPlayers=0;
+let rankingRows=[],rankingCenterOnNextRender=true,onlineConnected=false,onlineCount=0,rankingBusy=false,myRankingPosition=null,totalPlayers=0,rankingFailures=0;
 function isLobbyVisible(){return document.body.classList.contains('lobby-mode')&&ui.lobbyView&&ui.lobbyView.style.display!=='none';}
 function escapeRankingName(value){return String(value).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
 function setOnlineStatus(text,state=''){
   if(ui.onlineStatus){ui.onlineStatus.textContent=text;ui.onlineStatus.classList.toggle('ok',state==='ok');ui.onlineStatus.classList.toggle('bad',state==='bad');}
   if(ui.rankingLive)ui.rankingLive.textContent=state==='ok'?`${onlineCount} ONLINE`:(state==='bad'?'OFFLINE':'ŁĄCZENIE...');
   if(ui.onlineHudCount)ui.onlineHudCount.textContent=onlineCount;
-  if(ui.playBtn)ui.playBtn.disabled=!onlineConnected;
-  if(ui.retryBtn)ui.retryBtn.disabled=!onlineConnected;
+  // Mecz jest solo, więc chwilowa awaria rankingu nie może blokować przycisku Graj.
+  if(ui.playBtn)ui.playBtn.disabled=false;
+  if(ui.retryBtn)ui.retryBtn.disabled=false;
 }
 async function api(path,options={}){
-  const response=await fetch(path,{cache:'no-store',headers:{'Content-Type':'application/json',...(options.headers||{})},...options});
-  if(!response.ok)throw new Error(`HTTP ${response.status}`);
-  return response.json();
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),10000);
+  try{
+    const response=await fetch(path,{cache:'no-store',headers:{'Content-Type':'application/json',...(options.headers||{})},signal:controller.signal,...options});
+    if(!response.ok)throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  }finally{clearTimeout(timeout);}
 }
 function renderRanking(){
   if(!ui.rankingBody)return;
@@ -135,6 +141,18 @@ function renderRanking(){
   const playerRow=ui.rankingBody.querySelector('.playerRow');
   if(playerRow&&isLobbyVisible()&&rankingCenterOnNextRender){playerRow.scrollIntoView({block:'center'});rankingCenterOnNextRender=false;}
 }
+
+function handleRankingFailure(){
+  rankingFailures++;
+  if(rankingFailures<3){
+    setOnlineStatus('Ponowne łączenie z rankingiem…','');
+    return;
+  }
+  onlineConnected=false;
+  onlineCount=0;
+  setOnlineStatus('Ranking chwilowo niedostępny — gra działa solo','bad');
+}
+
 async function syncProfile(){
   try{
     const data=await api('/api/profile',{method:'POST',body:JSON.stringify({playerId,name:profile.name,points:profile.points,trophies:profile.trophies})});
@@ -147,8 +165,8 @@ async function syncProfile(){
     rankingRows=Array.isArray(data.players)?data.players:rankingRows;
     myRankingPosition=Number(data.position)||null;
     totalPlayers=Math.max(0,Number(data.totalPlayers)||0);
-    onlineConnected=true;onlineCount=Math.max(1,Number(data.online)||1);setOnlineStatus(`Połączono jako ${profile.name} • mecze solo`,'ok');renderRanking();
-  }catch(_){onlineConnected=false;onlineCount=0;setOnlineStatus('Brak serwera — uruchom URUCHOM_ONLINE.bat','bad');}
+    rankingFailures=0;onlineConnected=true;onlineCount=Math.max(1,Number(data.online)||1);setOnlineStatus(`Połączono jako ${profile.name} • mecze solo`,'ok');renderRanking();
+  }catch(_){handleRankingFailure();}
 }
 async function fetchRanking(){
   if(rankingBusy)return;rankingBusy=true;
@@ -157,21 +175,168 @@ async function fetchRanking(){
     rankingRows=Array.isArray(data.players)?data.players:[];
     myRankingPosition=Number(data.position)||null;
     totalPlayers=Math.max(0,Number(data.totalPlayers)||0);
-    onlineConnected=true;onlineCount=Math.max(0,Number(data.online)||0);setOnlineStatus(`Połączono jako ${profile.name} • mecze solo`,'ok');renderRanking();
+    rankingFailures=0;onlineConnected=true;onlineCount=Math.max(0,Number(data.online)||0);setOnlineStatus(`Połączono jako ${profile.name} • mecze solo`,'ok');renderRanking();
   }
-  catch(_){onlineConnected=false;onlineCount=0;setOnlineStatus('Brak serwera — uruchom URUCHOM_ONLINE.bat','bad');}
+  catch(_){handleRankingFailure();}
   finally{rankingBusy=false;}
 }
 function saveOnlineName(){
   if(!ui.nicknameInput)return;profile.name=safePlayerName(ui.nicknameInput.value);ui.nicknameInput.value=profile.name;saveProgress();rankingCenterOnNextRender=true;syncProfile().then(fetchRanking);
 }
-setInterval(fetchRanking,1500);
+setInterval(()=>{if(!document.hidden)fetchRanking();},5000);
+
+function updateModeUI(){
+  if(!ui.modeBtn)return;
+  const duel=selectedMode==='duel',solo=selectedMode==='solo';
+  ui.modeBtn.textContent=duel?'POJEDYNKI ⚔':(solo?'PRZETRWANIE 🤖':'TRYBY ▾');
+  ui.modeBtn.classList.toggle('selected',duel||solo);
+  ui.soloModeOption?.classList.toggle('selected',solo);
+  ui.duelModeOption?.classList.toggle('selected',duel);
+}
+function toggleModeMenu(force){
+  if(!ui.modeMenu)return;
+  const open=typeof force==='boolean'?force:!ui.modeMenu.classList.contains('open');
+  ui.modeMenu.classList.toggle('open',open);
+}
+function chooseSoloMode(){
+  selectedMode='solo';profile.mode='solo';saveProgress();updateModeUI();toggleModeMenu(false);
+}
+function chooseDuelMode(){
+  selectedMode='duel';profile.mode='duel';saveProgress();updateModeUI();toggleModeMenu(false);
+}
+
+function duelPlayerSettings(){
+  const versionOwned=profile.heroVersion1===true;
+  const maxHp=Math.round((BASE_HP+20*(profile.upgrades.hp||0))*(versionOwned?VERSION_ONE_HP:1));
+  const speed=BASE_SPEED*Math.pow(1.10,profile.upgrades.move||0)*(versionOwned?VERSION_ONE_SPEED:1);
+  const fireCooldown=BASE_FIRE_COOLDOWN/(Math.pow(1.07,profile.upgrades.fire||0)*(versionOwned?VERSION_ONE_FIRE:1));
+  return {playerId,name:profile.name,skin:profile.skin,maxHp,speed,fireCooldown};
+}
+function setDuelQueueText(text){if(ui.duelQueueText)ui.duelQueueText.textContent=text;}
+function clearDuelTimers(){
+  clearTimeout(duelJoinTimer);duelJoinTimer=0;
+  clearInterval(duelNetworkTimer);duelNetworkTimer=0;
+  duelNetworkBusy=false;
+}
+function stopDuelSession(notify=true){
+  const oldMatch=duelMatchId;
+  clearDuelTimers();
+  duelSearching=false;duelActive=false;duelEnded=false;duelMatchId='';duelOpponent=null;duelServerBullets=[];duelShootQueued=false;duelMatchStatus='';duelStartIn=0;duelNetworkFailures=0;
+  document.body.classList.remove('duel-mode');
+  if(location.hash==='#pojedynki')history.replaceState(null,'',location.pathname+location.search);
+  if(notify&&(oldMatch||playerId)){
+    const body=JSON.stringify({playerId,matchId:oldMatch});
+    if(navigator.sendBeacon){try{navigator.sendBeacon('/api/duel/leave',new Blob([body],{type:'application/json'}));}catch(_){}}
+    else api('/api/duel/leave',{method:'POST',body}).catch(()=>{});
+  }
+}
+async function requestDuelJoin(){
+  if(!duelSearching)return;
+  try{
+    const data=await api('/api/duel/join',{method:'POST',body:JSON.stringify(duelPlayerSettings())});
+    duelNetworkFailures=0;
+    if(!duelSearching)return;
+    if(data.status==='waiting'){
+      const left=Math.max(0,Math.ceil(Number(data.waitRemaining??30)));setDuelQueueText(`Szukam prawdziwego gracza online… ${left} s. Jeśli nikt nie dołączy, rozpoczniesz pojedynek z botem.`);
+      duelJoinTimer=setTimeout(requestDuelJoin,900);
+      return;
+    }
+    if(data.matchId){beginDuelMatch(data);return;}
+    throw new Error('Nieprawidłowa odpowiedź serwera');
+  }catch(_){
+    duelNetworkFailures++;
+    setDuelQueueText(duelNetworkFailures<3?'Ponowne łączenie z serwerem pojedynków…':'Serwer pojedynków chwilowo nie odpowiada. Próba ponownie za chwilę.');
+    duelJoinTimer=setTimeout(requestDuelJoin,1800);
+  }
+}
+function startDuelQueue(){
+  if(duelSearching||duelActive)return;
+  chooseDuelMode();
+  if(running&&!duelActive)commitRun();
+  reset();running=false;duelSearching=true;duelEnded=false;duelNetworkFailures=0;duelMatchId='';duelOpponent=null;duelServerBullets=[];
+  document.body.classList.add('lobby-mode');document.body.classList.remove('duel-mode');
+  ui.lobbyView.style.display='none';ui.gameOverView.style.display='none';ui.duelQueueView.style.display='grid';ui.overlay.style.display='block';
+  setDuelQueueText('Łączenie z kolejką pojedynków 1v1…');
+  requestDuelJoin();
+}
+function cancelDuelQueue(){
+  stopDuelSession(true);showLobby(false);
+}
+function beginDuelMatch(data){
+  clearTimeout(duelJoinTimer);duelJoinTimer=0;duelSearching=false;duelActive=true;duelEnded=false;duelMatchId=data.matchId;duelNetworkFailures=0;
+  reset();running=true;document.body.classList.remove('lobby-mode');document.body.classList.add('duel-mode');
+  ui.duelQueueView.style.display='none';ui.lobbyView.style.display='block';ui.gameOverView.style.display='none';ui.overlay.style.display='none';
+  if(ui.hudModeText)ui.hudModeText.textContent='Pojedynek 1v1';
+  history.replaceState(null,'','#pojedynki');
+  processDuelState(data,true);last=performance.now();
+  clearInterval(duelNetworkTimer);duelNetworkTimer=setInterval(sendDuelFrame,90);
+}
+function processDuelState(data,initial=false){
+  if(!data||data.matchId!==duelMatchId)return;
+  duelMatchStatus=data.status||duelMatchStatus;duelStartIn=Math.max(0,Number(data.startIn)||0);duelServerBullets=Array.isArray(data.bullets)?data.bullets:[];
+  const list=Array.isArray(data.players)?data.players:[],me=list.find(p=>p.id===playerId),other=list.find(p=>p.id!==playerId);
+  if(me&&player){
+    if(initial||Math.hypot((me.x||0)-player.x,(me.z||0)-player.z)>1.6){player.x=Number(me.x)||0;player.z=Number(me.z)||0;}
+    player.hp=Math.max(0,Number(me.hp)||0);player.maxHp=Math.max(1,Number(me.maxHp)||player.maxHp);
+  }
+  duelOpponent=other?{...other}:null;
+  if(ui.hudModeText)ui.hudModeText.textContent=other?.isBot?'Pojedynek z botem':'Pojedynek 1v1';
+  if(ui.duelOpponentName)ui.duelOpponentName.textContent=other?`${other.name.toUpperCase()}${other.isBot?' • BOT':''}`:'OCZEKIWANIE NA PRZECIWNIKA';
+  if(ui.duelOpponentHp)ui.duelOpponentHp.textContent=other?`${Math.max(0,other.hp)} / ${other.maxHp} HP`:'—';
+  updateUI();
+  if(data.status==='finished')finishDuel(data);
+}
+async function sendDuelFrame(){
+  if(!duelActive||!duelMatchId||!player||duelNetworkBusy)return;
+  duelNetworkBusy=true;const shot=duelShootQueued;duelShootQueued=false;
+  try{
+    const data=await api('/api/duel/action',{method:'POST',body:JSON.stringify({matchId:duelMatchId,playerId,x:player.x,z:player.z,angle:player.angle,shoot:shot})});
+    duelNetworkFailures=0;processDuelState(data,false);
+  }catch(_){
+    if(shot)duelShootQueued=true;
+    duelNetworkFailures++;
+    if(duelNetworkFailures===3)showMessage('PONOWNE ŁĄCZENIE…');
+    if(duelNetworkFailures>12&&!duelEnded){finishDuel({winnerId:null,reason:'Utracono połączenie z serwerem pojedynku.'});}
+  }finally{duelNetworkBusy=false;}
+}
+function duelPlayerShoot(){
+  if(!duelActive||duelMatchStatus!=='playing'||!player||player.fire>0||player.reload>0)return;
+  if(player.ammo<=0){startReload();return;}
+  player.fire=player.fireCooldown;player.ammo--;duelShootQueued=true;
+  const color=profile.skin==='cosmic'?[.78,.38,1]:[.24,.85,1];
+  burst(player.x+Math.sin(player.angle),player.z+Math.cos(player.angle),color,5,2.7);
+  if(player.ammo<=0)startReload();else updateUI();
+}
+function updateDuel(dt){
+  if(!duelActive||!player)return;
+  player.fire=Math.max(0,player.fire-dt);
+  if(player.reload>0){player.reload=Math.max(0,player.reload-dt);if(player.reload===0){player.ammo=MAG_SIZE;showMessage('AMUNICJA GOTOWA!');}updateUI();}
+  if(duelMatchStatus==='countdown'){
+    const n=Math.max(1,Math.ceil(duelStartIn));showMessage(`START ZA ${n}`);duelStartIn=Math.max(0,duelStartIn-dt);
+  }else if(duelMatchStatus==='playing'){
+    let dx=(keys.KeyD?1:0)-(keys.KeyA?1:0),dz=(keys.KeyS?1:0)-(keys.KeyW?1:0),len=Math.hypot(dx,dz);
+    if(len){dx/=len;dz/=len;player.x+=dx*player.speed*dt;player.z+=dz*player.speed*dt;player.x=Math.max(-17.2,Math.min(17.2,player.x));player.z=Math.max(-17.2,Math.min(17.2,player.z));}
+    player.angle=Math.atan2(mouse.worldX-player.x,mouse.worldZ-player.z);if(mouse.down)duelPlayerShoot();
+  }
+  for(let i=particles.length-1;i>=0;i--){const p=particles[i];p.life-=dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.z+=p.vz*dt;p.vy-=10*dt;p.vx*=.97;p.vz*=.97;if(p.y<.05){p.y=.05;p.vy*=-.25;}if(p.life<=0)particles.splice(i,1);}
+  shake=Math.max(0,shake-dt);if(messageClock>0){messageClock-=dt;if(messageClock<=0)ui.centerMsg.style.opacity='0';}
+}
+function finishDuel(data){
+  if(duelEnded)return;duelEnded=true;running=false;duelActive=false;clearDuelTimers();
+  const won=data.winnerId===playerId,lost=data.winnerId&&data.winnerId!==playerId;
+  if(ui.gameOverBadge)ui.gameOverBadge.textContent='KONIEC POJEDYNKU • TRYB ONLINE 1V1';
+  if(ui.gameOverTitle)ui.gameOverTitle.innerHTML=won?'ZWYCIĘSTWO!':(lost?'PRZEGRANA':'KONIEC MECZU');
+  const opponentName=duelOpponent?.name||'Przeciwnik';
+  if(ui.endStats)ui.endStats.innerHTML=`<div class="endStat">Tryb<span>1V1</span></div><div class="endStat">Przeciwnik<span>${escapeRankingName(opponentName)}</span></div><div class="endStat">Twoje życie<span>${Math.max(0,Math.ceil(player?.hp||0))}</span></div><div class="endStat">Wynik<span>${won?'WYGRANA':(lost?'PRZEGRANA':'REMIS')}</span></div>`;
+  const reason=data.reason||'Pojedynek został zakończony.';ui.gameOverView.querySelector('p').textContent=reason;
+  ui.duelQueueView.style.display='none';ui.lobbyView.style.display='none';ui.gameOverView.style.display='grid';document.body.classList.add('lobby-mode');document.body.classList.remove('duel-mode');ui.overlay.style.display='block';
+}
 
 function updateLobby(){
   ui.savedTrophies.textContent=Math.floor(profile.trophies).toLocaleString('pl-PL');
   ui.savedPoints.textContent=Math.floor(profile.points).toLocaleString('pl-PL');
   ui.savedCoins.textContent=Math.floor(profile.coins).toLocaleString('pl-PL');
-  if(isLobbyVisible())renderRanking();
+  if(isLobbyVisible())renderRanking();updateModeUI();
   if(ui.nicknameInput&&document.activeElement!==ui.nicknameInput)ui.nicknameInput.value=profile.name;
   if(ui.versionOneBtn){
     const owned=profile.heroVersion1===true;
@@ -216,6 +381,8 @@ function buyVersionOne(){
 let upgrades={...profile.upgrades};
 let running=false,runCommitted=false,last=performance.now(),score=0,wave=1,kills=0,walletCoins=profile.coins,runCoins=0,trophies=0,survivalTime=0,waveClock=0,spawnClock=0,shake=0,messageClock=0;
 let player,enemies=[],bullets=[],particles=[],stars=[],pickups=[],coins=[];
+let selectedMode=profile.mode==='duel'?'duel':'solo',duelSearching=false,duelActive=false,duelEnded=false,duelMatchId='',duelOpponent=null,duelServerBullets=[],duelShootQueued=false,duelNetworkBusy=false,duelNetworkTimer=0,duelJoinTimer=0,duelNetworkFailures=0,duelMatchStatus='',duelStartIn=0;
+
 const obstacles=[
   {x:-6,z:-5,w:3.6,d:2.3,h:1.7,c:[.43,.29,.21]}, {x:6,z:5,w:3.6,d:2.3,h:1.7,c:[.43,.29,.21]},
   {x:-7,z:6,w:2.4,d:4.2,h:1.5,c:[.30,.36,.44]}, {x:7,z:-6,w:2.4,d:4.2,h:1.5,c:[.30,.36,.44]},
@@ -234,9 +401,10 @@ function commitRun(){
   profile.points+=Math.max(0,Math.floor(score));profile.trophies+=Math.max(0,Math.floor(trophies));profile.coins=Math.max(0,Math.floor(walletCoins));
   saveProgress();updateLobby();syncProfile().then(fetchRanking);
 }
-function showLobby(){running=false;rankingCenterOnNextRender=true;document.body.classList.add('lobby-mode');ui.lobbyView.style.display='block';ui.gameOverView.style.display='none';ui.overlay.style.display='grid';updateLobby();fetchRanking();}
-function startGame(){if(!onlineConnected){setOnlineStatus('Najpierw uruchom serwer online.','bad');return;}if(running)commitRun();reset();running=true;document.body.classList.remove('lobby-mode');ui.lobbyView.style.display='block';ui.gameOverView.style.display='none';updateUI();ui.overlay.style.display='none';last=performance.now();}
-function gameOver(){running=false;commitRun();ui.finalScore.textContent=score;ui.finalKills.textContent=kills;ui.finalCoins.textContent=runCoins;ui.finalTrophies.textContent=trophies;ui.lobbyView.style.display='none';ui.gameOverView.style.display='grid';document.body.classList.add('lobby-mode');ui.overlay.style.display='block';}
+function showLobby(leaveDuel=true){if(leaveDuel&&(duelActive||duelSearching||duelMatchId))stopDuelSession(true);running=false;rankingCenterOnNextRender=true;document.body.classList.add('lobby-mode');document.body.classList.remove('duel-mode');ui.lobbyView.style.display='block';ui.duelQueueView.style.display='none';ui.gameOverView.style.display='none';ui.overlay.style.display='grid';if(ui.hudModeText)ui.hudModeText.textContent='Online';if(ui.gameOverBadge)ui.gameOverBadge.textContent='KONIEC MECZU • POSTĘP ZAPISANY';if(ui.gameOverTitle)ui.gameOverTitle.innerHTML='ROBOTY CIĘ<br>POKONAŁY';updateLobby();fetchRanking();}
+function startSoloGame(){if(running)commitRun();reset();running=true;document.body.classList.remove('lobby-mode');document.body.classList.remove('duel-mode');ui.lobbyView.style.display='block';ui.gameOverView.style.display='none';updateUI();ui.overlay.style.display='none';last=performance.now();}
+function startGame(){if(selectedMode==='solo'){startSoloGame();return;}if(selectedMode==='duel'){startDuelQueue();return;}toggleModeMenu(true);}
+function gameOver(){running=false;commitRun();if(ui.gameOverBadge)ui.gameOverBadge.textContent='KONIEC MECZU • POSTĘP ZAPISANY';if(ui.gameOverTitle)ui.gameOverTitle.innerHTML='ROBOTY CIĘ<br>POKONAŁY';if(ui.endStats)ui.endStats.innerHTML='<div class="endStat">Punkty ⭐<span id="finalScore">0</span></div><div class="endStat">Pokonani 🤖<span id="finalKills">0</span></div><div class="endStat">Monety 🪙<span id="finalCoins">0</span></div><div class="endStat">Pucharki 🏆<span id="finalTrophies">0</span></div>';ui.finalScore=$('finalScore');ui.finalKills=$('finalKills');ui.finalCoins=$('finalCoins');ui.finalTrophies=$('finalTrophies');ui.finalScore.textContent=score;ui.finalKills.textContent=kills;ui.finalCoins.textContent=runCoins;ui.finalTrophies.textContent=trophies;ui.gameOverView.querySelector('p').textContent='Wybierz następną akcję.';ui.lobbyView.style.display='none';ui.gameOverView.style.display='grid';document.body.classList.add('lobby-mode');ui.overlay.style.display='block';}
 function showMessage(t){ui.centerMsg.textContent=t;ui.centerMsg.style.opacity='1';messageClock=1.4;}
 function updateUI(){
   ui.score.textContent=score;ui.wave.textContent=wave;ui.kills.textContent=kills;ui.coins.textContent=walletCoins;ui.trophies.textContent=trophies;
@@ -257,6 +425,7 @@ function updateUI(){
   }
 }
 function buyUpgrade(type){
+  if(duelActive)return;
   if(!running||!(type in upgrades))return;
   const level=upgrades[type];
   if(level>=UPGRADE_COSTS.length){showMessage('MAKSYMALNY POZIOM');return;}
@@ -297,17 +466,18 @@ function spawnEnemy(){
 }
 function shoot(owner,x,z,angle,speed,damage,color,size=.18,spread=0){angle+=rnd(-spread,spread);bullets.push({owner,x,y:.72,z,vx:Math.sin(angle)*speed,vz:Math.cos(angle)*speed,life:2.2,damage,color,size});}
 function startReload(){if(!running||!player||player.reload>0||player.ammo>=MAG_SIZE)return;player.reload=RELOAD_TIME;player.fire=0;showMessage('PRZEŁADOWANIE...');updateUI();}
-function playerShoot(){if(!running||player.fire>0||player.reload>0)return;if(player.ammo<=0){startReload();return;}const hyper=(player.hyperActive||0)>0;player.fire=player.fireCooldown/(hyper?HYPER_FIRE_MULT:1);player.ammo--;const cosmic=profile.skin==='cosmic',shotColor=hyper?[.35,1,.92]:(cosmic?[.78,.38,1]:[.24,.85,1]),flashColor=hyper?[1,.95,.35]:(cosmic?[.35,1,1]:[.35,.9,1]);shoot('player',player.x+Math.sin(player.angle)*1.05,player.z+Math.cos(player.angle)*1.05,player.angle,18,22,shotColor,.21,.025);burst(player.x+Math.sin(player.angle),player.z+Math.cos(player.angle),flashColor,4,2.5);if(player.ammo<=0)startReload();else updateUI();}
+function playerShoot(){if(duelActive){duelPlayerShoot();return;}if(!running||player.fire>0||player.reload>0)return;if(player.ammo<=0){startReload();return;}const hyper=(player.hyperActive||0)>0;player.fire=player.fireCooldown/(hyper?HYPER_FIRE_MULT:1);player.ammo--;const cosmic=profile.skin==='cosmic',shotColor=hyper?[.35,1,.92]:(cosmic?[.78,.38,1]:[.24,.85,1]),flashColor=hyper?[1,.95,.35]:(cosmic?[.35,1,1]:[.35,.9,1]);shoot('player',player.x+Math.sin(player.angle)*1.05,player.z+Math.cos(player.angle)*1.05,player.angle,18,22,shotColor,.21,.025);burst(player.x+Math.sin(player.angle),player.z+Math.cos(player.angle),flashColor,4,2.5);if(player.ammo<=0)startReload();else updateUI();}
 function addCharge(baseAmount){if(!player)return;const amount=baseAmount*SUPER_CHARGE_MULTIPLIER;player.super=Math.min(100,player.super+amount);if((player.hyperActive||0)<=0)player.hyper=Math.min(100,player.hyper+amount/HYPER_CHARGE_RATIO);}
 function superPulse(pulse,total){if(!running||!player)return;const color=total>1?[.25,1,.88]:[1,.35,.93];for(let i=0;i<24;i++)shoot('player',player.x,player.z,i/24*Math.PI*2,14,28,color,.24,0);for(const e of enemies){const d=Math.hypot(e.x-player.x,e.z-player.z);if(d<5.5){e.hp-=45;const k=(5.5-d)/5.5;e.x+=(e.x-player.x)/(d||1)*k*3;e.z+=(e.z-player.z)/(d||1)*k*3;}}burst(player.x,player.z,color,32,9);shake=Math.max(shake,.55);if(total>1)showMessage(`HIPER SUPER ${pulse}/${total}!`);}
-function superAttack(){if(!running||player.super<100)return;player.super=0;player.inv=.6;const pulses=(player.hyperActive||0)>0?3:1,caster=player;if(pulses===1){showMessage('SUPER!');superPulse(1,1);}else{/* Liczba fal jest ustalana w chwili użycia. Koniec hiperdoładowania nie anuluje fal 2 i 3. */superPulse(1,3);setTimeout(()=>{if(running&&player===caster)superPulse(2,3);},170);setTimeout(()=>{if(running&&player===caster)superPulse(3,3);},340);}updateUI();}
-function activateHyper(){if(!running||!player||player.hyper<100||player.hyperActive>0)return;player.hyper=0;player.hyperActive=HYPER_DURATION;player.inv=Math.max(player.inv,.45);showMessage('HIPERDOŁADOWANIE: 9 SEKUND!');burst(player.x,player.z,[.25,1,.82],40,10);shake=.4;updateUI();}
+function superAttack(){if(duelActive){showMessage('SUPER NIEDOSTĘPNY W 1V1');return;}if(!running||player.super<100)return;player.super=0;player.inv=.6;const pulses=(player.hyperActive||0)>0?3:1,caster=player;if(pulses===1){showMessage('SUPER!');superPulse(1,1);}else{/* Liczba fal jest ustalana w chwili użycia. Koniec hiperdoładowania nie anuluje fal 2 i 3. */superPulse(1,3);setTimeout(()=>{if(running&&player===caster)superPulse(2,3);},170);setTimeout(()=>{if(running&&player===caster)superPulse(3,3);},340);}updateUI();}
+function activateHyper(){if(duelActive){showMessage('HIPER NIEDOSTĘPNY W 1V1');return;}if(!running||!player||player.hyper<100||player.hyperActive>0)return;player.hyper=0;player.hyperActive=HYPER_DURATION;player.inv=Math.max(player.inv,.45);showMessage('HIPERDOŁADOWANIE: 9 SEKUND!');burst(player.x,player.z,[.25,1,.82],40,10);shake=.4;updateUI();}
 function spawnCoins(x,z,count){for(let i=0;i<count;i++){const a=(i/count)*Math.PI*2+rnd(-.3,.3),power=rnd(1.8,4.2);coins.push({x,z,r:.22,vx:Math.cos(a)*power,vz:Math.sin(a)*power,t:rnd(0,6.28),life:25});}}
 function enemyDeath(e){score+=e.type==='tank'?350:e.type==='shooter'?180:120;kills++;addCharge(e.type==='tank'?18:10);burst(e.x,e.z,e.color,e.type==='tank'?24:15,e.type==='tank'?8:5);spawnCoins(e.x,e.z,e.coinReward||1);stars.push({x:e.x,z:e.z,y:.45,t:Math.random()*6.28,life:10});if(kills%7===0)pickups.push({x:e.x,z:e.z,type:'heal',life:14,t:0});updateUI();}
 function damagePlayer(d){if(player.inv>0)return;if((player.hyperActive||0)>0)d*=HYPER_DAMAGE_MULT;player.hp-=d;player.inv=.55;player.regen=4;shake=.35;burst(player.x,player.z,[1,.15,.2],16,6);updateUI();if(player.hp<=0)gameOver();}
 
 function update(dt){
   if(!running)return;
+  if(duelActive){updateDuel(dt);return;}
   survivalTime+=dt;const earnedTrophies=Math.floor(survivalTime/4);if(earnedTrophies>trophies){trophies=earnedTrophies;showMessage(`PUCHAREK ${trophies} 🏆`);updateUI();}
   player.fire=Math.max(0,player.fire-dt);if(player.reload>0){player.reload=Math.max(0,player.reload-dt);if(player.reload===0){player.ammo=MAG_SIZE;showMessage('AMUNICJA GOTOWA!');}updateUI();}player.inv=Math.max(0,player.inv-dt);player.regen=Math.max(0,player.regen-dt);const wasHyper=(player.hyperActive||0)>0;if(wasHyper){player.hyperActive=Math.max(0,player.hyperActive-dt);updateUI();if(player.hyperActive===0)showMessage('HIPERDOŁADOWANIE ZAKOŃCZONE');}if(player.regen<=0&&player.hp<player.maxHp){player.hp=Math.min(player.maxHp,player.hp+5*dt);updateUI();}
   let dx=(keys.KeyD?1:0)-(keys.KeyA?1:0),dz=(keys.KeyS?1:0)-(keys.KeyW?1:0),l=Math.hypot(dx,dz);if(l){dx/=l;dz/=l;const moveSpeed=player.speed*((player.hyperActive||0)>0?HYPER_SPEED_MULT:1);player.x+=dx*moveSpeed*dt;player.z+=dz*moveSpeed*dt;resolve(player);}
@@ -345,11 +515,11 @@ function render(){
   for(let x=-16;x<=16;x+=4)for(let z=-16;z<=16;z+=4)draw(mesh.cube,x,-.015,z,1.86,.02,1.86,0,((x+z)/4)%2===0?[.24,.57,.43]:[.22,.53,.40]);
   // granice
   draw(mesh.cube,0,.45,-19,20,.9,.55,0,[.18,.23,.35]);draw(mesh.cube,0,.45,19,20,.9,.55,0,[.18,.23,.35]);draw(mesh.cube,-19,.45,0,.55,.9,20,0,[.18,.23,.35]);draw(mesh.cube,19,.45,0,.55,.9,20,0,[.18,.23,.35]);
-  for(const o of obstacles){draw(mesh.cube,o.x,o.h/2-.02,o.z,o.w/2,o.h/2,o.d/2,0,o.c);draw(mesh.cube,o.x,o.h+.05,o.z,o.w*.43,.08,o.d*.43,0,[Math.min(1,o.c[0]+.12),Math.min(1,o.c[1]+.12),Math.min(1,o.c[2]+.12)]);}
-  for(const b of bushes){for(let k=0;k<5;k++){const a=k/5*Math.PI*2;draw(mesh.sphere,b[0]+Math.cos(a)*.55,.45,b[1]+Math.sin(a)*.55,.7,.55,.7,0,[.08,.48,.22]);}}
-  for(const s of stars){const bob=Math.sin(s.t)*.15;draw(mesh.sphere,s.x,.55+bob,s.z,.36,.15,.36,s.t,[1,.85,.12]);draw(mesh.sphere,s.x,.55+bob,s.z,.15,.42,.15,s.t,[1,.65,.05]);}
-  for(const p of pickups){const bob=Math.sin(p.t)*.13;draw(mesh.cube,p.x,.55+bob,p.z,.42,.42,.42,p.t*.5,[.2,.95,.4]);draw(mesh.cube,p.x,.57+bob,p.z,.12,.47,.13,0,[1,1,1]);draw(mesh.cube,p.x,.57+bob,p.z,.47,.12,.13,0,[1,1,1]);}
-  for(const c of coins){const bob=Math.sin(c.t)*.12,pulse=1+Math.sin(c.t*1.7)*.08;draw(mesh.cyl,c.x,.42+bob,c.z,.30*pulse,.075,.30*pulse,c.t,[1,.72,.04]);draw(mesh.cyl,c.x,.50+bob,c.z,.19*pulse,.018,.19*pulse,-c.t,[1,.92,.28]);}
+  if(!duelActive)for(const o of obstacles){draw(mesh.cube,o.x,o.h/2-.02,o.z,o.w/2,o.h/2,o.d/2,0,o.c);draw(mesh.cube,o.x,o.h+.05,o.z,o.w*.43,.08,o.d*.43,0,[Math.min(1,o.c[0]+.12),Math.min(1,o.c[1]+.12),Math.min(1,o.c[2]+.12)]);}
+  if(!duelActive)for(const b of bushes){for(let k=0;k<5;k++){const a=k/5*Math.PI*2;draw(mesh.sphere,b[0]+Math.cos(a)*.55,.45,b[1]+Math.sin(a)*.55,.7,.55,.7,0,[.08,.48,.22]);}}
+  if(!duelActive)for(const s of stars){const bob=Math.sin(s.t)*.15;draw(mesh.sphere,s.x,.55+bob,s.z,.36,.15,.36,s.t,[1,.85,.12]);draw(mesh.sphere,s.x,.55+bob,s.z,.15,.42,.15,s.t,[1,.65,.05]);}
+  if(!duelActive)for(const p of pickups){const bob=Math.sin(p.t)*.13;draw(mesh.cube,p.x,.55+bob,p.z,.42,.42,.42,p.t*.5,[.2,.95,.4]);draw(mesh.cube,p.x,.57+bob,p.z,.12,.47,.13,0,[1,1,1]);draw(mesh.cube,p.x,.57+bob,p.z,.47,.12,.13,0,[1,1,1]);}
+  if(!duelActive)for(const c of coins){const bob=Math.sin(c.t)*.12,pulse=1+Math.sin(c.t*1.7)*.08;draw(mesh.cyl,c.x,.42+bob,c.z,.30*pulse,.075,.30*pulse,c.t,[1,.72,.04]);draw(mesh.cyl,c.x,.50+bob,c.z,.19*pulse,.018,.19*pulse,-c.t,[1,.92,.28]);}
   // gracz i wybrana skórka z lobby
   if(player){
     const blink=player.inv>0&&Math.floor(player.inv*18)%2===0,cosmic=profile.skin==='cosmic',anim=performance.now()*.002;
@@ -372,8 +542,15 @@ function render(){
     }
     healthBar(player.x,player.z,player.hp,player.maxHp,2.05,1.25);
   }
-  for(const e of enemies){draw(mesh.cyl,e.x,.11,e.z,e.r*1.18,.04,e.r*1.18,0,e.color,.65);const c=e.hit>0?[1,1,1]:e.color;draw(mesh.sphere,e.x,e.r*.95,e.z,e.r,e.r*1.05,e.r,0,c);draw(mesh.sphere,e.x,e.r*1.14,e.z,e.r*.62,e.r*.63,e.r*.62,0,[Math.min(1,c[0]+.22),Math.min(1,c[1]+.22),Math.min(1,c[2]+.22)]);if(e.type==='shooter')draw(mesh.cube,e.x+Math.sin(e.angle)*e.r*.95,e.r*.95,e.z+Math.cos(e.angle)*e.r*.95,.16,.16,.58,e.angle,[.18,.16,.19]);if(e.type==='tank'){draw(mesh.cube,e.x,e.r*1.05,e.z,e.r*.95,.24,e.r*.95,0,[.25,.11,.31]);}for(let lv=0;lv<(e.level||1);lv++)draw(mesh.sphere,e.x+(lv-((e.level||1)-1)/2)*.24,e.r*2.28,e.z,.08,.08,.08,0,[1,.78,.12]);healthBar(e.x,e.z,e.hp,e.maxHp,e.r*2.35,e.r*.9);}
-  for(const b of bullets)draw(mesh.sphere,b.x,b.y,b.z,b.size,b.size,b.size,0,b.color);
+  if(duelActive&&duelOpponent){
+    const o=duelOpponent,cosmic=o.skin==='cosmic',anim=performance.now()*.002;
+    draw(mesh.cyl,o.x,.12,o.z,.98,.05,.98,0,[1,.25,.55],.8);
+    if(cosmic){draw(mesh.sphere,o.x,.82,o.z,.72,.82,.72,0,[.43,.10,.48]);draw(mesh.sphere,o.x,.84,o.z,.53,.66,.53,0,[.78,.20,.68]);draw(mesh.sphere,o.x,.90,o.z,.62,.43,.62,0,[1,.42,.85],.32);draw(mesh.cube,o.x+Math.sin(o.angle)*.75,.82,o.z+Math.cos(o.angle)*.75,.18,.18,.62,o.angle,[.30,.04,.20]);draw(mesh.sphere,o.x+Math.sin(anim)*1.02,.93,o.z+Math.cos(anim)*1.02,.11,.11,.11,0,[1,.72,.25]);}
+    else{draw(mesh.sphere,o.x,.82,o.z,.72,.82,.72,0,[.93,.18,.42]);draw(mesh.sphere,o.x,.82,o.z,.49,.62,.49,0,[1,.37,.58]);draw(mesh.cube,o.x+Math.sin(o.angle)*.75,.82,o.z+Math.cos(o.angle)*.75,.18,.18,.62,o.angle,[.28,.10,.18]);draw(mesh.sphere,o.x,.82,o.z,.78,.86,.78,0,[1,.55,.70],.13);}
+    healthBar(o.x,o.z,o.hp,o.maxHp,2.05,1.25);
+  }
+  if(!duelActive)for(const e of enemies){draw(mesh.cyl,e.x,.11,e.z,e.r*1.18,.04,e.r*1.18,0,e.color,.65);const c=e.hit>0?[1,1,1]:e.color;draw(mesh.sphere,e.x,e.r*.95,e.z,e.r,e.r*1.05,e.r,0,c);draw(mesh.sphere,e.x,e.r*1.14,e.z,e.r*.62,e.r*.63,e.r*.62,0,[Math.min(1,c[0]+.22),Math.min(1,c[1]+.22),Math.min(1,c[2]+.22)]);if(e.type==='shooter')draw(mesh.cube,e.x+Math.sin(e.angle)*e.r*.95,e.r*.95,e.z+Math.cos(e.angle)*e.r*.95,.16,.16,.58,e.angle,[.18,.16,.19]);if(e.type==='tank'){draw(mesh.cube,e.x,e.r*1.05,e.z,e.r*.95,.24,e.r*.95,0,[.25,.11,.31]);}for(let lv=0;lv<(e.level||1);lv++)draw(mesh.sphere,e.x+(lv-((e.level||1)-1)/2)*.24,e.r*2.28,e.z,.08,.08,.08,0,[1,.78,.12]);healthBar(e.x,e.z,e.hp,e.maxHp,e.r*2.35,e.r*.9);}
+  if(duelActive){for(const b of duelServerBullets){const mine=b.ownerId===playerId,c=mine?(profile.skin==='cosmic'?[.78,.38,1]:[.24,.85,1]):[1,.25,.48];draw(mesh.sphere,b.x,.72,b.z,.21,.21,.21,0,c);}}else for(const b of bullets)draw(mesh.sphere,b.x,b.y,b.z,b.size,b.size,b.size,0,b.color);
   for(const p of particles)draw(mesh.cube,p.x,p.y,p.z,p.size,p.size,p.size,0,p.color,Math.max(0,p.life*2));
 }
 function loop(now){const dt=Math.min(.033,(now-last)/1000);last=now;update(dt);render();requestAnimationFrame(loop);}requestAnimationFrame(loop);
@@ -385,12 +562,17 @@ canvas.addEventListener('mousedown',e=>{if(e.button===0){mouse.down=true;playerS
 if(ui.versionOneBtn)ui.versionOneBtn.addEventListener('click',buyVersionOne);
 if(ui.saveNameBtn)ui.saveNameBtn.addEventListener('click',saveOnlineName);
 if(ui.nicknameInput){ui.nicknameInput.value=profile.name;ui.nicknameInput.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();saveOnlineName();}});}
+if(ui.modeBtn)ui.modeBtn.addEventListener('click',e=>{e.stopPropagation();toggleModeMenu();});
+if(ui.soloModeOption)ui.soloModeOption.addEventListener('click',chooseSoloMode);
+if(ui.duelModeOption)ui.duelModeOption.addEventListener('click',chooseDuelMode);
+if(ui.duelCancelBtn)ui.duelCancelBtn.addEventListener('click',cancelDuelQueue);
+document.addEventListener('click',e=>{if(ui.modeMenu&&!ui.modeMenu.contains(e.target)&&e.target!==ui.modeBtn)toggleModeMenu(false);});
 ui.playBtn.addEventListener('click',startGame);
 ui.retryBtn.addEventListener('click',startGame);
 ui.lobbyBtn.addEventListener('click',showLobby);
 for(const button of ui.upgradeButtons)button.addEventListener('click',()=>buyUpgrade(button.dataset.upgrade));
 for(const card of ui.skinCards){card.addEventListener('click',()=>selectSkin(card.dataset.skin));card.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();selectSkin(card.dataset.skin);}});}
 ui.crosshair.style.left=mouse.x+'px';ui.crosshair.style.top=mouse.y+'px';
-addEventListener('beforeunload',()=>{if(running)commitRun();else{profile.coins=walletCoins;saveProgress();}});
-reset();showLobby();syncProfile().then(fetchRanking);
+addEventListener('beforeunload',()=>{if(duelActive||duelSearching||duelMatchId)stopDuelSession(true);else if(running)commitRun();else{profile.coins=walletCoins;saveProgress();}});
+updateModeUI();reset();showLobby();syncProfile().then(fetchRanking);
 })();
