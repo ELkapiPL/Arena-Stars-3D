@@ -352,6 +352,17 @@ def resolve_duel_position(x: float, z: float, radius: float = DUEL_PLAYER_RADIUS
     return x, z, collided
 
 
+def move_duel_position(x: float, z: float, dx: float, dz: float, radius: float = DUEL_PLAYER_RADIUS) -> tuple[float, float]:
+    """Przesuwa postać osobno po osi X i Z, co usuwa blokowanie na rogach ścian."""
+    next_x = max(-DUEL_ARENA + radius, min(DUEL_ARENA - radius, x + dx))
+    if not duel_hits_wall(next_x, z, radius):
+        x = next_x
+    next_z = max(-DUEL_ARENA + radius, min(DUEL_ARENA - radius, z + dz))
+    if not duel_hits_wall(x, next_z, radius):
+        z = next_z
+    return x, z
+
+
 def segment_circle_hit_t(x0: float, z0: float, x1: float, z1: float, cx: float, cz: float, radius: float) -> float | None:
     """Zwraca pierwszy parametr t w [0,1], w którym odcinek trafia koło."""
     dx, dz = x1 - x0, z1 - z0
@@ -868,15 +879,17 @@ def duel_action(payload: dict[str, Any]) -> dict[str, Any] | None:
     if match["status"] == "playing":
         requested_x = clean_float(payload.get("x"), -DUEL_ARENA, DUEL_ARENA, player["x"])
         requested_z = clean_float(payload.get("z"), -DUEL_ARENA, DUEL_ARENA, player["z"])
-        elapsed = max(0.01, min(0.4, current - player["last_move"]))
-        max_distance = player["speed"] * elapsed + 0.55
+        # Darmowy hosting potrafi odpowiadać z opóźnieniem. Większe okno czasu
+        # pozwala zaakceptować legalny ruch wykonany podczas oczekiwania na HTTP.
+        elapsed = max(0.01, min(1.25, current - player["last_move"]))
+        max_distance = player["speed"] * elapsed + 1.0
         dx, dz = requested_x - player["x"], requested_z - player["z"]
         distance = (dx * dx + dz * dz) ** 0.5
         if distance > max_distance:
             scale = max_distance / distance
             dx, dz = dx * scale, dz * scale
         old_x, old_z = player["x"], player["z"]
-        player["x"], player["z"], _ = resolve_duel_position(player["x"] + dx, player["z"] + dz)
+        player["x"], player["z"] = move_duel_position(player["x"], player["z"], dx, dz)
         player["vx"] = (player["x"] - old_x) / elapsed
         player["vz"] = (player["z"] - old_z) / elapsed
         player["last_move"] = current

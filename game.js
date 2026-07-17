@@ -333,10 +333,18 @@ function processDuelState(data,initial=false){
   if(initial&&other?.isBot){duelLocalBotMode=true;duelServerBullets=[];duelBotBullets=[];duelBotTurnTimer=.45;duelBotShotTimer=.75;duelBotStrafe=Math.random()<.5?-1:1;duelBotStuck=0;duelBotReveal=0;}
   if(me&&player){
     const sx=Number(me.x),sz=Number(me.z),err=Number.isFinite(sx)&&Number.isFinite(sz)?Math.hypot(sx-player.x,sz-player.z):0;
-    if(initial||err>3.2){player.x=sx||0;player.z=sz||0;player.netX=player.x;player.netZ=player.z;}
-    else if(err>.65){player.netX=sx;player.netZ=sz;}
+    // Pozycja lokalnego gracza jest przewidywana natychmiast w przeglądarce.
+    // Serwer poprawia ją tylko przy dużym, rzeczywistym rozjechaniu, zamiast
+    // ciągle ciągnąć postać do starej pozycji z poprzedniej odpowiedzi HTTP.
+    if(initial||err>6.0){
+      player.x=Number.isFinite(sx)?sx:0;player.z=Number.isFinite(sz)?sz:0;resolveDuelEntity(player);
+    }else if(err>2.75){
+      const correction=Math.min(.22,.10+(err-2.75)*.035);
+      player.x+=(sx-player.x)*correction;player.z+=(sz-player.z)*correction;resolveDuelEntity(player);
+    }
+    player.netX=player.x;player.netZ=player.z;
     const serverAngle=normalizeDuelAngle(me.angle);
-    if(initial||Math.abs(duelAngleDelta(player.angle,serverAngle))>1.9)player.angle=serverAngle;
+    if(initial||Math.abs(duelAngleDelta(player.angle,serverAngle))>2.6)player.angle=serverAngle;
     player.hp=Math.max(0,Number(me.hp)||0);player.maxHp=Math.max(1,Number(me.maxHp)||player.maxHp);player.inBush=!!me.inBush;
   }
   if(other){
@@ -506,11 +514,10 @@ function updateDuel(dt){
     }
   }else if(duelMatchStatus==='playing'){
     let dx=(keys.KeyD?1:0)-(keys.KeyA?1:0),dz=(keys.KeyS?1:0)-(keys.KeyW?1:0),len=Math.hypot(dx,dz);
-    if(len){dx/=len;dz/=len;const moveSpeed=player.speed*((player.hyperActive||0)>0?HYPER_SPEED_MULT:1);player.x+=dx*moveSpeed*dt;player.z+=dz*moveSpeed*dt;resolveDuelEntity(player);}
-    // Serwer koryguje tylko większe odchylenia. Małe różnice ignorujemy, aby nie było gumowania ruchu.
-    if(Number.isFinite(player.netX)&&Number.isFinite(player.netZ)){
-      const err=Math.hypot(player.netX-player.x,player.netZ-player.z);
-      if(err>.65){const correction=1-Math.exp(-3.0*dt);player.x+=(player.netX-player.x)*correction;player.z+=(player.netZ-player.z)*correction;resolveDuelEntity(player);}else{player.netX=player.x;player.netZ=player.z;}
+    if(len){
+      dx/=len;dz/=len;
+      const moveSpeed=player.speed*((player.hyperActive||0)>0?HYPER_SPEED_MULT:1);
+      moveDuelEntity(player,dx*moveSpeed*dt,dz*moveSpeed*dt);
     }
     player.inBush=duelPointInBush(player.x,player.z);
     player.angle=normalizeDuelAngle(Math.atan2(mouse.worldX-player.x,mouse.worldZ-player.z));if(mouse.down)duelPlayerShoot();
@@ -669,6 +676,15 @@ function resolveDuelEntity(ent){
       if(m===dl)ent.x=minX;else if(m===dr)ent.x=maxX;else if(m===dt)ent.z=minZ;else ent.z=maxZ;
     }
   }
+}
+// Ruch osiami osobno pozwala płynnie ślizgać się wzdłuż ściany zamiast
+// zakleszczać postać na narożniku przy ruchu po skosie.
+function moveDuelEntity(ent,dx,dz){
+  const r=Number(ent.r)||DUEL_RADIUS;
+  const nextX=Math.max(-DUEL_ARENA_SIZE+r,Math.min(DUEL_ARENA_SIZE-r,ent.x+dx));
+  if(!duelHitsWall(nextX,ent.z,r))ent.x=nextX;
+  const nextZ=Math.max(-DUEL_ARENA_SIZE+r,Math.min(DUEL_ARENA_SIZE-r,ent.z+dz));
+  if(!duelHitsWall(ent.x,nextZ,r))ent.z=nextZ;
 }
 function reset(){
   upgrades={...profile.upgrades};runCommitted=false;walletCoins=profile.coins;runCoins=0;
