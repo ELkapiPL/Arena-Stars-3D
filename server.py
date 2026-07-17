@@ -70,9 +70,11 @@ duel_counter = 0
 
 
 # Sekrety administracyjne są wyłącznie po stronie serwera.
-ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "").strip()
-ADMIN_RECOVERY_CODE = os.environ.get("ADMIN_RECOVERY_CODE", "").strip()
-ADMIN_PLAYER_ID = clean_admin_player_id = os.environ.get("ADMIN_PLAYER_ID", "").strip()
+# Tymczasowa konfiguracja właściciela panelu.
+# Hasło jest ustawione bezpośrednio na 1234, a dostęp ograniczony do jednego ID konta.
+ADMIN_PASSWORD = "1234"
+ADMIN_RECOVERY_CODE = os.environ.get("ADMIN_RECOVERY_CODE", "FORZAHORIZON6").strip()
+ADMIN_PLAYER_ID = clean_admin_player_id = "594caf3b-f84e-4627-9724-c15ca547ab42"
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "").strip()
 GITHUB_REPO = os.environ.get("GITHUB_REPO", os.environ.get("RENDER_GIT_REPO_SLUG", "")).strip()
 GITHUB_BRANCH = os.environ.get("GITHUB_BRANCH", os.environ.get("RENDER_GIT_BRANCH", "main")).strip() or "main"
@@ -848,7 +850,7 @@ def duel_payload(match: dict[str, Any], player_id: str) -> dict[str, Any]:
         "serverTime": round(current, 4),
         "stateSeq": int(match.get("state_seq", 0)),
         "ackShotSeq": int(match["players"].get(player_id, {}).get("last_client_shot_seq", 0)),
-        "build": "admin-panel-v1",
+        "build": "admin-panel-password-1234-v1",
     }
 
 
@@ -1471,7 +1473,7 @@ class Handler(BaseHTTPRequestHandler):
                     with db_connect() as conn, conn.cursor() as cur:
                         cur.execute("SELECT 1")
                         cur.fetchone()
-                self.send_json({"ok": True, "storage": "neon" if DATABASE_URL else "json", "build": "admin-panel-v1"})
+                self.send_json({"ok": True, "storage": "neon" if DATABASE_URL else "json", "build": "admin-panel-password-1234-v1"})
             except Exception as exc:
                 self.send_json({"ok": False, "error": str(exc)}, HTTPStatus.SERVICE_UNAVAILABLE)
             return
