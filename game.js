@@ -84,15 +84,34 @@ const HYPER_CHARGE_RATIO=3,HYPER_DURATION=9,HYPER_SPEED_MULT=1.05,HYPER_FIRE_MUL
 const COSMIC_SKIN_COST=1250,VERSION_ONE_COST=150,VERSION_ONE_SPEED=1.03,VERSION_ONE_FIRE=1.02,VERSION_ONE_HP=1.10;
 const SAVE_KEY='arenaStars3D_save_v3';
 const PLAYER_ID_KEY='arenaStars3D_online_player_id_v1';
+const NICKNAME_KEY='arenaStars3D_nickname_permanent_v1';
+const LEGACY_SAVE_KEYS=['arenaStars3D_save_v3','arenaStars3D_save_v2','arenaStars3D_save_v1','arenaStars3D_save'];
 function safePlayerName(value){const text=String(value||'Gracz').trim().replace(/[<>\r\n\t]/g,'').replace(/\s+/g,' ');return (text.slice(0,18)||'Gracz');}
+function readNicknameCookie(){try{const item=document.cookie.split(';').map(v=>v.trim()).find(v=>v.startsWith('arenaStars3D_nickname='));return item?safePlayerName(decodeURIComponent(item.slice(item.indexOf('=')+1))):'';}catch(_){return '';}}
+function loadPermanentNickname(){
+  try{
+    const direct=safePlayerName(localStorage.getItem(NICKNAME_KEY)||'');
+    if(direct&&direct!=='Gracz')return direct;
+    const cookie=readNicknameCookie();if(cookie&&cookie!=='Gracz')return cookie;
+    for(const key of LEGACY_SAVE_KEYS){try{const raw=localStorage.getItem(key);if(!raw)continue;const data=JSON.parse(raw);const name=safePlayerName(data?.name||'');if(name&&name!=='Gracz')return name;}catch(_){}}
+  }catch(_){}
+  return '';
+}
+function persistNickname(value){
+  const name=safePlayerName(value),existing=loadPermanentNickname();
+  if(name==='Gracz'&&existing&&existing!=='Gracz')return existing;
+  try{localStorage.setItem(NICKNAME_KEY,name);}catch(_){}
+  try{document.cookie=`arenaStars3D_nickname=${encodeURIComponent(name)}; Max-Age=157680000; Path=/; SameSite=Lax`;}catch(_){}
+  return name;
+}
 function safeUpgradeLevel(value){return Math.max(0,Math.min(UPGRADE_COSTS.length,Math.floor(Number(value)||0)));}
 function loadProgress(){
   try{
-    const raw=localStorage.getItem(SAVE_KEY),data=raw?JSON.parse(raw):{},saved=data.upgrades||{};
+    const raw=localStorage.getItem(SAVE_KEY),data=raw?JSON.parse(raw):{},saved=data.upgrades||{},permanentName=loadPermanentNickname();
     const ownedSkins={classic:true,cosmic:data.ownedSkins?.cosmic===true};
     const requestedSkin=data.skin==='cosmic'?'cosmic':'classic';
     return {
-      name:safePlayerName(data.name),
+      name:safePlayerName(permanentName||data.name),
       trophies:Math.max(0,Number(data.trophies)||0),
       points:Math.max(0,Number(data.points)||0),
       coins:Math.max(0,Number(data.coins)||0),
@@ -106,7 +125,8 @@ function loadProgress(){
   }catch(_){return {name:'Gracz',trophies:0,points:0,coins:0,skin:'classic',ownedSkins:{classic:true,cosmic:false},heroVersion1:false,mode:'solo',adminRevision:0,upgrades:{move:0,fire:0,hp:0}};}
 }
 let profile=loadProgress();
-function saveProgress(){try{localStorage.setItem(SAVE_KEY,JSON.stringify(profile));}catch(_){} }
+profile.name=persistNickname(profile.name);
+function saveProgress(){try{profile.name=persistNickname(profile.name);localStorage.setItem(SAVE_KEY,JSON.stringify(profile));}catch(_){} }
 function getPlayerId(){
   try{let id=localStorage.getItem(PLAYER_ID_KEY);if(!id){id=(crypto.randomUUID?crypto.randomUUID():`gracz-${Date.now()}-${Math.random().toString(16).slice(2)}`);localStorage.setItem(PLAYER_ID_KEY,id);}return id;}
   catch(_){return `gracz-${Date.now()}-${Math.random().toString(16).slice(2)}`;}
@@ -114,7 +134,7 @@ function getPlayerId(){
 const playerId=getPlayerId();
 window.__arenaPlayerId=playerId;
 
-const DEFAULT_CLIENT_CONFIG={survivalBotLevel:5,duelBotLevel:5,duelBotWaitSeconds:30,duelHpMultiplier:3.5,duelMaxRounds:3,duelWinsToTakeMatch:2,duelWinCoins:25,duelWinTrophies:10,duelDrawCoins:5,duelDrawTrophies:4,soloEnabled:true,duelEnabled:true,announcement:'',customModes:[]};
+const DEFAULT_CLIENT_CONFIG={survivalBotLevel:5,duelBotLevel:5,duelBotWaitSeconds:30,duelHpMultiplier:3.5,duelMaxRounds:3,duelWinsToTakeMatch:2,duelWinCoins:25,duelWinTrophies:10,duelDrawCoins:5,duelDrawTrophies:4,soloEnabled:true,duelEnabled:true,announcement:'',profanityBanHours:2,customModes:[]};
 let gameConfig={...DEFAULT_CLIENT_CONFIG};
 function modeDefinition(id){if(id==='solo')return {id:'solo',name:'PRZETRWANIE',base:'solo',enabled:gameConfig.soloEnabled!==false};if(id==='duel')return {id:'duel',name:'POJEDYNKI',base:'duel',enabled:gameConfig.duelEnabled!==false};return (gameConfig.customModes||[]).find(m=>m.id===id&&m.enabled!==false)||null;}
 function selectedModeBase(){return modeDefinition(selectedMode)?.base||'solo';}
@@ -145,8 +165,9 @@ async function api(path,options={}){
   const timeout=setTimeout(()=>controller.abort(),timeoutMs);
   try{
     const response=await fetch(path,{cache:'no-store',headers:{'Content-Type':'application/json',...(fetchOptions.headers||{})},signal:controller.signal,...fetchOptions});
-    if(!response.ok)throw new Error(`HTTP ${response.status}`);
-    return await response.json();
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok){const error=new Error(data.error||`HTTP ${response.status}`);error.status=response.status;error.data=data;if(response.status===423&&typeof showAccountBan==='function')showAccountBan(data);throw error;}
+    return data;
   }finally{clearTimeout(timeout);}
 }
 function renderRanking(){
@@ -176,7 +197,7 @@ async function syncProfile(){
     const data=await api('/api/profile',{method:'POST',body:JSON.stringify({playerId,name:profile.name,points:profile.points,trophies:profile.trophies,coins:profile.coins,upgrades:profile.upgrades,skin:profile.skin,cosmicOwned:profile.ownedSkins?.cosmic===true,heroVersion1:profile.heroVersion1===true,adminRevision:profile.adminRevision||0})});
     if(data.profile){
       const remote=data.profile,forced=Number(remote.adminRevision||0)>Number(profile.adminRevision||0);
-      profile.name=safePlayerName(remote.name||profile.name);
+      profile.name=persistNickname(remote.name||profile.name);
       if(forced){profile.points=Number(remote.points)||0;profile.trophies=Number(remote.trophies)||0;profile.coins=Number(remote.coins)||0;profile.upgrades={move:safeUpgradeLevel(remote.upgrades?.move),fire:safeUpgradeLevel(remote.upgrades?.fire),hp:safeUpgradeLevel(remote.upgrades?.hp)};profile.ownedSkins={classic:true,cosmic:remote.cosmicOwned===true};profile.heroVersion1=remote.heroVersion1===true;profile.skin=remote.skin==='cosmic'&&profile.ownedSkins.cosmic?'cosmic':'classic';}
       else{profile.points=Math.max(profile.points,Number(remote.points)||0);profile.trophies=Math.max(profile.trophies,Number(remote.trophies)||0);profile.coins=Math.max(profile.coins,Number(remote.coins)||0);}
       profile.adminRevision=Math.max(Number(profile.adminRevision)||0,Number(remote.adminRevision)||0);walletCoins=profile.coins;saveProgress();updateLobby();
@@ -197,7 +218,8 @@ async function fetchRanking(){
   finally{rankingBusy=false;}
 }
 function saveOnlineName(){
-  if(!ui.nicknameInput)return;profile.name=safePlayerName(ui.nicknameInput.value);ui.nicknameInput.value=profile.name;saveProgress();rankingCenterOnNextRender=true;syncProfile().then(fetchRanking);
+  if(currentAccount){if(ui.nicknameInput)ui.nicknameInput.value=currentAccount.username;return;}
+  if(!ui.nicknameInput)return;profile.name=persistNickname(ui.nicknameInput.value);ui.nicknameInput.value=profile.name;saveProgress();rankingCenterOnNextRender=true;syncProfile().then(fetchRanking);
 }
 setInterval(()=>{if(!document.hidden)fetchRanking();},5000);
 
@@ -915,6 +937,29 @@ for(const button of ui.upgradeButtons)button.addEventListener('click',()=>buyUpg
 for(const card of ui.skinCards){card.addEventListener('click',()=>selectSkin(card.dataset.skin));card.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();selectSkin(card.dataset.skin);}});}
 
 
+
+// ---------- Konta użytkowników, sesje i czat ----------
+const authUI={overlay:$('authOverlay'),card:$('authCard'),banCard:$('banCard'),msg:$('authMsg'),registerUser:$('registerUsername'),registerPassword:$('registerPassword'),registerBtn:$('registerBtn'),loginUser:$('loginUsername'),loginPassword:$('loginPassword'),loginBtn:$('loginBtn'),banReason:$('banReason'),banUntil:$('banUntil'),accountUsername:$('accountUsername'),logout:$('accountLogoutBtn')};
+const chatUI={overlay:$('chatOverlay'),open:$('chatOpenBtn'),close:$('chatCloseBtn'),users:$('chatUsers'),search:$('chatSearch'),header:$('chatHeader'),messages:$('chatMessages'),input:$('chatInput'),send:$('chatSendBtn'),status:$('chatStatus'),badge:$('chatBadge')};
+let currentAccount=null,authFinished=false,chatSelected=new Set(),chatPollTimer=0,chatKnownLast=0,chatUnread=0;
+function authMessage(text,bad=false){if(authUI.msg){authUI.msg.textContent=text||'';authUI.msg.style.color=bad?'#ff7890':'#ffdd75';}}
+function showAccountBan(data){if(!authUI.overlay)return;authUI.overlay.classList.remove('hidden');authUI.card.style.display='none';authUI.banCard.style.display='block';authUI.banReason.textContent=data.banReason||'Blokada konta';const until=Number(data.bannedUntil)||0;authUI.banUntil.textContent=until?`Koniec blokady: ${new Date(until*1000).toLocaleString('pl-PL')}`:'Blokada aktywna';}
+function setAuthPane(name){document.querySelectorAll('.authTab').forEach(x=>x.classList.toggle('active',x.dataset.authTab===name));document.querySelectorAll('.authPane').forEach(x=>x.classList.toggle('active',x.dataset.authPane===name));authMessage('');}
+function applyServerProfile(serverProfile){if(!serverProfile)return;profile={...profile,...serverProfile,ownedSkins:{classic:true,cosmic:serverProfile.cosmicOwned===true},heroVersion1:serverProfile.heroVersion1===true,upgrades:{...profile.upgrades,...(serverProfile.upgrades||{})}};walletCoins=profile.coins||0;saveProgress();}
+async function completeAccountLogin(data){currentAccount=data.account;if(!currentAccount)return;const accountId=currentAccount.playerId||currentAccount.id;if(accountId&&accountId!==playerId){localStorage.setItem(PLAYER_ID_KEY,accountId);location.reload();return;}profile.name=safePlayerName(currentAccount.username);persistNickname(profile.name);applyServerProfile(data.profile);if(ui.nicknameInput){ui.nicknameInput.value=profile.name;ui.nicknameInput.disabled=true;}if(ui.saveNameBtn){ui.saveNameBtn.disabled=true;ui.saveNameBtn.textContent='NAZWA KONTA';}if(authUI.accountUsername)authUI.accountUsername.textContent=currentAccount.username;authUI.overlay.classList.add('hidden');authUI.card.style.display='block';authUI.banCard.style.display='none';authFinished=true;syncProfile().then(fetchRanking);startChatPolling();}
+async function authBootstrap(){try{const data=await api('/api/auth/status');if(data.authenticated){if(data.account?.banned){showAccountBan(data.account);return;}await completeAccountLogin(data);}else{authUI.overlay.classList.remove('hidden');}}catch(e){authMessage('Serwer kont nie odpowiada. Odśwież stronę za chwilę.',true);}}
+async function authSubmit(kind){authMessage('Łączenie z serwerem…');const register=kind==='register',username=(register?authUI.registerUser:authUI.loginUser).value,password=(register?authUI.registerPassword:authUI.loginPassword).value;try{const data=await api(register?'/api/auth/register':'/api/auth/login',{method:'POST',body:JSON.stringify({username,password,playerId})});await completeAccountLogin(data);}catch(e){authMessage(e.message||'Nie udało się zalogować.',true);}}
+document.querySelectorAll('.authTab').forEach(x=>x.addEventListener('click',()=>setAuthPane(x.dataset.authTab)));authUI.registerBtn?.addEventListener('click',()=>authSubmit('register'));authUI.loginBtn?.addEventListener('click',()=>authSubmit('login'));authUI.logout?.addEventListener('click',async()=>{await api('/api/auth/logout',{method:'POST',body:'{}'}).catch(()=>{});location.reload();});
+
+function chatEscape(value){return escapeRankingName(String(value||''));}
+function selectedChatNames(){return [...chatSelected].map(id=>chatUI.users?.querySelector(`[data-chat-user="${CSS.escape(id)}"] .chatUserName`)?.textContent).filter(Boolean);}
+async function loadChatUsers(){if(!currentAccount||!chatUI.users)return;try{const r=await api(`/api/chat/users?q=${encodeURIComponent(chatUI.search?.value||'')}`);chatUI.users.innerHTML=(r.users||[]).map(u=>`<label class="chatUser${u.online?' online':''}" data-chat-user="${u.id}"><input type="checkbox" ${chatSelected.has(u.id)?'checked':''}><span class="chatUserName">${chatEscape(u.username)}</span></label>`).join('')||'<div class="adminHint">Brak innych kont.</div>';chatUI.users.querySelectorAll('[data-chat-user]').forEach(row=>{row.querySelector('input').addEventListener('change',e=>{e.target.checked?chatSelected.add(row.dataset.chatUser):chatSelected.delete(row.dataset.chatUser);chatUI.header.textContent=chatSelected.size?`Piszesz do: ${selectedChatNames().join(', ')}`:'Wybierz odbiorców po lewej stronie.';});});}catch(e){chatUI.status.textContent='Nie udało się pobrać listy kont.';}}
+function renderChat(messages){if(!chatUI.messages)return;const atBottom=chatUI.messages.scrollTop+chatUI.messages.clientHeight>=chatUI.messages.scrollHeight-50;chatUI.messages.innerHTML=(messages||[]).map(m=>{const mine=m.senderId===playerId,rec=(m.recipients||[]).map(x=>x.username).join(', ');return `<div class="chatMessage${mine?' mine':''}"><div class="chatMeta">${mine?'TY → '+chatEscape(rec):chatEscape(m.sender)} • ${new Date(Number(m.createdAt)*1000).toLocaleTimeString('pl-PL',{hour:'2-digit',minute:'2-digit'})}</div>${chatEscape(m.body)}</div>`;}).join('')||'<div class="adminHint">Nie masz jeszcze wiadomości.</div>';if(atBottom)chatUI.messages.scrollTop=chatUI.messages.scrollHeight;const last=Math.max(...(messages||[]).map(x=>Number(x.id)||0),0);if(!chatUI.overlay.classList.contains('open')&&last>chatKnownLast&&chatKnownLast){chatUnread++;chatUI.badge.style.display='inline-grid';chatUI.badge.textContent=String(chatUnread);}chatKnownLast=Math.max(chatKnownLast,last);}
+async function loadChatMessages(){if(!currentAccount)return;try{const r=await api('/api/chat/messages');renderChat(r.messages||[]);}catch(e){if(e.status!==423)chatUI.status.textContent='Czat chwilowo niedostępny.';}}
+function startChatPolling(){clearInterval(chatPollTimer);loadChatUsers();loadChatMessages();chatPollTimer=setInterval(()=>{if(!document.hidden){loadChatMessages();if(chatUI.overlay.classList.contains('open'))loadChatUsers();}},2500);}
+chatUI.open?.addEventListener('click',()=>{chatUI.overlay.classList.add('open');chatUnread=0;chatUI.badge.style.display='none';loadChatUsers();loadChatMessages();});chatUI.close?.addEventListener('click',()=>chatUI.overlay.classList.remove('open'));chatUI.search?.addEventListener('input',()=>loadChatUsers());chatUI.send?.addEventListener('click',async()=>{const body=chatUI.input.value.trim();if(!body||!chatSelected.size){chatUI.status.textContent='Wybierz odbiorców i wpisz wiadomość.';return;}try{await api('/api/chat/send',{method:'POST',body:JSON.stringify({recipients:[...chatSelected],body})});chatUI.input.value='';chatUI.status.textContent='Wiadomość wysłana.';await loadChatMessages();}catch(e){chatUI.status.textContent=e.message||'Nie udało się wysłać.';}});chatUI.input?.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();chatUI.send.click();}});
+
+
 // ---------- Panel administratora ----------
 const adminUI={overlay:$('adminOverlay'),open:$('adminOpenBtn'),loginCard:$('adminLoginCard'),dashboard:$('adminDashboard'),loginClose:$('adminLoginClose'),close:$('adminCloseBtn'),logout:$('adminLogoutBtn'),password:$('adminPasswordInput'),login:$('adminLoginBtn'),forgot:$('adminForgotBtn'),passwordArea:$('adminPasswordArea'),recoveryArea:$('adminRecoveryArea'),recovery:$('adminRecoveryInput'),recoverBtn:$('adminRecoveryBtn'),back:$('adminBackToPassword'),loginMsg:$('adminLoginMsg'),playerId:$('adminPlayerId'),deployStatus:$('adminDeployStatus'),settingsMsg:$('adminSettingsMsg'),playerMsg:$('adminPlayerMsg'),modesMsg:$('adminModesMsg'),deployMsg:$('adminDeployMsg')};
 let adminConfig=null,adminSelectedPlayer=null;
@@ -922,11 +967,11 @@ function adminMsg(el,text,bad=false){if(!el)return;el.textContent=text||'';el.cl
 function adminOpen(show=true){adminUI.overlay?.classList.toggle('open',show);adminUI.overlay?.setAttribute('aria-hidden',show?'false':'true');if(show)adminCheckStatus();}
 async function adminCheckStatus(){try{const s=await api(`/api/admin/status?playerId=${encodeURIComponent(playerId)}`);adminUI.playerId.textContent=playerId;adminUI.deployStatus.textContent=s.deploymentConfigured?`WDROŻENIA GOTOWE • ${s.repo||''}`:'BRAK KONFIGURACJI GITHUB';adminUI.deployStatus.className=`adminStatusPill ${s.deploymentConfigured?'ok':'bad'}`;if(s.authorized){await adminShowDashboard();}else{adminUI.loginCard.style.display='block';adminUI.dashboard.style.display='none';if(!s.configured)adminMsg(adminUI.loginMsg,'Najpierw ustaw ADMIN_PASSWORD i ADMIN_RECOVERY_CODE w Renderze.',true);else if(!s.accountMatches)adminMsg(adminUI.loginMsg,'To ID konta nie zgadza się z ADMIN_PLAYER_ID.',true);else adminMsg(adminUI.loginMsg,'');}}catch(e){adminMsg(adminUI.loginMsg,'Serwer panelu nie odpowiada.',true);}}
 async function adminAuth(kind){const path=kind==='recovery'?'/api/admin/recover':'/api/admin/login',body={playerId,[kind==='recovery'?'code':'password']:kind==='recovery'?adminUI.recovery.value:adminUI.password.value};try{const r=await api(path,{method:'POST',body:JSON.stringify(body)});if(r.ok)await adminShowDashboard();}catch(e){adminMsg(adminUI.loginMsg,'Nieprawidłowe dane albo konto nie ma dostępu.',true);}}
-async function adminShowDashboard(){adminUI.loginCard.style.display='none';adminUI.dashboard.style.display='block';await adminLoadConfig();await adminSearchPlayers('');}
+async function adminShowDashboard(){adminUI.loginCard.style.display='none';adminUI.dashboard.style.display='block';await adminLoadConfig();await adminSearchPlayers('');await adminSearchAccounts('');}
 function n(id){return Number($(id)?.value)||0;}function c(id){return !!$(id)?.checked;}
-function fillAdminConfig(cfg){adminConfig=cfg;const map={cfgSurvivalBot:'survivalBotLevel',cfgDuelBot:'duelBotLevel',cfgBotWait:'duelBotWaitSeconds',cfgHpMultiplier:'duelHpMultiplier',cfgRounds:'duelMaxRounds',cfgWins:'duelWinsToTakeMatch',cfgWinCoins:'duelWinCoins',cfgWinTrophies:'duelWinTrophies',cfgDrawCoins:'duelDrawCoins',cfgDrawTrophies:'duelDrawTrophies'};for(const [id,key] of Object.entries(map))if($(id))$(id).value=cfg[key];$('cfgSoloEnabled').checked=cfg.soloEnabled!==false;$('cfgDuelEnabled').checked=cfg.duelEnabled!==false;$('cfgAnnouncement').value=cfg.announcement||'';renderAdminModes();}
+function fillAdminConfig(cfg){adminConfig=cfg;const map={cfgSurvivalBot:'survivalBotLevel',cfgDuelBot:'duelBotLevel',cfgBotWait:'duelBotWaitSeconds',cfgHpMultiplier:'duelHpMultiplier',cfgRounds:'duelMaxRounds',cfgWins:'duelWinsToTakeMatch',cfgWinCoins:'duelWinCoins',cfgWinTrophies:'duelWinTrophies',cfgDrawCoins:'duelDrawCoins',cfgDrawTrophies:'duelDrawTrophies',cfgProfanityBanHours:'profanityBanHours'};for(const [id,key] of Object.entries(map))if($(id))$(id).value=cfg[key];$('cfgSoloEnabled').checked=cfg.soloEnabled!==false;$('cfgDuelEnabled').checked=cfg.duelEnabled!==false;$('cfgAnnouncement').value=cfg.announcement||'';renderAdminModes();}
 async function adminLoadConfig(){try{const r=await api('/api/admin/config');fillAdminConfig(r.config);}catch(e){adminMsg(adminUI.settingsMsg,'Nie udało się pobrać ustawień.',true);}}
-function collectAdminConfig(){return {...adminConfig,survivalBotLevel:n('cfgSurvivalBot'),duelBotLevel:n('cfgDuelBot'),duelBotWaitSeconds:n('cfgBotWait'),duelHpMultiplier:n('cfgHpMultiplier'),duelMaxRounds:n('cfgRounds'),duelWinsToTakeMatch:n('cfgWins'),duelWinCoins:n('cfgWinCoins'),duelWinTrophies:n('cfgWinTrophies'),duelDrawCoins:n('cfgDrawCoins'),duelDrawTrophies:n('cfgDrawTrophies'),soloEnabled:c('cfgSoloEnabled'),duelEnabled:c('cfgDuelEnabled'),announcement:$('cfgAnnouncement').value,customModes:adminConfig?.customModes||[]};}
+function collectAdminConfig(){return {...adminConfig,survivalBotLevel:n('cfgSurvivalBot'),duelBotLevel:n('cfgDuelBot'),duelBotWaitSeconds:n('cfgBotWait'),duelHpMultiplier:n('cfgHpMultiplier'),duelMaxRounds:n('cfgRounds'),duelWinsToTakeMatch:n('cfgWins'),duelWinCoins:n('cfgWinCoins'),duelWinTrophies:n('cfgWinTrophies'),duelDrawCoins:n('cfgDrawCoins'),duelDrawTrophies:n('cfgDrawTrophies'),profanityBanHours:n('cfgProfanityBanHours'),soloEnabled:c('cfgSoloEnabled'),duelEnabled:c('cfgDuelEnabled'),announcement:$('cfgAnnouncement').value,customModes:adminConfig?.customModes||[]};}
 async function adminSaveConfig(){try{const r=await api('/api/admin/config',{method:'POST',body:JSON.stringify({config:collectAdminConfig()})});fillAdminConfig(r.config);applyGameConfig(r.config);adminMsg(adminUI.settingsMsg,'Ustawienia zapisane dla wszystkich graczy.');}catch(e){adminMsg(adminUI.settingsMsg,'Nie udało się zapisać ustawień.',true);}}
 async function adminSearchPlayers(q){try{const r=await api(`/api/admin/players?q=${encodeURIComponent(q||'')}`),box=$('adminPlayerList');box.innerHTML=(r.players||[]).map(p=>`<div class="adminPlayerRow" data-player="${p.id}"><span><b>${escapeRankingName(p.name)}</b><small>${p.id}</small></span><span>${p.points.toLocaleString('pl-PL')} ⭐<br>${p.trophies.toLocaleString('pl-PL')} 🏆</span></div>`).join('')||'<div class="adminHint">Brak wyników.</div>';box.querySelectorAll('[data-player]').forEach(el=>el.onclick=()=>adminSelectPlayer((r.players||[]).find(p=>p.id===el.dataset.player)));}catch(e){adminMsg(adminUI.playerMsg,'Nie udało się pobrać graczy.',true);}}
 function adminSelectPlayer(p){if(!p)return;adminSelectedPlayer=p;$('editPlayerId').value=p.id;$('editPlayerName').value=p.name;$('editPoints').value=p.points;$('editTrophies').value=p.trophies;$('editCoins').value=p.coins;$('editMove').value=p.upgrades?.move||0;$('editFire').value=p.upgrades?.fire||0;$('editHp').value=p.upgrades?.hp||0;$('editSkin').value=p.skin||'classic';$('editCosmic').checked=p.cosmicOwned===true;$('editVersion').checked=p.heroVersion1===true;}
@@ -937,11 +982,19 @@ async function adminSaveModes(){adminConfig.customModes=collectAdminModes();try{
 function adminAddMode(){adminConfig.customModes=adminConfig.customModes||[];adminConfig.customModes.push({id:`tryb-${Date.now()}`,name:'Nowy tryb',description:'Wariant utworzony przez administratora',base:'solo',enabled:true});renderAdminModes();}
 function adminFilesChanged(){const files=[...$('adminFiles').files];$('adminFileList').textContent=files.length?files.map(f=>`${f.name} • ${Math.ceil(f.size/1024)} KB`).join('\n'):'Nie wybrano plików.';}
 async function adminDeploy(){const files=[...$('adminFiles').files];if(!files.length){adminMsg(adminUI.deployMsg,'Wybierz pliki.',true);return;}adminMsg(adminUI.deployMsg,'Wysyłanie plików i tworzenie commita…');try{const encoded=[];for(const f of files){const bytes=new Uint8Array(await f.arrayBuffer());let binary='';for(let i=0;i<bytes.length;i+=0x8000)binary+=String.fromCharCode(...bytes.subarray(i,i+0x8000));encoded.push({name:f.name,content:btoa(binary)});}const r=await api('/api/admin/deploy',{method:'POST',timeout:60000,body:JSON.stringify({files:encoded,message:$('adminCommitMessage').value})});adminMsg(adminUI.deployMsg,`Gotowe. Commit ${String(r.commit||'').slice(0,8)}. Render rozpocznie wdrożenie.`);}catch(e){adminMsg(adminUI.deployMsg,'Aktualizacja nie powiodła się. Sprawdź GITHUB_TOKEN i GITHUB_REPO.',true);}}
+
+let adminSelectedAccount=null;
+async function adminSearchAccounts(q=''){try{const r=await api(`/api/admin/accounts?q=${encodeURIComponent(q)}`),box=$('adminAccountList');box.innerHTML=(r.accounts||[]).map(a=>`<div class="adminPlayerRow" data-account="${a.id}"><span><b>${chatEscape(a.username)}</b><small>${a.id}</small></span><span>${a.banned?'⛔ ZBANOWANY':'✅ AKTYWNY'}</span></div>`).join('')||'<div class="adminHint">Brak kont.</div>';box.querySelectorAll('[data-account]').forEach(el=>el.onclick=()=>adminSelectAccount((r.accounts||[]).find(a=>a.id===el.dataset.account)));}catch(e){$('adminBanMsg').textContent='Nie udało się pobrać kont.';}}
+function adminSelectAccount(a){if(!a)return;adminSelectedAccount=a;$('banAccountId').value=a.id;$('banAccountName').value=a.username;$('banAccountStatus').textContent=a.banned?`Zbanowany do ${new Date(a.bannedUntil*1000).toLocaleString('pl-PL')} • ${a.banReason}`:'Konto aktywne';}
+async function adminBanAccount(){if(!adminSelectedAccount)return;const seconds=Math.max(1,Number($('banDuration').value)||1)*(Number($('banUnit').value)||3600);try{const r=await api('/api/admin/ban',{method:'POST',body:JSON.stringify({accountId:adminSelectedAccount.id,durationSeconds:seconds,reason:$('banReasonInput').value})});adminSelectAccount(r.account);$('adminBanMsg').textContent='Konto zbanowane.';await adminSearchAccounts($('adminAccountSearch').value);}catch(e){$('adminBanMsg').textContent=e.message;}}
+async function adminUnbanAccount(){if(!adminSelectedAccount)return;try{const r=await api('/api/admin/unban',{method:'POST',body:JSON.stringify({accountId:adminSelectedAccount.id})});adminSelectAccount(r.account);$('adminBanMsg').textContent='Konto odblokowane.';await adminSearchAccounts($('adminAccountSearch').value);}catch(e){$('adminBanMsg').textContent=e.message;}}
+$('adminAccountSearchBtn')?.addEventListener('click',()=>adminSearchAccounts($('adminAccountSearch').value));$('adminBanBtn')?.addEventListener('click',adminBanAccount);$('adminUnbanBtn')?.addEventListener('click',adminUnbanAccount);
+
 adminUI.open?.addEventListener('click',()=>adminOpen(true));adminUI.loginClose?.addEventListener('click',()=>adminOpen(false));adminUI.close?.addEventListener('click',()=>adminOpen(false));adminUI.login?.addEventListener('click',()=>adminAuth('password'));adminUI.recoverBtn?.addEventListener('click',()=>adminAuth('recovery'));adminUI.forgot?.addEventListener('click',()=>{adminUI.passwordArea.style.display='none';adminUI.recoveryArea.style.display='block';});adminUI.back?.addEventListener('click',()=>{adminUI.passwordArea.style.display='block';adminUI.recoveryArea.style.display='none';});adminUI.logout?.addEventListener('click',async()=>{await api('/api/admin/logout',{method:'POST',body:'{}'}).catch(()=>{});adminUI.dashboard.style.display='none';adminUI.loginCard.style.display='block';});
 document.querySelectorAll('.adminTab').forEach(tab=>tab.addEventListener('click',()=>{document.querySelectorAll('.adminTab').forEach(x=>x.classList.toggle('active',x===tab));document.querySelectorAll('.adminPane').forEach(p=>p.classList.toggle('active',p.dataset.adminPane===tab.dataset.adminTab));}));
 $('adminSaveSettings')?.addEventListener('click',adminSaveConfig);$('adminSearchBtn')?.addEventListener('click',()=>adminSearchPlayers($('adminPlayerSearch').value));$('adminSavePlayer')?.addEventListener('click',adminSavePlayer);$('adminAddMode')?.addEventListener('click',adminAddMode);$('adminSaveModes')?.addEventListener('click',adminSaveModes);$('adminFiles')?.addEventListener('change',adminFilesChanged);$('adminDeployBtn')?.addEventListener('click',adminDeploy);
 
 ui.crosshair.style.left=mouse.x+'px';ui.crosshair.style.top=mouse.y+'px';
 addEventListener('beforeunload',()=>{if(duelActive||duelSearching||duelMatchId)stopDuelSession(true);else if(running)commitRun();else{profile.coins=walletCoins;saveProgress();}});
-fetchGameConfig();setInterval(()=>{if(!document.hidden)fetchGameConfig();},15000);updateModeUI();reset();showLobby();syncProfile().then(fetchRanking);
+fetchGameConfig();setInterval(()=>{if(!document.hidden)fetchGameConfig();},15000);updateModeUI();reset();showLobby();authBootstrap();
 })();

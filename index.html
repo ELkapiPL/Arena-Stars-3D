@@ -222,6 +222,15 @@
     .adminUploadBox{border:2px dashed rgba(105,230,255,.35);border-radius:14px;padding:18px;text-align:center}.adminUploadBox input{max-width:100%}.adminFileList{margin-top:9px;font:800 10px monospace;color:#bfeeff;white-space:pre-wrap}.adminStatusPill{display:inline-block;padding:4px 8px;border-radius:999px;background:rgba(255,255,255,.08);font-size:9px;font-weight:900}.adminStatusPill.ok{background:rgba(63,223,154,.16);color:#79f3b7}.adminStatusPill.bad{background:rgba(255,72,104,.16);color:#ff9bad}
     @media(max-width:760px){.adminGrid{grid-template-columns:1fr}.adminModeRow{grid-template-columns:1fr}.adminCard{padding:14px}#adminOpenBtn{left:10px;bottom:10px}}
 
+
+    /* Konta użytkowników */
+    #authOverlay{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 25%,rgba(87,65,220,.35),transparent 35%),rgba(3,7,18,.96);color:#fff}
+    #authOverlay.hidden{display:none}.authCard{width:min(430px,92vw);padding:24px;border-radius:22px;background:rgba(10,18,42,.96);border:1px solid rgba(255,255,255,.18);box-shadow:0 30px 90px rgba(0,0,0,.55)}.authCard h2{margin:0 0 7px;font-size:30px}.authLead{margin:0 0 18px;color:#b9c9e8;font-size:13px;line-height:1.45}.authTabs{display:flex;gap:8px;margin-bottom:15px}.authTab{flex:1;padding:10px;border:1px solid rgba(255,255,255,.16);border-radius:11px;background:rgba(255,255,255,.06);color:#dce9ff;font-weight:900;cursor:pointer}.authTab.active{background:#5fdfff;color:#06162c}.authPane{display:none}.authPane.active{display:block}.authField{display:grid;gap:6px;margin:12px 0}.authField label{font-size:10px;font-weight:1000;letter-spacing:.1em;color:#9fc3ef}.authField input{width:100%;padding:12px;border-radius:11px;border:1px solid rgba(255,255,255,.18);background:#091226;color:#fff;font:700 15px inherit;outline:none}.authPrimary{width:100%;padding:12px;border:0;border-radius:12px;background:linear-gradient(180deg,#64edff,#3b91ff);color:#06152b;font-weight:1000;cursor:pointer}.authMsg{min-height:22px;margin-top:10px;color:#ffdd75;font-size:12px;font-weight:800}.banCard{text-align:center}.banCard .banIcon{font-size:54px}.banCard strong{display:block;margin:10px 0;color:#ff748f}.banCard small{color:#b8c5df}
+    #accountUser{position:absolute;z-index:4;right:20px;top:84px;display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:12px;background:rgba(8,13,35,.78);border:1px solid rgba(255,255,255,.16);font-size:10px;font-weight:900;color:#dce8ff}#accountLogoutBtn{border:0;border-radius:8px;padding:5px 7px;background:rgba(255,255,255,.11);color:#fff;font-weight:900;cursor:pointer}
+    #chatOpenBtn{position:absolute;z-index:4;right:292px;bottom:22px;padding:15px 18px;border:0;border-radius:15px;background:linear-gradient(180deg,#62e9ff,#347dff);color:#06152c;font-size:14px;font-weight:1000;cursor:pointer;box-shadow:0 6px 0 #164893}.chatBadge{display:inline-grid;place-items:center;min-width:20px;height:20px;margin-left:5px;border-radius:99px;background:#ff4c83;color:white;font-size:10px}
+    #chatOverlay{position:fixed;inset:0;z-index:900;display:none;background:rgba(1,5,15,.68);backdrop-filter:blur(5px);color:#fff}#chatOverlay.open{display:flex;align-items:center;justify-content:center}.chatCard{width:min(980px,94vw);height:min(680px,88vh);display:grid;grid-template-columns:290px 1fr;overflow:hidden;border-radius:22px;background:#091329;border:1px solid rgba(255,255,255,.18);box-shadow:0 30px 90px rgba(0,0,0,.6)}.chatSidebar{padding:16px;border-right:1px solid rgba(255,255,255,.12);overflow:hidden;display:flex;flex-direction:column}.chatTop{display:flex;align-items:center;justify-content:space-between;gap:10px}.chatTop h2{margin:0}.chatClose{border:0;border-radius:9px;background:rgba(255,255,255,.1);color:#fff;padding:7px 10px;cursor:pointer}.chatSearch{margin:13px 0;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:#071022;color:#fff}.chatUsers{overflow:auto;display:grid;gap:6px}.chatUser{display:flex;align-items:center;gap:8px;padding:8px;border-radius:10px;background:rgba(255,255,255,.055);font-size:12px;cursor:pointer}.chatUser.online:after{content:'ONLINE';margin-left:auto;color:#65f1aa;font-size:8px;font-weight:1000}.chatMain{display:grid;grid-template-rows:auto 1fr auto;min-width:0}.chatHeader{padding:15px 18px;border-bottom:1px solid rgba(255,255,255,.12);font-size:12px;color:#b8cae8}.chatMessages{padding:15px 18px;overflow:auto;display:flex;flex-direction:column;gap:9px}.chatMessage{max-width:82%;padding:9px 11px;border-radius:13px;background:rgba(255,255,255,.08);font-size:13px;line-height:1.4}.chatMessage.mine{align-self:flex-end;background:rgba(55,143,255,.27)}.chatMeta{font-size:9px;color:#9eb3d4;margin-bottom:4px;font-weight:900}.chatComposer{padding:13px 16px;border-top:1px solid rgba(255,255,255,.12);display:grid;grid-template-columns:1fr auto;gap:9px}.chatComposer textarea{resize:none;height:58px;padding:10px;border-radius:11px;border:1px solid rgba(255,255,255,.15);background:#071022;color:#fff}.chatSend{border:0;border-radius:11px;padding:0 20px;background:#59e5ff;color:#07152c;font-weight:1000;cursor:pointer}.chatStatus{padding:0 16px 10px;color:#ffd36c;font-size:11px}
+    @media(max-width:760px){.chatCard{grid-template-columns:180px 1fr;height:92vh}.chatSidebar{padding:9px}#chatOpenBtn{right:180px;padding:12px}.chatMessage{max-width:95%}}
+
   </style>
 </head>
 <body class="lobby-mode">
@@ -249,7 +258,7 @@
   <div id="overlay">
     <div id="lobbyView">
       <div id="lobbyTrophies"><div class="trophyIcon">🏆</div><div class="trophyText">PUCHARKI<strong id="savedTrophies">0</strong></div></div>
-      <div id="accountBox"><div class="accountStat">PUNKTY ⭐<strong id="savedPoints">0</strong></div><div class="accountStat">MONETY 🪙<strong id="savedCoins">0</strong></div></div>
+      <div id="accountBox"><div class="accountStat">PUNKTY ⭐<strong id="savedPoints">0</strong></div><div class="accountStat">MONETY 🪙<strong id="savedCoins">0</strong></div></div><div id="accountUser"><span id="accountUsername">—</span><button id="accountLogoutBtn">WYLOGUJ</button></div>
       <div class="lobbyLogo">ARENA<br>STARS 3D<small>ONLINE • TRYBY GRY</small></div>
       <aside id="skinDock">
         <div id="skinShopTitle">PRZEBRANIA</div>
@@ -290,7 +299,7 @@
       </div>
       <div class="saveNote">Postęp zapisuje się w przeglądarce. Wybierz Przetrwanie z botami albo Pojedynki 1v1.</div>
       <div id="modeMenu" aria-label="Wybór trybu gry"><div class="modeMenuTitle">WYBIERZ TRYB</div><button id="soloModeOption" class="modeOption"><span class="modeIcon">🤖</span><span><span class="modeName">Przetrwanie z botami</span><span class="modeDesc">Klasyczny tryb z falami robotów, monetami, pucharkami i ulepszeniami.</span></span></button><button id="duelModeOption" class="modeOption"><span class="modeIcon">⚔️</span><span><span class="modeName">Pojedynki 1v1</span><span class="modeDesc">Szybka arena z 2 ścianami i 4 polami krzaków. Czekaj do 30 sekund na gracza albo walcz z botem.</span></span></button></div>
-      <button id="adminOpenBtn">⚙ PANEL ADMINISTRACYJNY</button>
+      <button id="chatOpenBtn">💬 CZAT <span id="chatBadge" class="chatBadge" style="display:none">0</span></button><button id="adminOpenBtn">⚙ PANEL ADMINISTRACYJNY</button>
       <button id="modeBtn">TRYBY ▾</button>
       <button id="playBtn">GRAJ ▶</button>
     </div>
@@ -308,6 +317,22 @@
         <div id="gameOverActions"><button id="retryBtn" class="endButton">ZAGRAJ PONOWNIE</button><button id="lobbyBtn" class="endButton secondaryBtn">POWRÓT DO LOBBY</button></div>
       </div>
     </div>
+  </div>
+
+
+  <div id="authOverlay">
+    <section id="authCard" class="authCard">
+      <h2>Konto Arena Stars</h2><p class="authLead">Przy pierwszym wejściu utwórz konto. Nazwa jest unikatowa, a postęp zostaje zapisany na serwerze.</p>
+      <div class="authTabs"><button class="authTab active" data-auth-tab="register">UTWÓRZ KONTO</button><button class="authTab" data-auth-tab="login">ZALOGUJ SIĘ</button></div>
+      <div class="authPane active" data-auth-pane="register"><div class="authField"><label>UNIKATOWA NAZWA KONTA</label><input id="registerUsername" maxlength="20" autocomplete="username"></div><div class="authField"><label>HASŁO — MINIMUM 6 ZNAKÓW</label><input id="registerPassword" type="password" autocomplete="new-password"></div><button id="registerBtn" class="authPrimary">UTWÓRZ KONTO</button></div>
+      <div class="authPane" data-auth-pane="login"><div class="authField"><label>NAZWA KONTA</label><input id="loginUsername" maxlength="20" autocomplete="username"></div><div class="authField"><label>HASŁO</label><input id="loginPassword" type="password" autocomplete="current-password"></div><button id="loginBtn" class="authPrimary">ZALOGUJ SIĘ</button></div>
+      <div id="authMsg" class="authMsg"></div>
+    </section>
+    <section id="banCard" class="authCard banCard" style="display:none"><div class="banIcon">⛔</div><h2>Konto zablokowane</h2><strong id="banReason"></strong><div id="banUntil"></div><small>Po wygaśnięciu blokady odśwież stronę.</small></section>
+  </div>
+
+  <div id="chatOverlay">
+    <section class="chatCard"><aside class="chatSidebar"><div class="chatTop"><h2>Czat</h2><button id="chatCloseBtn" class="chatClose">✕</button></div><input id="chatSearch" class="chatSearch" placeholder="Szukaj konta"><div class="adminHint">Zaznacz jedną albo wiele osób.</div><div id="chatUsers" class="chatUsers"></div></aside><main class="chatMain"><div id="chatHeader" class="chatHeader">Wybierz odbiorców po lewej stronie.</div><div id="chatMessages" class="chatMessages"></div><div><div class="chatComposer"><textarea id="chatInput" maxlength="300" placeholder="Napisz wiadomość..."></textarea><button id="chatSendBtn" class="chatSend">WYŚLIJ</button></div><div id="chatStatus" class="chatStatus"></div></div></main></section>
   </div>
 
   <div id="adminOverlay" aria-hidden="true">
@@ -328,7 +353,7 @@
 
     <section id="adminDashboard" class="adminCard">
       <div class="adminTop"><div><h2>Centrum sterowania Arena Stars</h2><span id="adminDeployStatus" class="adminStatusPill">Sprawdzanie wdrożeń…</span></div><div class="adminActions"><button id="adminLogoutBtn" class="adminSecondary">WYLOGUJ</button><button id="adminCloseBtn" class="adminClose">✕</button></div></div>
-      <div class="adminTabs"><button class="adminTab active" data-admin-tab="settings">USTAWIENIA</button><button class="adminTab" data-admin-tab="players">GRACZE</button><button class="adminTab" data-admin-tab="modes">TRYBY</button><button class="adminTab" data-admin-tab="deploy">AKTUALIZACJA</button></div>
+      <div class="adminTabs"><button class="adminTab active" data-admin-tab="settings">USTAWIENIA</button><button class="adminTab" data-admin-tab="players">GRACZE</button><button class="adminTab" data-admin-tab="accounts">KONTA I BANY</button><button class="adminTab" data-admin-tab="modes">TRYBY</button><button class="adminTab" data-admin-tab="deploy">AKTUALIZACJA</button></div>
 
       <div class="adminPane active" data-admin-pane="settings">
         <div class="adminGrid">
@@ -343,7 +368,7 @@
           <div class="adminSection"><h3>Nagrody i dostępność</h3>
             <div class="adminGrid"><div class="adminField"><label>MONETY ZA WYGRANĄ</label><input id="cfgWinCoins" type="number" min="0"></div><div class="adminField"><label>PUCHARKI ZA WYGRANĄ</label><input id="cfgWinTrophies" type="number" min="0"></div><div class="adminField"><label>MONETY ZA REMIS</label><input id="cfgDrawCoins" type="number" min="0"></div><div class="adminField"><label>PUCHARKI ZA REMIS</label><input id="cfgDrawTrophies" type="number" min="0"></div></div>
             <label class="adminCheck"><input id="cfgSoloEnabled" type="checkbox"> Przetrwanie dostępne</label><label class="adminCheck"><input id="cfgDuelEnabled" type="checkbox"> Pojedynki dostępne</label>
-            <div class="adminField"><label>WIADOMOŚĆ W LOBBY</label><textarea id="cfgAnnouncement" maxlength="180"></textarea></div>
+            <div class="adminField"><label>AUTOMATYCZNY BAN ZA PRZEKLINANIE (GODZINY)</label><input id="cfgProfanityBanHours" type="number" min="0.25" max="168" step="0.25"></div><div class="adminField"><label>WIADOMOŚĆ W LOBBY</label><textarea id="cfgAnnouncement" maxlength="180"></textarea></div>
           </div>
         </div>
         <div class="adminActions"><button id="adminSaveSettings" class="adminPrimary">ZAPISZ USTAWIENIA DLA WSZYSTKICH</button></div><div id="adminSettingsMsg" class="adminMsg"></div>
@@ -353,6 +378,9 @@
         <div class="adminGrid"><div class="adminSection"><h3>Znajdź gracza</h3><div class="adminField"><label>NICK LUB ID</label><input id="adminPlayerSearch" placeholder="Wpisz nazwę albo ID"></div><button id="adminSearchBtn" class="adminPrimary">SZUKAJ</button><div id="adminPlayerList" class="adminPlayerList"></div></div>
         <div class="adminSection"><h3>Edytuj profil</h3><div class="adminField"><label>ID GRACZA</label><input id="editPlayerId" readonly></div><div class="adminField"><label>NICK</label><input id="editPlayerName"></div><div class="adminGrid"><div class="adminField"><label>PUNKTY</label><input id="editPoints" type="number" min="0"></div><div class="adminField"><label>PUCHARKI</label><input id="editTrophies" type="number" min="0"></div><div class="adminField"><label>MONETY</label><input id="editCoins" type="number" min="0"></div><div class="adminField"><label>SKÓRKA</label><select id="editSkin"><option value="classic">Klasyczna</option><option value="cosmic">Kosmiczny Strażnik</option></select></div><div class="adminField"><label>POZIOM RUCHU</label><input id="editMove" type="number" min="0" max="5"></div><div class="adminField"><label>POZIOM STRZAŁU</label><input id="editFire" type="number" min="0" max="5"></div><div class="adminField"><label>POZIOM ŻYCIA</label><input id="editHp" type="number" min="0" max="5"></div></div><label class="adminCheck"><input id="editCosmic" type="checkbox"> Kosmiczny Strażnik odblokowany</label><label class="adminCheck"><input id="editVersion" type="checkbox"> Lepsza wersja I odblokowana</label><button id="adminSavePlayer" class="adminPrimary">ZAPISZ PROFIL</button><div id="adminPlayerMsg" class="adminMsg"></div></div></div>
       </div>
+
+
+      <div class="adminPane" data-admin-pane="accounts"><div class="adminGrid"><div class="adminSection"><h3>Konta użytkowników</h3><div class="adminField"><label>NAZWA LUB ID KONTA</label><input id="adminAccountSearch"></div><button id="adminAccountSearchBtn" class="adminPrimary">SZUKAJ</button><div id="adminAccountList" class="adminPlayerList"></div></div><div class="adminSection"><h3>Banowanie konta</h3><div class="adminField"><label>ID KONTA</label><input id="banAccountId" readonly></div><div class="adminField"><label>NAZWA</label><input id="banAccountName" readonly></div><div id="banAccountStatus" class="adminHint">Wybierz konto z listy.</div><div class="adminGrid"><div class="adminField"><label>CZAS</label><input id="banDuration" type="number" min="1" value="2"></div><div class="adminField"><label>JEDNOSTKA</label><select id="banUnit"><option value="3600">godziny</option><option value="60">minuty</option><option value="86400">dni</option></select></div></div><div class="adminField"><label>POWÓD</label><input id="banReasonInput" value="Naruszenie zasad gry"></div><div class="adminActions"><button id="adminBanBtn" class="adminDanger">ZBANUJ</button><button id="adminUnbanBtn" class="adminSecondary">ODBLOKUJ</button></div><div id="adminBanMsg" class="adminMsg"></div></div></div></div>
 
       <div class="adminPane" data-admin-pane="modes">
         <div class="adminSection"><h3>Tryby tworzone z istniejących silników</h3><p class="adminHint">Możesz dodać nową pozycję w menu, opartą na Przetrwaniu albo Pojedynkach. Całkiem nowa mechanika nadal wymaga zmiany kodu.</p><div id="adminModesList"></div><div class="adminActions"><button id="adminAddMode" class="adminSecondary">+ DODAJ TRYB</button><button id="adminSaveModes" class="adminPrimary">ZAPISZ TRYBY</button></div><div id="adminModesMsg" class="adminMsg"></div></div>
@@ -365,6 +393,6 @@
   </div>
 
   <div id="error"></div>
-  <script src="game.js?v=admin-panel-v1"></script>
+  <script src="game.js?v=accounts-chat-bans-v1"></script>
 </body>
 </html>

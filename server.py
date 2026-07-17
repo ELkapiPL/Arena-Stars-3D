@@ -9,9 +9,13 @@ from __future__ import annotations
 
 import base64
 import hmac
+import hashlib
 import json
 import math
 import random
+import re
+import unicodedata
+import uuid
 import mimetypes
 import os
 import secrets
@@ -29,6 +33,8 @@ from urllib.parse import parse_qs, urlparse
 ROOT = Path(__file__).resolve().parent
 DATA_FILE = ROOT / "players.json"
 SETTINGS_FILE = ROOT / "game_settings.json"
+ACCOUNTS_FILE = ROOT / "accounts.json"
+CHAT_FILE = ROOT / "chat_messages.json"
 DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
 HOST = "0.0.0.0"
 PORT = int(os.environ.get("PORT", "8765"))
@@ -36,6 +42,10 @@ VISIBLE_RANKING_SIZE = 200
 ACTIVE_TIMEOUT = 20.0
 MAX_BODY = 256 * 1024
 ADMIN_UPLOAD_MAX_BODY = 8 * 1024 * 1024
+AUTH_SESSION_TTL = 30 * 24 * 60 * 60
+CHAT_MAX_MESSAGE = 300
+CHAT_MAX_RECIPIENTS = 20
+CHAT_HISTORY_LIMIT = 160
 DUEL_PLAYER_TIMEOUT = 12.0
 DUEL_WAIT_TIMEOUT = 45.0
 DUEL_BOT_WAIT = 30.0
@@ -83,6 +93,10 @@ ADMIN_SESSION_TTL = 8 * 60 * 60
 ADMIN_ALLOWED_FILES = {"index.html", "game.js", "server.py", "requirements.txt", "Dockerfile", "render.yaml", ".python-version"}
 admin_sessions: dict[str, dict[str, Any]] = {}
 admin_login_attempts: dict[str, dict[str, float | int]] = {}
+local_accounts: dict[str, dict[str, Any]] = {}
+local_auth_sessions: dict[str, dict[str, Any]] = {}
+local_chat_messages: list[dict[str, Any]] = []
+local_chat_seq = 0
 
 DEFAULT_GAME_CONFIG: dict[str, Any] = {
     "survivalBotLevel": 5,
@@ -98,6 +112,7 @@ DEFAULT_GAME_CONFIG: dict[str, Any] = {
     "soloEnabled": True,
     "duelEnabled": True,
     "announcement": "",
+    "profanityBanHours": 2,
     "customModes": [],
 }
 game_config: dict[str, Any] = dict(DEFAULT_GAME_CONFIG)
@@ -183,6 +198,7 @@ def sanitize_game_config(value: Any) -> dict[str, Any]:
     result["soloEnabled"] = bool(source.get("soloEnabled", True))
     result["duelEnabled"] = bool(source.get("duelEnabled", True))
     result["announcement"] = clean_mode_text(source.get("announcement"), 180)
+    result["profanityBanHours"] = round(clean_float(source.get("profanityBanHours"), 0.25, 168.0, 2.0), 2)
     modes: list[dict[str, Any]] = []
     raw_modes = source.get("customModes")
     if isinstance(raw_modes, list):
@@ -383,6 +399,311 @@ def deploy_files_to_github(files: Any, message: str) -> dict[str, Any]:
             print(f"Commit zapisany, ale deploy hook nie odpowiedział: {exc}")
     return {"ok": True, "commit": commit.get("sha"), "files": [name for name, _ in decoded], "repo": repo, "branch": branch}
 
+
+# ----------------------------- konta, sesje, bany i czat -----------------------------
+
+def normalize_username(value: Any) -> tuple[str, str]:
+    username = " ".join(str(value or "").strip().split())
+    if not 3 <= len(username) <= 20:
+        raise ValueError("Nazwa konta musi mieć od 3 do 20 znaków.")
+    if not all(ch.isalnum() or ch in "_-." for ch in username):
+        raise ValueError("Nazwa konta może zawierać litery, cyfry, _, - i kropkę.")
+    return username, username.casefold()
+
+
+def validate_password(value: Any) -> str:
+    password = str(value or "")
+    if len(password) < 6:
+        raise ValueError("Hasło musi mieć co najmniej 6 znaków.")
+    if len(password) > 128:
+        raise ValueError("Hasło jest za długie.")
+    return password
+
+
+def make_password_hash(password: str, salt_b64: str | None = None) -> tuple[str, str]:
+    salt = base64.b64decode(salt_b64) if salt_b64 else secrets.token_bytes(16)
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 240_000)
+    return base64.b64encode(digest).decode("ascii"), base64.b64encode(salt).decode("ascii")
+
+
+def verify_password(password: str, expected_hash: str, salt_b64: str) -> bool:
+    calculated, _ = make_password_hash(password, salt_b64)
+    return hmac.compare_digest(calculated, expected_hash)
+
+
+def token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def account_ban_payload(row: dict[str, Any]) -> dict[str, Any]:
+    until = float(row.get("banned_until_ts") or 0)
+    active = until > now()
+    return {"banned": active, "bannedUntil": until if active else 0, "banReason": str(row.get("ban_reason") or "") if active else ""}
+
+
+def account_public(row: dict[str, Any]) -> dict[str, Any]:
+    ban = account_ban_payload(row)
+    return {
+        "id": clean_id(row.get("account_id") or row.get("id")),
+        "playerId": clean_id(row.get("account_id") or row.get("id")),
+        "username": str(row.get("username") or ""),
+        **ban,
+    }
+
+
+def load_account_storage() -> None:
+    global local_accounts, local_chat_messages, local_chat_seq
+    if DATABASE_URL:
+        return
+    try:
+        raw = json.loads(ACCOUNTS_FILE.read_text(encoding="utf-8")) if ACCOUNTS_FILE.exists() else {}
+        local_accounts = raw if isinstance(raw, dict) else {}
+    except Exception:
+        local_accounts = {}
+    try:
+        raw_chat = json.loads(CHAT_FILE.read_text(encoding="utf-8")) if CHAT_FILE.exists() else []
+        local_chat_messages = raw_chat if isinstance(raw_chat, list) else []
+        local_chat_seq = max([clean_number(m.get("id")) for m in local_chat_messages] or [0])
+    except Exception:
+        local_chat_messages, local_chat_seq = [], 0
+
+
+def save_account_storage() -> None:
+    if DATABASE_URL:
+        return
+    ACCOUNTS_FILE.write_text(json.dumps(local_accounts, ensure_ascii=False, indent=2), encoding="utf-8")
+    CHAT_FILE.write_text(json.dumps(local_chat_messages[-3000:], ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def account_get_by_username(username_key: str) -> dict[str, Any] | None:
+    if DATABASE_URL:
+        with db_connect() as conn, conn.cursor() as cur:
+            cur.execute("SELECT account_id, username, password_hash, password_salt, EXTRACT(EPOCH FROM banned_until), ban_reason FROM accounts WHERE username_key=%s", (username_key,))
+            row = cur.fetchone()
+        return ({"account_id":row[0],"username":row[1],"password_hash":row[2],"password_salt":row[3],"banned_until_ts":float(row[4] or 0),"ban_reason":row[5] or ""} if row else None)
+    for row in local_accounts.values():
+        if str(row.get("username_key")) == username_key:
+            return dict(row)
+    return None
+
+
+def account_get(account_id: str) -> dict[str, Any] | None:
+    account_id = clean_id(account_id)
+    if not account_id:
+        return None
+    if DATABASE_URL:
+        with db_connect() as conn, conn.cursor() as cur:
+            cur.execute("SELECT account_id, username, password_hash, password_salt, EXTRACT(EPOCH FROM banned_until), ban_reason FROM accounts WHERE account_id=%s", (account_id,))
+            row = cur.fetchone()
+        return ({"account_id":row[0],"username":row[1],"password_hash":row[2],"password_salt":row[3],"banned_until_ts":float(row[4] or 0),"ban_reason":row[5] or ""} if row else None)
+    row = local_accounts.get(account_id)
+    return dict(row) if row else None
+
+
+def ensure_account_profile(account_id: str, username: str) -> None:
+    if DATABASE_URL:
+        with db_connect() as conn, conn.cursor() as cur:
+            cur.execute("SELECT 1 FROM players WHERE player_id=%s", (account_id,))
+            if not cur.fetchone():
+                cur.execute("INSERT INTO players (player_id,name,points,trophies,updated_at) VALUES (%s,%s,0,0,NOW())", (account_id, clean_name(username)))
+            else:
+                cur.execute("UPDATE players SET name=%s, updated_at=NOW() WHERE player_id=%s", (clean_name(username), account_id))
+    else:
+        row = profiles.get(account_id) or {"id":account_id,"points":0,"trophies":0,"coins":0,"upgrades":{"move":0,"fire":0,"hp":0},"skin":"classic","cosmicOwned":False,"heroVersion1":False,"adminRevision":0}
+        row["name"] = clean_name(username)
+        profiles[account_id] = row
+        save_profiles()
+
+
+def account_create(username_value: Any, password_value: Any, requested_id: Any) -> dict[str, Any]:
+    username, username_key = normalize_username(username_value)
+    password = validate_password(password_value)
+    if account_get_by_username(username_key):
+        raise ValueError("Ta nazwa konta jest już zajęta.")
+    account_id = clean_id(requested_id) or str(uuid.uuid4())
+    if account_get(account_id):
+        account_id = str(uuid.uuid4())
+    password_hash, password_salt = make_password_hash(password)
+    if DATABASE_URL:
+        try:
+            with db_connect() as conn, conn.cursor() as cur:
+                cur.execute("INSERT INTO accounts (account_id,username,username_key,password_hash,password_salt,last_login) VALUES (%s,%s,%s,%s,%s,NOW())", (account_id,username,username_key,password_hash,password_salt))
+        except Exception as exc:
+            if "unique" in str(exc).lower():
+                raise ValueError("Ta nazwa konta jest już zajęta.") from exc
+            raise
+    else:
+        local_accounts[account_id] = {"account_id":account_id,"username":username,"username_key":username_key,"password_hash":password_hash,"password_salt":password_salt,"banned_until_ts":0,"ban_reason":"","created_at":now(),"last_login":now()}
+        save_account_storage()
+    ensure_account_profile(account_id, username)
+    return account_get(account_id) or {"account_id":account_id,"username":username}
+
+
+def account_mark_login(account_id: str) -> None:
+    if DATABASE_URL:
+        with db_connect() as conn, conn.cursor() as cur:
+            cur.execute("UPDATE accounts SET last_login=NOW() WHERE account_id=%s", (account_id,))
+    elif account_id in local_accounts:
+        local_accounts[account_id]["last_login"] = now(); save_account_storage()
+
+
+def create_account_session(account_id: str) -> str:
+    token = secrets.token_urlsafe(36)
+    digest = token_hash(token)
+    expiry = now() + AUTH_SESSION_TTL
+    if DATABASE_URL:
+        with db_connect() as conn, conn.cursor() as cur:
+            cur.execute("DELETE FROM account_sessions WHERE expires_at < NOW()")
+            cur.execute("INSERT INTO account_sessions (token_hash,account_id,expires_at) VALUES (%s,%s,TO_TIMESTAMP(%s))", (digest,account_id,expiry))
+    else:
+        local_auth_sessions[digest] = {"account_id":account_id,"expires":expiry}
+    return token
+
+
+def verify_account_session(token: str) -> dict[str, Any] | None:
+    if not token:
+        return None
+    digest = token_hash(token)
+    account_id = ""
+    if DATABASE_URL:
+        with db_connect() as conn, conn.cursor() as cur:
+            cur.execute("SELECT account_id FROM account_sessions WHERE token_hash=%s AND expires_at>NOW()", (digest,))
+            row = cur.fetchone(); account_id = str(row[0]) if row else ""
+    else:
+        row = local_auth_sessions.get(digest)
+        if row and float(row.get("expires",0)) > now(): account_id = str(row.get("account_id") or "")
+        elif row: local_auth_sessions.pop(digest,None)
+    return account_get(account_id) if account_id else None
+
+
+def delete_account_session(token: str) -> None:
+    if not token: return
+    digest = token_hash(token)
+    if DATABASE_URL:
+        with db_connect() as conn, conn.cursor() as cur: cur.execute("DELETE FROM account_sessions WHERE token_hash=%s", (digest,))
+    else: local_auth_sessions.pop(digest,None)
+
+
+def set_account_ban(account_id: str, seconds: float, reason: str) -> dict[str, Any]:
+    until = now() + max(1.0, seconds)
+    reason = clean_mode_text(reason, 240) or "Ban administratora"
+    if DATABASE_URL:
+        with db_connect() as conn, conn.cursor() as cur:
+            cur.execute("UPDATE accounts SET banned_until=TO_TIMESTAMP(%s), ban_reason=%s WHERE account_id=%s", (until,reason,account_id))
+    elif account_id in local_accounts:
+        local_accounts[account_id]["banned_until_ts"] = until; local_accounts[account_id]["ban_reason"] = reason; save_account_storage()
+    return account_public(account_get(account_id) or {"account_id":account_id,"username":""})
+
+
+def clear_account_ban(account_id: str) -> dict[str, Any]:
+    if DATABASE_URL:
+        with db_connect() as conn, conn.cursor() as cur:
+            cur.execute("UPDATE accounts SET banned_until=NULL, ban_reason='' WHERE account_id=%s", (account_id,))
+    elif account_id in local_accounts:
+        local_accounts[account_id]["banned_until_ts"] = 0; local_accounts[account_id]["ban_reason"] = ""; save_account_storage()
+    return account_public(account_get(account_id) or {"account_id":account_id,"username":""})
+
+
+def normalize_for_moderation(text: str) -> str:
+    normalized = unicodedata.normalize("NFKD", text.casefold())
+    return "".join(ch for ch in normalized if not unicodedata.combining(ch))
+
+
+PROFANITY_RE = re.compile(r"(?<![a-z0-9])(kurw\w*|chuj\w*|jeb\w*|pierd\w*|skurw\w*|cwel\w*)(?![a-z0-9])", re.IGNORECASE)
+
+
+def contains_profanity(text: str) -> bool:
+    return bool(PROFANITY_RE.search(normalize_for_moderation(text)))
+
+
+def chat_users(current_id: str, query: str = "") -> list[dict[str, Any]]:
+    query_key = query.strip().casefold()
+    rows: list[dict[str, Any]] = []
+    if DATABASE_URL:
+        with db_connect() as conn, conn.cursor() as cur:
+            if query_key:
+                cur.execute("SELECT account_id, username, EXTRACT(EPOCH FROM banned_until), ban_reason FROM accounts WHERE account_id<>%s AND username_key LIKE %s ORDER BY username_key LIMIT 100", (current_id,f"%{query_key}%"))
+            else:
+                cur.execute("SELECT account_id, username, EXTRACT(EPOCH FROM banned_until), ban_reason FROM accounts WHERE account_id<>%s ORDER BY username_key LIMIT 100", (current_id,))
+            raw = cur.fetchall()
+            rows = [{"account_id":r[0],"username":r[1],"banned_until_ts":float(r[2] or 0),"ban_reason":r[3] or ""} for r in raw]
+    else:
+        rows = [dict(r) for aid,r in local_accounts.items() if aid != current_id and (not query_key or query_key in str(r.get("username_key", "")))]
+        rows.sort(key=lambda r:str(r.get("username_key","")))
+        rows=rows[:100]
+    return [{**account_public(r),"online":clean_id(r.get("account_id")) in active_players} for r in rows]
+
+
+def chat_send(sender: dict[str, Any], recipients_value: Any, body_value: Any) -> dict[str, Any]:
+    global local_chat_seq
+    body = " ".join(str(body_value or "").strip().split())[:CHAT_MAX_MESSAGE]
+    if not body: raise ValueError("Wiadomość jest pusta.")
+    if contains_profanity(body):
+        hours = float(game_config.get("profanityBanHours", 2.0))
+        banned = set_account_ban(sender["account_id"], hours*3600, "Automatyczny ban: przeklinanie na czacie")
+        return {"banned":True,**banned}
+    raw = recipients_value if isinstance(recipients_value,list) else []
+    recipients=[]
+    for value in raw:
+        rid=clean_id(value)
+        if rid and rid != sender["account_id"] and rid not in recipients and account_get(rid): recipients.append(rid)
+        if len(recipients)>=CHAT_MAX_RECIPIENTS: break
+    if not recipients: raise ValueError("Wybierz co najmniej jednego odbiorcę.")
+    batch_id=secrets.token_hex(12); created=now()
+    if DATABASE_URL:
+        with db_connect() as conn, conn.cursor() as cur:
+            for rid in recipients:
+                cur.execute("INSERT INTO chat_messages (batch_id,sender_id,recipient_id,body,created_at) VALUES (%s,%s,%s,%s,TO_TIMESTAMP(%s))", (batch_id,sender["account_id"],rid,body,created))
+    else:
+        for rid in recipients:
+            local_chat_seq+=1; local_chat_messages.append({"id":local_chat_seq,"batch_id":batch_id,"sender_id":sender["account_id"],"recipient_id":rid,"body":body,"created_at":created})
+        save_account_storage()
+    return {"ok":True,"batchId":batch_id,"recipients":recipients}
+
+
+def chat_history(account_id: str, limit: int = CHAT_HISTORY_LIMIT) -> list[dict[str, Any]]:
+    records=[]
+    if DATABASE_URL:
+        with db_connect() as conn, conn.cursor() as cur:
+            cur.execute("""SELECT m.id,m.batch_id,m.sender_id,s.username,m.recipient_id,r.username,m.body,EXTRACT(EPOCH FROM m.created_at)
+                           FROM chat_messages m JOIN accounts s ON s.account_id=m.sender_id JOIN accounts r ON r.account_id=m.recipient_id
+                           WHERE m.sender_id=%s OR m.recipient_id=%s ORDER BY m.id DESC LIMIT %s""", (account_id,account_id,limit*3))
+            records=[{"id":x[0],"batch_id":x[1],"sender_id":x[2],"sender_name":x[3],"recipient_id":x[4],"recipient_name":x[5],"body":x[6],"created_at":float(x[7])} for x in cur.fetchall()][::-1]
+    else:
+        name_map={aid:str(r.get("username") or "") for aid,r in local_accounts.items()}
+        for m in local_chat_messages:
+            if m.get("sender_id")==account_id or m.get("recipient_id")==account_id:
+                records.append({**m,"sender_name":name_map.get(m.get("sender_id"),"?"),"recipient_name":name_map.get(m.get("recipient_id"),"?")})
+        records=records[-limit*3:]
+    grouped={}
+    order=[]
+    for m in records:
+        key=(m["batch_id"],m["sender_id"],m["body"],int(m["created_at"]))
+        if key not in grouped:
+            grouped[key]={"id":m["id"],"batchId":m["batch_id"],"senderId":m["sender_id"],"sender":m["sender_name"],"recipients":[],"body":m["body"],"createdAt":m["created_at"]}; order.append(key)
+        grouped[key]["recipients"].append({"id":m["recipient_id"],"username":m["recipient_name"]})
+        grouped[key]["id"] = max(grouped[key]["id"], m["id"])
+    return [grouped[k] for k in order][-limit:]
+
+
+def admin_accounts(query: str = "") -> list[dict[str, Any]]:
+    query_key=query.strip().casefold()
+    rows=[]
+    if DATABASE_URL:
+        with db_connect() as conn, conn.cursor() as cur:
+            cur.execute("""SELECT a.account_id,a.username,EXTRACT(EPOCH FROM a.banned_until),a.ban_reason,p.points,p.trophies,p.coins
+                           FROM accounts a LEFT JOIN players p ON p.player_id=a.account_id
+                           WHERE (%s='' OR a.username_key LIKE %s OR a.account_id LIKE %s)
+                           ORDER BY a.username_key LIMIT 100""", (query_key,f"%{query_key}%",f"%{query_key}%"))
+            rows=cur.fetchall()
+    else:
+        for aid,a in local_accounts.items():
+            if query_key and query_key not in str(a.get("username_key","")) and query_key not in aid.casefold(): continue
+            p=profiles.get(aid,{})
+            rows.append((aid,a.get("username"),a.get("banned_until_ts",0),a.get("ban_reason",""),p.get("points",0),p.get("trophies",0),p.get("coins",0)))
+    return [{**account_public({"account_id":r[0],"username":r[1],"banned_until_ts":float(r[2] or 0),"ban_reason":r[3] or ""}),"points":clean_number(r[4]),"trophies":clean_number(r[5]),"coins":clean_number(r[6])} for r in rows]
+
+
 # ----------------------------- Neon Postgres -----------------------------
 
 def db_connect():
@@ -422,7 +743,46 @@ def init_database() -> None:
         ):
             cur.execute(statement)
         cur.execute("CREATE TABLE IF NOT EXISTS game_settings (key TEXT PRIMARY KEY, value JSONB NOT NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())")
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS accounts (
+                account_id VARCHAR(80) PRIMARY KEY,
+                username VARCHAR(24) NOT NULL,
+                username_key VARCHAR(24) NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                password_salt TEXT NOT NULL,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                last_login TIMESTAMPTZ,
+                banned_until TIMESTAMPTZ,
+                ban_reason VARCHAR(240) NOT NULL DEFAULT ''
+            )
+            """
+        )
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS account_sessions (
+                token_hash CHAR(64) PRIMARY KEY,
+                account_id VARCHAR(80) NOT NULL REFERENCES accounts(account_id) ON DELETE CASCADE,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                expires_at TIMESTAMPTZ NOT NULL
+            )
+            """
+        )
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS chat_messages (
+                id BIGSERIAL PRIMARY KEY,
+                batch_id VARCHAR(64) NOT NULL,
+                sender_id VARCHAR(80) NOT NULL REFERENCES accounts(account_id) ON DELETE CASCADE,
+                recipient_id VARCHAR(80) NOT NULL REFERENCES accounts(account_id) ON DELETE CASCADE,
+                body VARCHAR(300) NOT NULL,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+            """
+        )
         cur.execute("CREATE INDEX IF NOT EXISTS players_ranking_idx ON players (points DESC, trophies DESC, player_id ASC)")
+        cur.execute("CREATE INDEX IF NOT EXISTS account_sessions_expiry_idx ON account_sessions (expires_at)")
+        cur.execute("CREATE INDEX IF NOT EXISTS chat_messages_users_idx ON chat_messages (sender_id, recipient_id, id DESC)")
 
 
 def db_upsert_profile(payload: dict[str, Any]) -> dict[str, Any] | None:
@@ -444,9 +804,12 @@ def db_upsert_profile(payload: dict[str, Any]) -> dict[str, Any] | None:
             old = profile_full_row({"id":row[0],"name":row[1],"points":row[2],"trophies":row[3],"coins":row[4],"move_level":row[5],"fire_level":row[6],"hp_level":row[7],"skin":row[8],"cosmic_owned":row[9],"hero_version1":row[10],"admin_revision":row[11]})
             if old["adminRevision"] > known_revision:
                 merged = old
-                merged["name"] = incoming["name"]
+                if incoming["name"] != "Gracz" or old["name"] == "Gracz":
+                    merged["name"] = incoming["name"]
             else:
                 merged = incoming
+                if incoming["name"] == "Gracz" and old["name"] != "Gracz":
+                    merged["name"] = old["name"]
                 merged["points"] = max(old["points"], incoming["points"])
                 merged["trophies"] = max(old["trophies"], incoming["trophies"])
                 merged["coins"] = max(old["coins"], incoming["coins"])
@@ -562,9 +925,12 @@ def json_upsert_profile(payload: dict[str, Any]) -> dict[str, Any] | None:
     known = clean_number(payload.get("adminRevision"))
     if old["adminRevision"] > known:
         entry = old
-        entry["name"] = incoming["name"]
+        if incoming["name"] != "Gracz" or old["name"] == "Gracz":
+            entry["name"] = incoming["name"]
     else:
         entry = incoming
+        if incoming["name"] == "Gracz" and old["name"] != "Gracz":
+            entry["name"] = old["name"]
         entry["points"] = max(old["points"], incoming["points"])
         entry["trophies"] = max(old["trophies"], incoming["trophies"])
         entry["coins"] = max(old["coins"], incoming["coins"])
@@ -850,7 +1216,7 @@ def duel_payload(match: dict[str, Any], player_id: str) -> dict[str, Any]:
         "serverTime": round(current, 4),
         "stateSeq": int(match.get("state_seq", 0)),
         "ackShotSeq": int(match["players"].get(player_id, {}).get("last_client_shot_seq", 0)),
-        "build": "admin-panel-password-1234-v1",
+        "build": "accounts-chat-bans-v1",
     }
 
 
@@ -1355,7 +1721,7 @@ def duel_tick_loop() -> None:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "ArenaStarsRenderNeon/1.4-bot-localny"
+    server_version = "ArenaStarsRenderNeon/2.0-accounts-chat"
     protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt: str, *args: Any) -> None:
@@ -1395,6 +1761,49 @@ class Handler(BaseHTTPRequestHandler):
         forwarded = self.headers.get("X-Forwarded-For", "").split(",")[0].strip()
         return forwarded or str(self.client_address[0])
 
+    def cookie_value(self, wanted: str) -> str:
+        cookie = self.headers.get("Cookie", "")
+        for part in cookie.split(";"):
+            key, _, value = part.strip().partition("=")
+            if key == wanted:
+                return value
+        return ""
+
+    def account_token(self) -> str:
+        return self.cookie_value("arena_session")
+
+    def account_session(self) -> dict[str, Any] | None:
+        return verify_account_session(self.account_token())
+
+    def require_account(self, allow_banned: bool = False) -> dict[str, Any] | None:
+        account = self.account_session()
+        if not account:
+            self.send_json({"error":"Zaloguj się do konta.","authRequired":True}, HTTPStatus.UNAUTHORIZED)
+            return None
+        ban = account_ban_payload(account)
+        if ban["banned"] and not allow_banned:
+            self.send_json({"error":"Konto jest zbanowane.",**ban}, HTTPStatus.LOCKED)
+            return None
+        touch(clean_id(account.get("account_id")))
+        return account
+
+    def send_account_login(self, account: dict[str, Any]) -> None:
+        token = create_account_session(clean_id(account.get("account_id")))
+        secure = bool(os.environ.get("RENDER")) or self.headers.get("X-Forwarded-Proto") == "https"
+        cookie = f"arena_session={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age={AUTH_SESSION_TTL}" + ("; Secure" if secure else "")
+        account_mark_login(clean_id(account.get("account_id")))
+        profile = None
+        try:
+            if DATABASE_URL:
+                with db_connect() as conn, conn.cursor() as cur:
+                    cur.execute("SELECT player_id,name,points,trophies,coins,move_level,fire_level,hp_level,skin,cosmic_owned,hero_version1,admin_revision FROM players WHERE player_id=%s", (account["account_id"],))
+                    r=cur.fetchone()
+                    if r: profile=profile_full_row({"id":r[0],"name":r[1],"points":r[2],"trophies":r[3],"coins":r[4],"move_level":r[5],"fire_level":r[6],"hp_level":r[7],"skin":r[8],"cosmic_owned":r[9],"hero_version1":r[10],"admin_revision":r[11]})
+            else:
+                profile=profile_full_row(profiles.get(account["account_id"],{}))
+        except Exception: profile=None
+        self.send_json({"ok":True,"account":account_public(account),"profile":profile}, extra_headers={"Set-Cookie":cookie})
+
     def admin_token(self) -> str:
         cookie = self.headers.get("Cookie", "")
         for part in cookie.split(";"):
@@ -1420,6 +1829,24 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
+        if parsed.path == "/api/auth/status":
+            account = self.account_session()
+            if not account:
+                self.send_json({"ok":True,"authenticated":False}); return
+            self.send_json({"ok":True,"authenticated":True,"account":account_public(account)}); return
+        if parsed.path == "/api/chat/users":
+            account=self.require_account()
+            if not account: return
+            q=(parse_qs(parsed.query).get("q") or [""])[0]
+            self.send_json({"ok":True,"users":chat_users(account["account_id"],q)}); return
+        if parsed.path == "/api/chat/messages":
+            account=self.require_account()
+            if not account: return
+            self.send_json({"ok":True,"messages":chat_history(account["account_id"])}); return
+        if parsed.path == "/api/admin/accounts":
+            if not self.require_admin(): return
+            q=(parse_qs(parsed.query).get("q") or [""])[0]
+            self.send_json({"ok":True,"accounts":admin_accounts(q)}); return
         if parsed.path == "/api/config":
             self.send_json({"ok": True, "config": public_game_config()})
             return
@@ -1457,9 +1884,11 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"error": "Błąd połączenia z bazą danych."}, HTTPStatus.SERVICE_UNAVAILABLE)
             return
         if parsed.path == "/api/duel/state":
+            account=self.require_account()
+            if not account: return
             query = parse_qs(parsed.query)
             match_id = clean_id((query.get("matchId") or [""])[0])
-            player_id = clean_id((query.get("playerId") or [""])[0])
+            player_id = clean_id(account.get("account_id"))
             with lock:
                 state = duel_state(match_id, player_id)
             if state is None:
@@ -1473,7 +1902,7 @@ class Handler(BaseHTTPRequestHandler):
                     with db_connect() as conn, conn.cursor() as cur:
                         cur.execute("SELECT 1")
                         cur.fetchone()
-                self.send_json({"ok": True, "storage": "neon" if DATABASE_URL else "json", "build": "admin-panel-password-1234-v1"})
+                self.send_json({"ok": True, "storage": "neon" if DATABASE_URL else "json", "build": "accounts-chat-bans-v1"})
             except Exception as exc:
                 self.send_json({"ok": False, "error": str(exc)}, HTTPStatus.SERVICE_UNAVAILABLE)
             return
@@ -1485,6 +1914,44 @@ class Handler(BaseHTTPRequestHandler):
         if payload is None:
             self.send_json({"error": "Nieprawidłowe dane."}, HTTPStatus.BAD_REQUEST)
             return
+        if parsed.path == "/api/auth/register":
+            try:
+                with lock: account=account_create(payload.get("username"),payload.get("password"),payload.get("playerId"))
+                self.send_account_login(account)
+            except ValueError as exc: self.send_json({"error":str(exc)}, HTTPStatus.CONFLICT)
+            except Exception as exc: print(f"Błąd rejestracji: {exc}"); self.send_json({"error":"Nie udało się utworzyć konta."}, HTTPStatus.INTERNAL_SERVER_ERROR)
+            return
+        if parsed.path == "/api/auth/login":
+            try:
+                _, key=normalize_username(payload.get("username")); account=account_get_by_username(key)
+                if not account or not verify_password(str(payload.get("password") or ""),account["password_hash"],account["password_salt"]):
+                    self.send_json({"error":"Nieprawidłowa nazwa konta lub hasło."}, HTTPStatus.UNAUTHORIZED); return
+                ban=account_ban_payload(account)
+                if ban["banned"]: self.send_json({"error":"Konto jest zbanowane.",**ban}, HTTPStatus.LOCKED); return
+                self.send_account_login(account)
+            except ValueError as exc: self.send_json({"error":str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+        if parsed.path == "/api/auth/logout":
+            delete_account_session(self.account_token())
+            self.send_json({"ok":True},extra_headers={"Set-Cookie":"arena_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0"}); return
+        if parsed.path == "/api/chat/send":
+            account=self.require_account()
+            if not account: return
+            try:
+                result=chat_send(account,payload.get("recipients"),payload.get("body"))
+                if result.get("banned"): self.send_json({"error":"Automatyczny ban za przeklinanie.",**result},HTTPStatus.LOCKED)
+                else: self.send_json(result)
+            except ValueError as exc: self.send_json({"error":str(exc)},HTTPStatus.BAD_REQUEST)
+            return
+        if parsed.path == "/api/admin/ban":
+            if not self.require_admin(): return
+            aid=clean_id(payload.get("accountId")); seconds=max(60,min(365*24*3600,float(payload.get("durationSeconds") or 0)))
+            if not account_get(aid): self.send_json({"error":"Nie znaleziono konta."},HTTPStatus.NOT_FOUND); return
+            self.send_json({"ok":True,"account":set_account_ban(aid,seconds,str(payload.get("reason") or "Ban administratora"))}); return
+        if parsed.path == "/api/admin/unban":
+            if not self.require_admin(): return
+            aid=clean_id(payload.get("accountId"))
+            self.send_json({"ok":True,"account":clear_account_ban(aid)}); return
         if parsed.path in {"/api/admin/login", "/api/admin/recover"}:
             ip = self.client_ip()
             wait = admin_login_locked(ip)
@@ -1528,6 +1995,9 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
             return
         if parsed.path == "/api/profile":
+            account=self.require_account()
+            if not account: return
+            payload["playerId"]=account["account_id"]; payload["name"]=account["username"]
             try:
                 with lock:
                     entry = upsert_profile(payload)
@@ -1542,6 +2012,10 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"error": "Nie udało się zapisać profilu."}, HTTPStatus.SERVICE_UNAVAILABLE)
             return
         if parsed.path == "/api/duel/join":
+            account=self.require_account()
+            if not account: return
+            payload["playerId"]=account["account_id"]
+            payload["name"]=account["username"]
             try:
                 with lock:
                     result = join_duel(payload)
@@ -1552,6 +2026,10 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"error": "Nie udało się uruchomić kolejki pojedynku."}, HTTPStatus.INTERNAL_SERVER_ERROR)
             return
         if parsed.path == "/api/duel/action":
+            account=self.require_account()
+            if not account: return
+            payload["playerId"]=account["account_id"]
+            payload["name"]=account["username"]
             try:
                 with lock:
                     result = duel_action(payload)
@@ -1564,6 +2042,10 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"error": "Nie udało się zaktualizować pojedynku."}, HTTPStatus.INTERNAL_SERVER_ERROR)
             return
         if parsed.path == "/api/duel/shoot":
+            account=self.require_account()
+            if not account: return
+            payload["playerId"]=account["account_id"]
+            payload["name"]=account["username"]
             try:
                 with lock:
                     result = duel_shoot(payload)
@@ -1576,6 +2058,10 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"error": "Nie udało się wysłać strzału."}, HTTPStatus.INTERNAL_SERVER_ERROR)
             return
         if parsed.path == "/api/duel/leave":
+            account=self.require_account()
+            if not account: return
+            payload["playerId"]=account["account_id"]
+            payload["name"]=account["username"]
             try:
                 with lock:
                     result = leave_duel(payload)
@@ -1625,6 +2111,7 @@ def local_ip() -> str:
 
 if __name__ == "__main__":
     load_profiles()
+    load_account_storage()
     init_database()
     load_game_config()
     threading.Thread(target=duel_tick_loop, name="duel-tick", daemon=True).start()
