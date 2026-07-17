@@ -38,6 +38,9 @@ DUEL_BULLET_SPEED = 18.0
 DUEL_BULLET_DAMAGE = 22
 DUEL_BULLET_RADIUS = 0.19
 DUEL_PLAYER_RADIUS = 0.75
+DUEL_HP_MULTIPLIER = 3.5  # „o 250% więcej” = 350% wartości bazowej
+DUEL_MAX_ROUNDS = 3
+DUEL_WINS_TO_TAKE_MATCH = 2
 DUEL_BUSH_REVEAL_DISTANCE = 4.5
 DUEL_TICK_RATE = 20.0  # niezależna symulacja bota i pocisków 20 razy na sekundę
 # Szybka, symetryczna mapa: dwie ściany i cztery małe pola krzaków.
@@ -446,6 +449,9 @@ def duel_public_player(player: dict[str, Any], viewer: dict[str, Any] | None = N
 
 def duel_payload(match: dict[str, Any], player_id: str) -> dict[str, Any]:
     current = now()
+    player_ids = list(match["players"].keys())
+    opponent_id = next((pid for pid in player_ids if pid != player_id), "")
+    wins = match.get("round_wins", {})
     return {
         "ok": True,
         "status": match["status"],
@@ -466,11 +472,18 @@ def duel_payload(match: dict[str, Any], player_id: str) -> dict[str, Any]:
         ],
         "winnerId": match.get("winner_id"),
         "reason": match.get("reason", ""),
+        "round": int(match.get("round", 1)),
+        "maxRounds": DUEL_MAX_ROUNDS,
+        "yourWins": int(wins.get(player_id, 0)),
+        "opponentWins": int(wins.get(opponent_id, 0)),
+        "roundDraws": int(match.get("round_draws", 0)),
+        "roundResult": match.get("round_result", ""),
+        "roundEventSeq": int(match.get("round_event_seq", 0)),
         "you": player_id,
         "serverTime": round(current, 4),
         "stateSeq": int(match.get("state_seq", 0)),
         "ackShotSeq": int(match["players"].get(player_id, {}).get("last_client_shot_seq", 0)),
-        "build": "bot-localny-final-1",
+        "build": "rundy-best-of-3-hp350-v1",
     }
 
 
@@ -482,6 +495,58 @@ def finish_duel(match: dict[str, Any], winner_id: str | None, reason: str) -> No
     match["reason"] = reason
     match["finished_at"] = now()
     match["bullets"] = []
+    match["state_seq"] = int(match.get("state_seq", 0)) + 1
+
+
+def reset_duel_round(match: dict[str, Any]) -> None:
+    """Ustawia obie postacie na pozycjach startowych z pełnym życiem."""
+    for player in match["players"].values():
+        player["x"] = float(player.get("spawn_x", 0.0))
+        player["z"] = float(player.get("spawn_z", 0.0))
+        player["angle"] = float(player.get("spawn_angle", 0.0))
+        player["hp"] = int(player["max_hp"])
+        player["vx"] = 0.0
+        player["vz"] = 0.0
+        player["last_shot"] = 0.0
+        player["last_move"] = now()
+        player["last_client_shot_seq"] = 0
+        player["revealed_until"] = 0.0
+        player["last_seen"] = now()
+        if player.get("is_bot"):
+            player["next_turn"] = now() + 0.55
+            player["stuck_for"] = 0.0
+    match["bullets"] = []
+    match["start_at"] = now() + 3.0
+    match["last_tick"] = now()
+    match["status"] = "countdown"
+    match["state_seq"] = int(match.get("state_seq", 0)) + 1
+
+
+def complete_duel_round(match: dict[str, Any], winner_id: str | None) -> None:
+    """Zapisuje wynik rundy i kończy lub uruchamia następną rundę."""
+    if match.get("status") == "finished":
+        return
+    current_round = int(match.get("round", 1))
+    wins = match.setdefault("round_wins", {pid: 0 for pid in match["players"]})
+    if winner_id is None:
+        match["round_draws"] = int(match.get("round_draws", 0)) + 1
+        match["round_result"] = "draw"
+    else:
+        wins[winner_id] = int(wins.get(winner_id, 0)) + 1
+        match["round_result"] = winner_id
+    match["round_event_seq"] = int(match.get("round_event_seq", 0)) + 1
+
+    champion = next((pid for pid, value in wins.items() if int(value) >= DUEL_WINS_TO_TAKE_MATCH), None)
+    if champion is not None:
+        finish_duel(match, champion, "Koniec meczu: zwycięstwo 2 rundy.")
+        return
+    if current_round >= DUEL_MAX_ROUNDS:
+        # Zgodnie z zasadą: wygrywa tylko osoba z 2 rundami. Bez 2 zwycięstw jest remis meczu.
+        finish_duel(match, None, "Koniec meczu: po 3 rundach nikt nie wygrał dwóch rund.")
+        return
+
+    match["round"] = current_round + 1
+    reset_duel_round(match)
 
 
 def update_duel_bots(match: dict[str, Any], step: float, current: float) -> None:
@@ -617,9 +682,6 @@ def advance_duel(match: dict[str, Any]) -> None:
                 bullet["z"] = z0 + (z1 - z0) * hit_t
                 target["hp"] = max(0, target["hp"] - bullet["damage"])
                 changed = True
-                if target["hp"] <= 0:
-                    finish_duel(match, bullet["owner_id"], f'{target["name"]} został pokonany.')
-                    return
                 continue
             if wall_t is not None:
                 changed = True
@@ -629,6 +691,14 @@ def advance_duel(match: dict[str, Any]) -> None:
             kept.append(bullet)
             changed = True
         match["bullets"] = kept
+
+        # Oceniamy zgony dopiero po wszystkich pociskach z tej klatki.
+        # Dzięki temu dwa trafienia w tej samej chwili dają prawdziwy remis rundy.
+        dead = [p for p in players if p.get("hp", 0) <= 0]
+        if dead:
+            alive = [p for p in players if p.get("hp", 0) > 0]
+            complete_duel_round(match, alive[0]["id"] if len(alive) == 1 else None)
+            return
 
     if changed:
         match["state_seq"] = int(match.get("state_seq", 0)) + 1
@@ -649,7 +719,8 @@ def cleanup_duels() -> None:
 
 
 def create_duel_player(payload: dict[str, Any], player_id: str, x: float, z: float, angle: float) -> dict[str, Any]:
-    max_hp = int(round(clean_float(payload.get("maxHp"), 100, 400, 150)))
+    base_hp = clean_float(payload.get("maxHp"), 100, 400, 150)
+    max_hp = int(round(base_hp * DUEL_HP_MULTIPLIER))
     return {
         "id": player_id,
         "name": clean_name(payload.get("name")),
@@ -657,6 +728,9 @@ def create_duel_player(payload: dict[str, Any], player_id: str, x: float, z: flo
         "x": x,
         "z": z,
         "angle": angle,
+        "spawn_x": x,
+        "spawn_z": z,
+        "spawn_angle": angle,
         "hp": max_hp,
         "max_hp": max_hp,
         "speed": clean_float(payload.get("speed"), 3.0, 12.0, 6.3),
@@ -702,6 +776,11 @@ def create_duel_match(first_payload: dict[str, Any], first_id: str, second_paylo
         "bullet_seq": 0,
         "winner_id": None,
         "reason": "",
+        "round": 1,
+        "round_wins": {first_id: 0, second_id: 0},
+        "round_draws": 0,
+        "round_result": "",
+        "round_event_seq": 0,
         "state_seq": 0,
     }
     duel_matches[match_id] = match
@@ -787,21 +866,25 @@ def duel_action(payload: dict[str, Any]) -> dict[str, Any] | None:
     advance_duel(match)
     player["last_seen"] = current
 
-    requested_x = clean_float(payload.get("x"), -DUEL_ARENA, DUEL_ARENA, player["x"])
-    requested_z = clean_float(payload.get("z"), -DUEL_ARENA, DUEL_ARENA, player["z"])
-    elapsed = max(0.01, min(0.4, current - player["last_move"]))
-    max_distance = player["speed"] * elapsed + 0.55
-    dx, dz = requested_x - player["x"], requested_z - player["z"]
-    distance = (dx * dx + dz * dz) ** 0.5
-    if distance > max_distance:
-        scale = max_distance / distance
-        dx, dz = dx * scale, dz * scale
-    old_x, old_z = player["x"], player["z"]
-    player["x"], player["z"], _ = resolve_duel_position(player["x"] + dx, player["z"] + dz)
-    player["vx"] = (player["x"] - old_x) / elapsed
-    player["vz"] = (player["z"] - old_z) / elapsed
     player["angle"] = normalize_duel_angle(payload.get("angle"), player["angle"])
-    player["last_move"] = current
+    if match["status"] == "playing":
+        requested_x = clean_float(payload.get("x"), -DUEL_ARENA, DUEL_ARENA, player["x"])
+        requested_z = clean_float(payload.get("z"), -DUEL_ARENA, DUEL_ARENA, player["z"])
+        elapsed = max(0.01, min(0.4, current - player["last_move"]))
+        max_distance = player["speed"] * elapsed + 0.55
+        dx, dz = requested_x - player["x"], requested_z - player["z"]
+        distance = (dx * dx + dz * dz) ** 0.5
+        if distance > max_distance:
+            scale = max_distance / distance
+            dx, dz = dx * scale, dz * scale
+        old_x, old_z = player["x"], player["z"]
+        player["x"], player["z"], _ = resolve_duel_position(player["x"] + dx, player["z"] + dz)
+        player["vx"] = (player["x"] - old_x) / elapsed
+        player["vz"] = (player["z"] - old_z) / elapsed
+        player["last_move"] = current
+    else:
+        player["vx"] = 0.0
+        player["vz"] = 0.0
 
     shots = payload.get("shots")
     if not isinstance(shots, list):
@@ -915,7 +998,7 @@ class Handler(BaseHTTPRequestHandler):
                     with db_connect() as conn, conn.cursor() as cur:
                         cur.execute("SELECT 1")
                         cur.fetchone()
-                self.send_json({"ok": True, "storage": "neon" if DATABASE_URL else "json", "build": "bot-localny-final-1"})
+                self.send_json({"ok": True, "storage": "neon" if DATABASE_URL else "json", "build": "rundy-best-of-3-hp350-v1"})
             except Exception as exc:
                 self.send_json({"ok": False, "error": str(exc)}, HTTPStatus.SERVICE_UNAVAILABLE)
             return

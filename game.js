@@ -223,6 +223,10 @@ function duelPlayerSettings(){
   const fireCooldown=BASE_FIRE_COOLDOWN/(Math.pow(1.07,profile.upgrades.fire||0)*(versionOwned?VERSION_ONE_FIRE:1));
   return {playerId,name:profile.name,skin:profile.skin,maxHp,speed,fireCooldown};
 }
+function duelModeLabel(){return duelLocalBotMode?'Pojedynek z botem':'Pojedynek 1v1';}
+function updateDuelRoundHud(){
+  if(ui.hudModeText)ui.hudModeText.textContent=`${duelModeLabel()} • RUNDA ${duelRound}/3 • ${duelYourWins}:${duelOpponentWins}${duelRoundDraws?` • REMISY ${duelRoundDraws}`:''}`;
+}
 function setDuelQueueText(text){if(ui.duelQueueText)ui.duelQueueText.textContent=text;}
 function clearDuelTimers(){
   clearTimeout(duelJoinTimer);duelJoinTimer=0;
@@ -232,7 +236,7 @@ function clearDuelTimers(){
 function stopDuelSession(notify=true){
   const oldMatch=duelMatchId;
   clearDuelTimers();
-  duelSearching=false;duelActive=false;duelEnded=false;duelMatchId='';duelOpponent=null;duelServerBullets=[];duelPredictedBullets=[];duelShotQueue=[];duelVisualHitSeqs.clear();duelMatchStatus='';duelStartIn=0;duelStartDeadline=0;duelNetworkFailures=0;duelFrameSeq=0;duelLocalBotMode=false;duelBotBullets=[];duelBotTurnTimer=0;duelBotShotTimer=.8;duelBotStrafe=1;duelBotStuck=0;duelBotReveal=0;
+  duelSearching=false;duelActive=false;duelEnded=false;duelMatchId='';duelOpponent=null;duelServerBullets=[];duelPredictedBullets=[];duelShotQueue=[];duelVisualHitSeqs.clear();duelMatchStatus='';duelStartIn=0;duelStartDeadline=0;duelNetworkFailures=0;duelFrameSeq=0;duelLocalBotMode=false;duelBotBullets=[];duelBotTurnTimer=0;duelBotShotTimer=.8;duelBotStrafe=1;duelBotStuck=0;duelBotReveal=0;duelRound=1;duelYourWins=0;duelOpponentWins=0;duelRoundDraws=0;duelRoundEventSeq=0;duelRoundResolving=false;
   document.body.classList.remove('duel-mode');
   if(location.hash==='#pojedynki')history.replaceState(null,'',location.pathname+location.search);
   if(notify&&(oldMatch||playerId)){
@@ -264,7 +268,7 @@ function startDuelQueue(){
   if(duelSearching||duelActive)return;
   chooseDuelMode();
   if(running&&!duelActive)commitRun();
-  reset();running=false;duelSearching=true;duelEnded=false;duelNetworkFailures=0;duelMatchId='';duelOpponent=null;duelServerBullets=[];duelPredictedBullets=[];duelShotQueue=[];duelVisualHitSeqs.clear();duelLocalShotSeq=0;duelFrameSeq=0;duelStartDeadline=0;duelLocalBotMode=false;duelBotBullets=[];duelBotTurnTimer=0;duelBotShotTimer=.8;duelBotStrafe=Math.random()<.5?-1:1;duelBotStuck=0;duelBotReveal=0;
+  reset();running=false;duelSearching=true;duelEnded=false;duelNetworkFailures=0;duelMatchId='';duelOpponent=null;duelServerBullets=[];duelPredictedBullets=[];duelShotQueue=[];duelVisualHitSeqs.clear();duelLocalShotSeq=0;duelFrameSeq=0;duelStartDeadline=0;duelLocalBotMode=false;duelBotBullets=[];duelBotTurnTimer=0;duelBotShotTimer=.8;duelBotStrafe=Math.random()<.5?-1:1;duelBotStuck=0;duelBotReveal=0;duelRound=1;duelYourWins=0;duelOpponentWins=0;duelRoundDraws=0;duelRoundEventSeq=0;duelRoundResolving=false;
   document.body.classList.add('lobby-mode');document.body.classList.remove('duel-mode');
   ui.lobbyView.style.display='none';ui.gameOverView.style.display='none';ui.duelQueueView.style.display='grid';ui.overlay.style.display='block';
   setDuelQueueText('Łączenie z kolejką pojedynków 1v1…');
@@ -296,6 +300,20 @@ function processDuelState(data,initial=false){
     duelStartDeadline=0;duelStartIn=0;
   }
   duelMatchStatus=incomingStatus;
+  const nextRound=Math.max(1,Math.min(3,Number(data.round)||duelRound||1));
+  const nextEventSeq=Math.max(0,Number(data.roundEventSeq)||0);
+  const roundChanged=nextRound!==duelRound||nextEventSeq>duelRoundEventSeq;
+  duelRound=nextRound;duelYourWins=Math.max(0,Number(data.yourWins)||0);duelOpponentWins=Math.max(0,Number(data.opponentWins)||0);duelRoundDraws=Math.max(0,Number(data.roundDraws)||0);
+  if(roundChanged){
+    duelServerBullets=[];duelPredictedBullets=[];duelBotBullets=[];duelShotQueue=[];duelVisualHitSeqs.clear();
+    if(player){player.ammo=MAG_SIZE;player.reload=0;player.fire=0;}
+    if(nextEventSeq>duelRoundEventSeq){
+      if(data.roundResult==='draw')showMessage('REMIS RUNDY!');
+      else if(data.roundResult===playerId)showMessage('WYGRYWASZ RUNDĘ!');
+      else if(data.roundResult)showMessage('PRZECIWNIK WYGRYWA RUNDĘ');
+    }
+  }
+  duelRoundEventSeq=nextEventSeq;
   const ackShotSeq=Math.max(0,Number(data.ackShotSeq)||0);
   if(ackShotSeq>0)duelShotQueue=duelShotQueue.filter(shot=>shot.seq>ackShotSeq);
   const previousBullets=new Map(duelServerBullets.map(b=>[b.id,b]));
@@ -336,7 +354,7 @@ function processDuelState(data,initial=false){
       if(Math.hypot(targetX-duelOpponent.renderX,targetZ-duelOpponent.renderZ)>5){duelOpponent.renderX=targetX;duelOpponent.renderZ=targetZ;duelOpponent.renderAngle=targetAngle;}
     }
   }else duelOpponent=null;
-  if(ui.hudModeText)ui.hudModeText.textContent=other?.isBot?'Pojedynek z botem':'Pojedynek 1v1';
+  updateDuelRoundHud();
   if(ui.duelOpponentName)ui.duelOpponentName.textContent=other?(other.hidden?'PRZECIWNIK W KRZAKACH':`${other.name.toUpperCase()}${other.isBot?' • BOT':''}`):'OCZEKIWANIE NA PRZECIWNIKA';
   if(ui.duelOpponentHp)ui.duelOpponentHp.textContent=other?`${Math.max(0,other.hp)} / ${other.maxHp} HP`:'—';
   updateUI();
@@ -369,7 +387,26 @@ function duelPlayerShoot(){
 }
 function localBotDamagePlayer(amount){
   if(!duelActive||duelEnded||!player)return;player.hp=Math.max(0,player.hp-amount);shake=Math.max(shake,.28);burst(player.x,player.z,[1,.18,.28],10,4.8);updateUI();
-  if(player.hp<=0)finishDuel({winnerId:duelOpponent?.id||'bot',reason:'Bot Arenowy wygrał pojedynek.'});
+}
+function resetLocalDuelRound(){
+  if(!player||!duelOpponent)return;
+  player.x=0;player.z=12;player.angle=Math.PI;player.netX=0;player.netZ=12;player.hp=player.maxHp;player.ammo=MAG_SIZE;player.reload=0;player.fire=0;
+  Object.assign(duelOpponent,{x:0,z:-12,renderX:0,renderZ:-12,targetX:0,targetZ:-12,angle:0,renderAngle:0,targetAngle:0,hp:duelOpponent.maxHp,hidden:false,vx:0,vz:0});
+  duelPredictedBullets=[];duelServerBullets=[];duelBotBullets=[];duelShotQueue=[];duelVisualHitSeqs.clear();
+  duelBotShotTimer=.8;duelBotTurnTimer=.4;duelBotStuck=0;duelBotReveal=0;duelRoundResolving=false;
+  duelMatchStatus='countdown';duelStartIn=3;duelStartDeadline=performance.now()+3000;updateDuelRoundHud();updateUI();
+}
+function resolveLocalDuelRound(){
+  if(!duelLocalBotMode||duelRoundResolving||duelEnded||duelMatchStatus!=='playing'||!player||!duelOpponent)return;
+  const playerDead=player.hp<=0,botDead=duelOpponent.hp<=0;if(!playerDead&&!botDead)return;duelRoundResolving=true;
+  let winnerId=null;if(playerDead&&!botDead){duelOpponentWins++;winnerId=duelOpponent.id||'bot';showMessage('PRZEGRANA RUNDA');}
+  else if(botDead&&!playerDead){duelYourWins++;winnerId=playerId;showMessage('WYGRANA RUNDA!');}
+  else{duelRoundDraws++;showMessage('REMIS RUNDY!');}
+  duelRoundEventSeq++;
+  if(duelYourWins>=2){finishDuel({winnerId:playerId,reason:'Wygrałeś dwie rundy.',yourWins:duelYourWins,opponentWins:duelOpponentWins,roundDraws:duelRoundDraws});return;}
+  if(duelOpponentWins>=2){finishDuel({winnerId:duelOpponent.id||'bot',reason:'Przeciwnik wygrał dwie rundy.',yourWins:duelYourWins,opponentWins:duelOpponentWins,roundDraws:duelRoundDraws});return;}
+  if(duelRound>=3){finishDuel({winnerId:null,reason:'Po trzech rundach nikt nie wygrał dwóch rund.',yourWins:duelYourWins,opponentWins:duelOpponentWins,roundDraws:duelRoundDraws});return;}
+  duelRound++;resetLocalDuelRound();
 }
 function spawnLocalBotBullet(){
   if(!duelOpponent||!player)return;const ox=duelOpponent.renderX??duelOpponent.x,oz=duelOpponent.renderZ??duelOpponent.z;
@@ -439,25 +476,29 @@ function updateDuel(dt){
     if(duelOpponent&&!duelOpponent.hidden){const ox=duelOpponent.renderX??duelOpponent.x,oz=duelOpponent.renderZ??duelOpponent.z;hitT=duelSegmentCircleHit(x0,z0,x1,z1,ox,oz,DUEL_RADIUS+.22);}
     if(hitT!==null&&(wallT===null||hitT<=wallT)){
       b.x=x0+(x1-x0)*hitT;b.z=z0+(z1-z0)*hitT;burst(b.x,b.z,profile.skin==='cosmic'?[.78,.38,1]:[.24,.85,1],7,3.4);
-      if(duelLocalBotMode&&duelOpponent){duelOpponent.hp=Math.max(0,duelOpponent.hp-(b.damage||22));duelBotReveal=.9;if(ui.duelOpponentHp)ui.duelOpponentHp.textContent=`${Math.ceil(duelOpponent.hp)} / ${duelOpponent.maxHp} HP`;if(duelOpponent.hp<=0){duelPredictedBullets.splice(i,1);finishDuel({winnerId:playerId,reason:'Pokonałeś Bota Arenowego.'});break;}}
+      if(duelLocalBotMode&&duelOpponent){duelOpponent.hp=Math.max(0,duelOpponent.hp-(b.damage||22));duelBotReveal=.9;if(ui.duelOpponentHp)ui.duelOpponentHp.textContent=`${Math.ceil(duelOpponent.hp)} / ${duelOpponent.maxHp} HP`;}
       else duelVisualHitSeqs.add(b.clientSeq);
       duelPredictedBullets.splice(i,1);continue;
     }
     if(wallT!==null||b.life<=0){if(wallT!==null)burst(x0+(x1-x0)*wallT,z0+(z1-z0)*wallT,profile.skin==='cosmic'?[.78,.38,1]:[.24,.85,1],4,2);duelPredictedBullets.splice(i,1);continue;}
     b.x=x1;b.z=z1;
   }
+  resolveLocalDuelRound();
   for(let i=particles.length-1;i>=0;i--){const p=particles[i];p.life-=dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.z+=p.vz*dt;p.vy-=10*dt;p.vx*=.97;p.vz*=.97;if(p.y<.05){p.y=.05;p.vy*=-.25;}if(p.life<=0)particles.splice(i,1);}
   shake=Math.max(0,shake-dt);if(messageClock>0){messageClock-=dt;if(messageClock<=0)ui.centerMsg.style.opacity='0';}
 }
 function finishDuel(data){
-  if(duelEnded)return;const endedMatchId=duelMatchId,wasLocalBot=duelLocalBotMode;duelEnded=true;running=false;duelActive=false;clearDuelTimers();
+  if(duelEnded)return;const endedMatchId=duelMatchId;duelEnded=true;running=false;duelActive=false;clearDuelTimers();
   if(endedMatchId){api('/api/duel/leave',{method:'POST',body:JSON.stringify({playerId,matchId:endedMatchId})}).catch(()=>{});}duelMatchId='';duelLocalBotMode=false;duelBotBullets=[];
-  const won=data.winnerId===playerId,lost=data.winnerId&&data.winnerId!==playerId;
-  if(ui.gameOverBadge)ui.gameOverBadge.textContent='KONIEC POJEDYNKU • TRYB ONLINE 1V1';
-  if(ui.gameOverTitle)ui.gameOverTitle.innerHTML=won?'ZWYCIĘSTWO!':(lost?'PRZEGRANA':'KONIEC MECZU');
+  duelYourWins=Math.max(0,Number(data.yourWins??duelYourWins)||0);duelOpponentWins=Math.max(0,Number(data.opponentWins??duelOpponentWins)||0);duelRoundDraws=Math.max(0,Number(data.roundDraws??duelRoundDraws)||0);
+  const won=data.winnerId===playerId,lost=!!data.winnerId&&data.winnerId!==playerId,draw=!data.winnerId;
+  const rewardCoins=won?25:(draw?5:0),rewardTrophies=won?10:(draw?4:0);
+  if(rewardCoins||rewardTrophies){profile.coins=Math.max(0,Math.floor(profile.coins+rewardCoins));profile.trophies=Math.max(0,Math.floor(profile.trophies+rewardTrophies));walletCoins=profile.coins;saveProgress();updateLobby();syncProfile().catch(()=>{});}
+  if(ui.gameOverBadge)ui.gameOverBadge.textContent='KONIEC POJEDYNKU • NAJLEPSZY Z 3 RUND';
+  if(ui.gameOverTitle)ui.gameOverTitle.innerHTML=won?'ZWYCIĘSTWO!':(lost?'PRZEGRANA':'REMIS!');
   const opponentName=duelOpponent?.name||'Przeciwnik';
-  if(ui.endStats)ui.endStats.innerHTML=`<div class="endStat">Tryb<span>1V1</span></div><div class="endStat">Przeciwnik<span>${escapeRankingName(opponentName)}</span></div><div class="endStat">Twoje życie<span>${Math.max(0,Math.ceil(player?.hp||0))}</span></div><div class="endStat">Wynik<span>${won?'WYGRANA':(lost?'PRZEGRANA':'REMIS')}</span></div>`;
-  const reason=data.reason||'Pojedynek został zakończony.';ui.gameOverView.querySelector('p').textContent=reason;
+  if(ui.endStats)ui.endStats.innerHTML=`<div class="endStat">Rundy<span>${duelYourWins}:${duelOpponentWins}</span></div><div class="endStat">Remisy rund<span>${duelRoundDraws}</span></div><div class="endStat">Przeciwnik<span>${escapeRankingName(opponentName)}</span></div><div class="endStat">Nagroda<span>${rewardCoins} 🪙 • ${rewardTrophies} 🏆</span></div>`;
+  const reason=data.reason||'Pojedynek został zakończony.';ui.gameOverView.querySelector('p').textContent=`${reason} ${won?'Otrzymujesz 25 monet i 10 pucharków.':(draw?'Otrzymujesz 5 monet i 4 pucharki.':'')}`.trim();
   ui.duelQueueView.style.display='none';ui.lobbyView.style.display='none';ui.gameOverView.style.display='grid';document.body.classList.add('lobby-mode');document.body.classList.remove('duel-mode');ui.overlay.style.display='block';
 }
 
@@ -510,8 +551,8 @@ function buyVersionOne(){
 let upgrades={...profile.upgrades};
 let running=false,runCommitted=false,last=performance.now(),score=0,wave=1,kills=0,walletCoins=profile.coins,runCoins=0,trophies=0,survivalTime=0,waveClock=0,spawnClock=0,shake=0,messageClock=0;
 let player,enemies=[],bullets=[],particles=[],stars=[],pickups=[],coins=[];
-let selectedMode=profile.mode==='duel'?'duel':'solo',duelSearching=false,duelActive=false,duelEnded=false,duelMatchId='',duelOpponent=null,duelServerBullets=[],duelPredictedBullets=[],duelShotQueue=[],duelVisualHitSeqs=new Set(),duelLocalShotSeq=0,duelNetworkBusy=false,duelNetworkTimer=0,duelJoinTimer=0,duelNetworkFailures=0,duelMatchStatus='',duelStartIn=0,duelStartDeadline=0,duelLastStateAt=performance.now(),duelRtt=0,duelFrameSeq=0,duelLocalBotMode=false,duelBotBullets=[],duelBotTurnTimer=0,duelBotShotTimer=.8,duelBotStrafe=1,duelBotStuck=0,duelBotReveal=0;
-window.__arenaDebug=()=>({duelActive,duelLocalBotMode,duelMatchStatus,player:player?{x:player.x,z:player.z,hp:player.hp}:null,opponent:duelOpponent?{x:duelOpponent.renderX??duelOpponent.x,z:duelOpponent.renderZ??duelOpponent.z,hp:duelOpponent.hp,hidden:duelOpponent.hidden,isBot:duelOpponent.isBot}:null,playerBullets:duelPredictedBullets.length,botBullets:duelBotBullets.length});
+let selectedMode=profile.mode==='duel'?'duel':'solo',duelSearching=false,duelActive=false,duelEnded=false,duelMatchId='',duelOpponent=null,duelServerBullets=[],duelPredictedBullets=[],duelShotQueue=[],duelVisualHitSeqs=new Set(),duelLocalShotSeq=0,duelNetworkBusy=false,duelNetworkTimer=0,duelJoinTimer=0,duelNetworkFailures=0,duelMatchStatus='',duelStartIn=0,duelStartDeadline=0,duelLastStateAt=performance.now(),duelRtt=0,duelFrameSeq=0,duelLocalBotMode=false,duelBotBullets=[],duelBotTurnTimer=0,duelBotShotTimer=.8,duelBotStrafe=1,duelBotStuck=0,duelBotReveal=0,duelRound=1,duelYourWins=0,duelOpponentWins=0,duelRoundDraws=0,duelRoundEventSeq=0,duelRoundResolving=false;
+window.__arenaDebug=()=>({duelActive,duelLocalBotMode,duelMatchStatus,duelRound,duelYourWins,duelOpponentWins,duelRoundDraws,player:player?{x:player.x,z:player.z,hp:player.hp}:null,opponent:duelOpponent?{x:duelOpponent.renderX??duelOpponent.x,z:duelOpponent.renderZ??duelOpponent.z,hp:duelOpponent.hp,hidden:duelOpponent.hidden,isBot:duelOpponent.isBot}:null,playerBullets:duelPredictedBullets.length,botBullets:duelBotBullets.length});
 
 const obstacles=[
   {x:-6,z:-5,w:3.6,d:2.3,h:1.7,c:[.43,.29,.21]}, {x:6,z:5,w:3.6,d:2.3,h:1.7,c:[.43,.29,.21]},
