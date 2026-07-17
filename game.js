@@ -99,10 +99,11 @@ function loadProgress(){
       skin:requestedSkin==='cosmic'&&ownedSkins.cosmic?'cosmic':'classic',
       ownedSkins,
       heroVersion1:data.heroVersion1===true,
-      mode:data.mode==='duel'?'duel':'solo',
+      mode:typeof data.mode==='string'&&data.mode?data.mode:'solo',
+      adminRevision:Math.max(0,Number(data.adminRevision)||0),
       upgrades:{move:safeUpgradeLevel(saved.move),fire:safeUpgradeLevel(saved.fire),hp:safeUpgradeLevel(saved.hp)}
     };
-  }catch(_){return {name:'Gracz',trophies:0,points:0,coins:0,skin:'classic',ownedSkins:{classic:true,cosmic:false},heroVersion1:false,mode:'solo',upgrades:{move:0,fire:0,hp:0}};}
+  }catch(_){return {name:'Gracz',trophies:0,points:0,coins:0,skin:'classic',ownedSkins:{classic:true,cosmic:false},heroVersion1:false,mode:'solo',adminRevision:0,upgrades:{move:0,fire:0,hp:0}};}
 }
 let profile=loadProgress();
 function saveProgress(){try{localStorage.setItem(SAVE_KEY,JSON.stringify(profile));}catch(_){} }
@@ -111,6 +112,22 @@ function getPlayerId(){
   catch(_){return `gracz-${Date.now()}-${Math.random().toString(16).slice(2)}`;}
 }
 const playerId=getPlayerId();
+window.__arenaPlayerId=playerId;
+
+const DEFAULT_CLIENT_CONFIG={survivalBotLevel:5,duelBotLevel:5,duelBotWaitSeconds:30,duelHpMultiplier:3.5,duelMaxRounds:3,duelWinsToTakeMatch:2,duelWinCoins:25,duelWinTrophies:10,duelDrawCoins:5,duelDrawTrophies:4,soloEnabled:true,duelEnabled:true,announcement:'',customModes:[]};
+let gameConfig={...DEFAULT_CLIENT_CONFIG};
+function modeDefinition(id){if(id==='solo')return {id:'solo',name:'PRZETRWANIE',base:'solo',enabled:gameConfig.soloEnabled!==false};if(id==='duel')return {id:'duel',name:'POJEDYNKI',base:'duel',enabled:gameConfig.duelEnabled!==false};return (gameConfig.customModes||[]).find(m=>m.id===id&&m.enabled!==false)||null;}
+function selectedModeBase(){return modeDefinition(selectedMode)?.base||'solo';}
+function renderCustomModes(){
+  if(!ui.modeMenu)return;ui.modeMenu.querySelectorAll('[data-custom-mode]').forEach(el=>el.remove());
+  if(ui.soloModeOption)ui.soloModeOption.style.display=gameConfig.soloEnabled===false?'none':'';
+  if(ui.duelModeOption)ui.duelModeOption.style.display=gameConfig.duelEnabled===false?'none':'';
+  for(const mode of gameConfig.customModes||[]){if(mode.enabled===false)continue;const b=document.createElement('button');b.className='modeOption';b.dataset.customMode=mode.id;b.innerHTML=`<span class="modeIcon">${mode.base==='duel'?'⚔️':'🤖'}</span><span><span class="modeName">${escapeRankingName(mode.name)}</span><span class="modeDesc">${escapeRankingName(mode.description||'Tryb administratora')}</span></span>`;b.addEventListener('click',()=>{selectedMode=mode.id;profile.mode=mode.id;saveProgress();updateModeUI();toggleModeMenu(false);});ui.modeMenu.appendChild(b);}
+  const def=modeDefinition(selectedMode);if(!def||def.enabled===false){selectedMode=gameConfig.soloEnabled!==false?'solo':'duel';profile.mode=selectedMode;saveProgress();}
+}
+function applyGameConfig(config){gameConfig={...DEFAULT_CLIENT_CONFIG,...(config||{})};gameConfig.customModes=Array.isArray(gameConfig.customModes)?gameConfig.customModes:[];renderCustomModes();updateModeUI();const note=document.querySelector('.saveNote');if(note&&gameConfig.announcement)note.textContent=gameConfig.announcement;}
+async function fetchGameConfig(){try{const data=await api('/api/config');if(data.config)applyGameConfig(data.config);}catch(_){}}
+
 let rankingRows=[],rankingCenterOnNextRender=true,onlineConnected=false,onlineCount=0,rankingBusy=false,myRankingPosition=null,totalPlayers=0,rankingFailures=0;
 function isLobbyVisible(){return document.body.classList.contains('lobby-mode')&&ui.lobbyView&&ui.lobbyView.style.display!=='none';}
 function escapeRankingName(value){return String(value).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
@@ -156,17 +173,15 @@ function handleRankingFailure(){
 
 async function syncProfile(){
   try{
-    const data=await api('/api/profile',{method:'POST',body:JSON.stringify({playerId,name:profile.name,points:profile.points,trophies:profile.trophies})});
+    const data=await api('/api/profile',{method:'POST',body:JSON.stringify({playerId,name:profile.name,points:profile.points,trophies:profile.trophies,coins:profile.coins,upgrades:profile.upgrades,skin:profile.skin,cosmicOwned:profile.ownedSkins?.cosmic===true,heroVersion1:profile.heroVersion1===true,adminRevision:profile.adminRevision||0})});
     if(data.profile){
-      profile.name=safePlayerName(data.profile.name||profile.name);
-      profile.points=Math.max(profile.points,Number(data.profile.points)||0);
-      profile.trophies=Math.max(profile.trophies,Number(data.profile.trophies)||0);
-      saveProgress();updateLobby();
+      const remote=data.profile,forced=Number(remote.adminRevision||0)>Number(profile.adminRevision||0);
+      profile.name=safePlayerName(remote.name||profile.name);
+      if(forced){profile.points=Number(remote.points)||0;profile.trophies=Number(remote.trophies)||0;profile.coins=Number(remote.coins)||0;profile.upgrades={move:safeUpgradeLevel(remote.upgrades?.move),fire:safeUpgradeLevel(remote.upgrades?.fire),hp:safeUpgradeLevel(remote.upgrades?.hp)};profile.ownedSkins={classic:true,cosmic:remote.cosmicOwned===true};profile.heroVersion1=remote.heroVersion1===true;profile.skin=remote.skin==='cosmic'&&profile.ownedSkins.cosmic?'cosmic':'classic';}
+      else{profile.points=Math.max(profile.points,Number(remote.points)||0);profile.trophies=Math.max(profile.trophies,Number(remote.trophies)||0);profile.coins=Math.max(profile.coins,Number(remote.coins)||0);}
+      profile.adminRevision=Math.max(Number(profile.adminRevision)||0,Number(remote.adminRevision)||0);walletCoins=profile.coins;saveProgress();updateLobby();
     }
-    rankingRows=Array.isArray(data.players)?data.players:rankingRows;
-    myRankingPosition=Number(data.position)||null;
-    totalPlayers=Math.max(0,Number(data.totalPlayers)||0);
-    rankingFailures=0;onlineConnected=true;onlineCount=Math.max(1,Number(data.online)||1);setOnlineStatus(`Połączono jako ${profile.name} • mecze solo`,'ok');renderRanking();
+    rankingRows=Array.isArray(data.players)?data.players:rankingRows;myRankingPosition=Number(data.position)||null;totalPlayers=Math.max(0,Number(data.totalPlayers)||0);rankingFailures=0;onlineConnected=true;onlineCount=Math.max(1,Number(data.online)||1);setOnlineStatus(`Połączono jako ${profile.name}`,'ok');renderRanking();
   }catch(_){handleRankingFailure();}
 }
 async function fetchRanking(){
@@ -187,12 +202,7 @@ function saveOnlineName(){
 setInterval(()=>{if(!document.hidden)fetchRanking();},5000);
 
 function updateModeUI(){
-  if(!ui.modeBtn)return;
-  const duel=selectedMode==='duel',solo=selectedMode==='solo';
-  ui.modeBtn.textContent=duel?'POJEDYNKI ⚔':(solo?'PRZETRWANIE 🤖':'TRYBY ▾');
-  ui.modeBtn.classList.toggle('selected',duel||solo);
-  ui.soloModeOption?.classList.toggle('selected',solo);
-  ui.duelModeOption?.classList.toggle('selected',duel);
+  if(!ui.modeBtn)return;const def=modeDefinition(selectedMode);const solo=selectedMode==='solo',duel=selectedMode==='duel';ui.modeBtn.textContent=def?`${def.name} ${def.base==='duel'?'⚔':'🤖'}`:'TRYBY ▾';ui.modeBtn.classList.toggle('selected',!!def);ui.soloModeOption?.classList.toggle('selected',solo);ui.duelModeOption?.classList.toggle('selected',duel);ui.modeMenu?.querySelectorAll('[data-custom-mode]').forEach(el=>el.classList.toggle('selected',el.dataset.customMode===selectedMode));
 }
 function toggleModeMenu(force){
   if(!ui.modeMenu)return;
@@ -225,7 +235,7 @@ function duelPlayerSettings(){
 }
 function duelModeLabel(){return duelLocalBotMode?'Pojedynek z botem':'Pojedynek 1v1';}
 function updateDuelRoundHud(){
-  if(ui.hudModeText)ui.hudModeText.textContent=`${duelModeLabel()} • RUNDA ${duelRound}/3 • ${duelYourWins}:${duelOpponentWins}${duelRoundDraws?` • REMISY ${duelRoundDraws}`:''}`;
+  if(ui.hudModeText)ui.hudModeText.textContent=`${duelModeLabel()} • RUNDA ${duelRound}/${Number(gameConfig.duelMaxRounds)||3} • ${duelYourWins}:${duelOpponentWins}${duelRoundDraws?` • REMISY ${duelRoundDraws}`:''}`;
 }
 function setDuelQueueText(text){if(ui.duelQueueText)ui.duelQueueText.textContent=text;}
 function clearDuelTimers(){
@@ -583,13 +593,13 @@ function finishDuel(data){
   if(endedMatchId){api('/api/duel/leave',{method:'POST',body:JSON.stringify({playerId,matchId:endedMatchId})}).catch(()=>{});}duelMatchId='';duelLocalBotMode=false;duelBotBullets=[];
   duelYourWins=Math.max(0,Number(data.yourWins??duelYourWins)||0);duelOpponentWins=Math.max(0,Number(data.opponentWins??duelOpponentWins)||0);duelRoundDraws=Math.max(0,Number(data.roundDraws??duelRoundDraws)||0);
   const won=data.winnerId===playerId,lost=!!data.winnerId&&data.winnerId!==playerId,draw=!data.winnerId;
-  const rewardCoins=won?25:(draw?5:0),rewardTrophies=won?10:(draw?4:0);
+  const rewardCoins=won?Number(gameConfig.duelWinCoins||25):(draw?Number(gameConfig.duelDrawCoins||5):0),rewardTrophies=won?Number(gameConfig.duelWinTrophies||10):(draw?Number(gameConfig.duelDrawTrophies||4):0);
   if(rewardCoins||rewardTrophies){profile.coins=Math.max(0,Math.floor(profile.coins+rewardCoins));profile.trophies=Math.max(0,Math.floor(profile.trophies+rewardTrophies));walletCoins=profile.coins;saveProgress();updateLobby();syncProfile().catch(()=>{});}
   if(ui.gameOverBadge)ui.gameOverBadge.textContent='KONIEC POJEDYNKU • NAJLEPSZY Z 3 RUND';
   if(ui.gameOverTitle)ui.gameOverTitle.innerHTML=won?'ZWYCIĘSTWO!':(lost?'PRZEGRANA':'REMIS!');
   const opponentName=duelOpponent?.name||'Przeciwnik';
   if(ui.endStats)ui.endStats.innerHTML=`<div class="endStat">Rundy<span>${duelYourWins}:${duelOpponentWins}</span></div><div class="endStat">Remisy rund<span>${duelRoundDraws}</span></div><div class="endStat">Przeciwnik<span>${escapeRankingName(opponentName)}</span></div><div class="endStat">Nagroda<span>${rewardCoins} 🪙 • ${rewardTrophies} 🏆</span></div>`;
-  const reason=data.reason||'Pojedynek został zakończony.';ui.gameOverView.querySelector('p').textContent=`${reason} ${won?'Otrzymujesz 25 monet i 10 pucharków.':(draw?'Otrzymujesz 5 monet i 4 pucharki.':'')}`.trim();
+  const reason=data.reason||'Pojedynek został zakończony.';ui.gameOverView.querySelector('p').textContent=`${reason} ${won?`Otrzymujesz ${rewardCoins} monet i ${rewardTrophies} pucharków.`:(draw?`Otrzymujesz ${rewardCoins} monet i ${rewardTrophies} pucharki.`:'')}`.trim();
   ui.duelQueueView.style.display='none';ui.lobbyView.style.display='none';ui.gameOverView.style.display='grid';document.body.classList.add('lobby-mode');document.body.classList.remove('duel-mode');ui.overlay.style.display='block';
 }
 
@@ -642,7 +652,7 @@ function buyVersionOne(){
 let upgrades={...profile.upgrades};
 let running=false,runCommitted=false,last=performance.now(),score=0,wave=1,kills=0,walletCoins=profile.coins,runCoins=0,trophies=0,survivalTime=0,waveClock=0,spawnClock=0,shake=0,messageClock=0;
 let player,enemies=[],bullets=[],particles=[],stars=[],pickups=[],coins=[];
-let selectedMode=profile.mode==='duel'?'duel':'solo',duelSearching=false,duelActive=false,duelEnded=false,duelMatchId='',duelOpponent=null,duelServerBullets=[],duelPredictedBullets=[],duelShotQueue=[],duelVisualHitSeqs=new Set(),duelLocalShotSeq=0,duelNetworkBusy=false,duelNetworkTimer=0,duelJoinTimer=0,duelNetworkFailures=0,duelMatchStatus='',duelStartIn=0,duelStartDeadline=0,duelLastStateAt=performance.now(),duelRtt=0,duelFrameSeq=0,duelLocalBotMode=false,duelBotBullets=[],duelBotTurnTimer=0,duelBotShotTimer=.8,duelBotStrafe=1,duelBotStuck=0,duelBotReveal=0,duelRound=1,duelYourWins=0,duelOpponentWins=0,duelRoundDraws=0,duelRoundEventSeq=0,duelRoundResolving=false,duelMirrorView=false,duelShotFlushBusy=false,duelShotFlushTimer=0;
+let selectedMode=profile.mode||'solo',duelSearching=false,duelActive=false,duelEnded=false,duelMatchId='',duelOpponent=null,duelServerBullets=[],duelPredictedBullets=[],duelShotQueue=[],duelVisualHitSeqs=new Set(),duelLocalShotSeq=0,duelNetworkBusy=false,duelNetworkTimer=0,duelJoinTimer=0,duelNetworkFailures=0,duelMatchStatus='',duelStartIn=0,duelStartDeadline=0,duelLastStateAt=performance.now(),duelRtt=0,duelFrameSeq=0,duelLocalBotMode=false,duelBotBullets=[],duelBotTurnTimer=0,duelBotShotTimer=.8,duelBotStrafe=1,duelBotStuck=0,duelBotReveal=0,duelRound=1,duelYourWins=0,duelOpponentWins=0,duelRoundDraws=0,duelRoundEventSeq=0,duelRoundResolving=false,duelMirrorView=false,duelShotFlushBusy=false,duelShotFlushTimer=0;
 window.__arenaDebug=()=>({duelActive,duelLocalBotMode,duelMatchStatus,duelRound,duelYourWins,duelOpponentWins,duelRoundDraws,player:player?{x:player.x,z:player.z,hp:player.hp}:null,opponent:duelOpponent?{x:duelOpponent.renderX??duelOpponent.x,z:duelOpponent.renderZ??duelOpponent.z,hp:duelOpponent.hp,hidden:duelOpponent.hidden,isBot:duelOpponent.isBot}:null,playerBullets:duelPredictedBullets.length,botBullets:duelBotBullets.length,botAmmo:duelOpponent?.ammo,botReload:duelOpponent?.reload,botSuper:duelOpponent?.super,botHyper:duelOpponent?.hyper,botHyperActive:duelOpponent?.hyperActive,mirrorView:duelMirrorView,shotQueue:duelShotQueue.length,shotFlushBusy:duelShotFlushBusy});
 
 const obstacles=[
@@ -725,7 +735,7 @@ function commitRun(){
 }
 function showLobby(leaveDuel=true){if(leaveDuel&&(duelActive||duelSearching||duelMatchId))stopDuelSession(true);running=false;rankingCenterOnNextRender=true;document.body.classList.add('lobby-mode');document.body.classList.remove('duel-mode');ui.lobbyView.style.display='block';ui.duelQueueView.style.display='none';ui.gameOverView.style.display='none';ui.overlay.style.display='grid';if(ui.hudModeText)ui.hudModeText.textContent='Online';if(ui.gameOverBadge)ui.gameOverBadge.textContent='KONIEC MECZU • POSTĘP ZAPISANY';if(ui.gameOverTitle)ui.gameOverTitle.innerHTML='ROBOTY CIĘ<br>POKONAŁY';updateLobby();fetchRanking();}
 function startSoloGame(){if(running)commitRun();reset();running=true;document.body.classList.remove('lobby-mode');document.body.classList.remove('duel-mode');ui.lobbyView.style.display='block';ui.gameOverView.style.display='none';updateUI();ui.overlay.style.display='none';last=performance.now();}
-function startGame(){if(selectedMode==='solo'){startSoloGame();return;}if(selectedMode==='duel'){startDuelQueue();return;}toggleModeMenu(true);}
+function startGame(){const base=selectedModeBase();if(base==='solo'&&gameConfig.soloEnabled!==false){startSoloGame();return;}if(base==='duel'&&gameConfig.duelEnabled!==false){startDuelQueue();return;}showMessage('TEN TRYB JEST WYŁĄCZONY');toggleModeMenu(true);}
 function gameOver(){running=false;commitRun();if(ui.gameOverBadge)ui.gameOverBadge.textContent='KONIEC MECZU • POSTĘP ZAPISANY';if(ui.gameOverTitle)ui.gameOverTitle.innerHTML='ROBOTY CIĘ<br>POKONAŁY';if(ui.endStats)ui.endStats.innerHTML='<div class="endStat">Punkty ⭐<span id="finalScore">0</span></div><div class="endStat">Pokonani 🤖<span id="finalKills">0</span></div><div class="endStat">Monety 🪙<span id="finalCoins">0</span></div><div class="endStat">Pucharki 🏆<span id="finalTrophies">0</span></div>';ui.finalScore=$('finalScore');ui.finalKills=$('finalKills');ui.finalCoins=$('finalCoins');ui.finalTrophies=$('finalTrophies');ui.finalScore.textContent=score;ui.finalKills.textContent=kills;ui.finalCoins.textContent=runCoins;ui.finalTrophies.textContent=trophies;ui.gameOverView.querySelector('p').textContent='Wybierz następną akcję.';ui.lobbyView.style.display='none';ui.gameOverView.style.display='grid';document.body.classList.add('lobby-mode');ui.overlay.style.display='block';}
 function showMessage(t){ui.centerMsg.textContent=t;ui.centerMsg.style.opacity='1';messageClock=1.4;}
 function updateUI(){
@@ -784,6 +794,7 @@ function spawnEnemy(){
   let a=Math.random()*Math.PI*2,x=Math.cos(a)*(ARENA-1),z=Math.sin(a)*(ARENA-1);if(Math.hypot(x-player.x,z-player.z)<10){a+=Math.PI;x=Math.cos(a)*(ARENA-1);z=Math.sin(a)*(ARENA-1);}
   const roll=Math.random(),type=wave>=4&&roll<.22?'tank':(wave>=2&&roll<.60?'shooter':'chaser');
   const cfg=type==='tank'?{hp:95+wave*10,speed:2.4,r:1.0,color:[.64,.18,.77],damage:24,level:3,coinReward:8}:type==='shooter'?{hp:42+wave*5,speed:3.4,r:.72,color:[1,.35,.18],damage:12,level:2,coinReward:3}:{hp:48+wave*6,speed:4.4,r:.72,color:[.94,.16,.25],damage:15,level:1,coinReward:1};
+  const adminLevel=Math.max(1,Math.min(10,Number(gameConfig.survivalBotLevel)||5)),factor=.7+adminLevel*.06;cfg.hp=Math.round(cfg.hp*factor);cfg.speed*=.82+adminLevel*.036;cfg.damage=Math.round(cfg.damage*(.75+adminLevel*.05));
   enemies.push({x,z,type,level:cfg.level,coinReward:cfg.coinReward,hp:cfg.hp,maxHp:cfg.hp,speed:cfg.speed,r:cfg.r,color:cfg.color,damage:cfg.damage,angle:0,fire:rnd(.5,1.8),hit:0,navX:x,navZ:z,navTime:0,stuck:0,escapeTime:0,avoidSide:Math.random()<.5?-1:1});
 }
 function shoot(owner,x,z,angle,speed,damage,color,size=.18,spread=0){angle+=rnd(-spread,spread);bullets.push({owner,x,y:.72,z,vx:Math.sin(angle)*speed,vz:Math.cos(angle)*speed,life:2.2,damage,color,size});}
@@ -902,7 +913,35 @@ ui.retryBtn.addEventListener('click',startGame);
 ui.lobbyBtn.addEventListener('click',showLobby);
 for(const button of ui.upgradeButtons)button.addEventListener('click',()=>buyUpgrade(button.dataset.upgrade));
 for(const card of ui.skinCards){card.addEventListener('click',()=>selectSkin(card.dataset.skin));card.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();selectSkin(card.dataset.skin);}});}
+
+
+// ---------- Panel administratora ----------
+const adminUI={overlay:$('adminOverlay'),open:$('adminOpenBtn'),loginCard:$('adminLoginCard'),dashboard:$('adminDashboard'),loginClose:$('adminLoginClose'),close:$('adminCloseBtn'),logout:$('adminLogoutBtn'),password:$('adminPasswordInput'),login:$('adminLoginBtn'),forgot:$('adminForgotBtn'),passwordArea:$('adminPasswordArea'),recoveryArea:$('adminRecoveryArea'),recovery:$('adminRecoveryInput'),recoverBtn:$('adminRecoveryBtn'),back:$('adminBackToPassword'),loginMsg:$('adminLoginMsg'),playerId:$('adminPlayerId'),deployStatus:$('adminDeployStatus'),settingsMsg:$('adminSettingsMsg'),playerMsg:$('adminPlayerMsg'),modesMsg:$('adminModesMsg'),deployMsg:$('adminDeployMsg')};
+let adminConfig=null,adminSelectedPlayer=null;
+function adminMsg(el,text,bad=false){if(!el)return;el.textContent=text||'';el.classList.toggle('bad',bad);}
+function adminOpen(show=true){adminUI.overlay?.classList.toggle('open',show);adminUI.overlay?.setAttribute('aria-hidden',show?'false':'true');if(show)adminCheckStatus();}
+async function adminCheckStatus(){try{const s=await api(`/api/admin/status?playerId=${encodeURIComponent(playerId)}`);adminUI.playerId.textContent=playerId;adminUI.deployStatus.textContent=s.deploymentConfigured?`WDROŻENIA GOTOWE • ${s.repo||''}`:'BRAK KONFIGURACJI GITHUB';adminUI.deployStatus.className=`adminStatusPill ${s.deploymentConfigured?'ok':'bad'}`;if(s.authorized){await adminShowDashboard();}else{adminUI.loginCard.style.display='block';adminUI.dashboard.style.display='none';if(!s.configured)adminMsg(adminUI.loginMsg,'Najpierw ustaw ADMIN_PASSWORD i ADMIN_RECOVERY_CODE w Renderze.',true);else if(!s.accountMatches)adminMsg(adminUI.loginMsg,'To ID konta nie zgadza się z ADMIN_PLAYER_ID.',true);else adminMsg(adminUI.loginMsg,'');}}catch(e){adminMsg(adminUI.loginMsg,'Serwer panelu nie odpowiada.',true);}}
+async function adminAuth(kind){const path=kind==='recovery'?'/api/admin/recover':'/api/admin/login',body={playerId,[kind==='recovery'?'code':'password']:kind==='recovery'?adminUI.recovery.value:adminUI.password.value};try{const r=await api(path,{method:'POST',body:JSON.stringify(body)});if(r.ok)await adminShowDashboard();}catch(e){adminMsg(adminUI.loginMsg,'Nieprawidłowe dane albo konto nie ma dostępu.',true);}}
+async function adminShowDashboard(){adminUI.loginCard.style.display='none';adminUI.dashboard.style.display='block';await adminLoadConfig();await adminSearchPlayers('');}
+function n(id){return Number($(id)?.value)||0;}function c(id){return !!$(id)?.checked;}
+function fillAdminConfig(cfg){adminConfig=cfg;const map={cfgSurvivalBot:'survivalBotLevel',cfgDuelBot:'duelBotLevel',cfgBotWait:'duelBotWaitSeconds',cfgHpMultiplier:'duelHpMultiplier',cfgRounds:'duelMaxRounds',cfgWins:'duelWinsToTakeMatch',cfgWinCoins:'duelWinCoins',cfgWinTrophies:'duelWinTrophies',cfgDrawCoins:'duelDrawCoins',cfgDrawTrophies:'duelDrawTrophies'};for(const [id,key] of Object.entries(map))if($(id))$(id).value=cfg[key];$('cfgSoloEnabled').checked=cfg.soloEnabled!==false;$('cfgDuelEnabled').checked=cfg.duelEnabled!==false;$('cfgAnnouncement').value=cfg.announcement||'';renderAdminModes();}
+async function adminLoadConfig(){try{const r=await api('/api/admin/config');fillAdminConfig(r.config);}catch(e){adminMsg(adminUI.settingsMsg,'Nie udało się pobrać ustawień.',true);}}
+function collectAdminConfig(){return {...adminConfig,survivalBotLevel:n('cfgSurvivalBot'),duelBotLevel:n('cfgDuelBot'),duelBotWaitSeconds:n('cfgBotWait'),duelHpMultiplier:n('cfgHpMultiplier'),duelMaxRounds:n('cfgRounds'),duelWinsToTakeMatch:n('cfgWins'),duelWinCoins:n('cfgWinCoins'),duelWinTrophies:n('cfgWinTrophies'),duelDrawCoins:n('cfgDrawCoins'),duelDrawTrophies:n('cfgDrawTrophies'),soloEnabled:c('cfgSoloEnabled'),duelEnabled:c('cfgDuelEnabled'),announcement:$('cfgAnnouncement').value,customModes:adminConfig?.customModes||[]};}
+async function adminSaveConfig(){try{const r=await api('/api/admin/config',{method:'POST',body:JSON.stringify({config:collectAdminConfig()})});fillAdminConfig(r.config);applyGameConfig(r.config);adminMsg(adminUI.settingsMsg,'Ustawienia zapisane dla wszystkich graczy.');}catch(e){adminMsg(adminUI.settingsMsg,'Nie udało się zapisać ustawień.',true);}}
+async function adminSearchPlayers(q){try{const r=await api(`/api/admin/players?q=${encodeURIComponent(q||'')}`),box=$('adminPlayerList');box.innerHTML=(r.players||[]).map(p=>`<div class="adminPlayerRow" data-player="${p.id}"><span><b>${escapeRankingName(p.name)}</b><small>${p.id}</small></span><span>${p.points.toLocaleString('pl-PL')} ⭐<br>${p.trophies.toLocaleString('pl-PL')} 🏆</span></div>`).join('')||'<div class="adminHint">Brak wyników.</div>';box.querySelectorAll('[data-player]').forEach(el=>el.onclick=()=>adminSelectPlayer((r.players||[]).find(p=>p.id===el.dataset.player)));}catch(e){adminMsg(adminUI.playerMsg,'Nie udało się pobrać graczy.',true);}}
+function adminSelectPlayer(p){if(!p)return;adminSelectedPlayer=p;$('editPlayerId').value=p.id;$('editPlayerName').value=p.name;$('editPoints').value=p.points;$('editTrophies').value=p.trophies;$('editCoins').value=p.coins;$('editMove').value=p.upgrades?.move||0;$('editFire').value=p.upgrades?.fire||0;$('editHp').value=p.upgrades?.hp||0;$('editSkin').value=p.skin||'classic';$('editCosmic').checked=p.cosmicOwned===true;$('editVersion').checked=p.heroVersion1===true;}
+async function adminSavePlayer(){if(!adminSelectedPlayer){adminMsg(adminUI.playerMsg,'Najpierw wybierz gracza.',true);return;}const body={playerId:$('editPlayerId').value,name:$('editPlayerName').value,points:n('editPoints'),trophies:n('editTrophies'),coins:n('editCoins'),upgrades:{move:n('editMove'),fire:n('editFire'),hp:n('editHp')},skin:$('editSkin').value,cosmicOwned:c('editCosmic'),heroVersion1:c('editVersion')};try{const r=await api('/api/admin/player',{method:'POST',body:JSON.stringify(body)});adminSelectedPlayer=r.player;adminSelectPlayer(r.player);adminMsg(adminUI.playerMsg,'Profil zapisany. Gracz otrzyma zmiany przy następnej synchronizacji.');await adminSearchPlayers($('adminPlayerSearch').value);}catch(e){adminMsg(adminUI.playerMsg,'Nie udało się zapisać profilu.',true);}}
+function renderAdminModes(){const box=$('adminModesList');box.innerHTML='';for(const mode of adminConfig?.customModes||[]){const row=document.createElement('div');row.className='adminModeRow';row.dataset.modeId=mode.id;row.innerHTML=`<input class="modeNameInput" value="${escapeRankingName(mode.name)}"><select class="modeBaseInput"><option value="solo"${mode.base==='solo'?' selected':''}>Przetrwanie</option><option value="duel"${mode.base==='duel'?' selected':''}>Pojedynki</option></select><label class="adminCheck"><input class="modeEnabledInput" type="checkbox"${mode.enabled!==false?' checked':''}> Aktywny</label><button class="adminDanger modeDeleteBtn">USUŃ</button><textarea class="modeDescInput" placeholder="Opis">${escapeRankingName(mode.description||'')}</textarea>`;row.querySelector('.modeDeleteBtn').onclick=()=>{adminConfig.customModes=adminConfig.customModes.filter(m=>m.id!==mode.id);renderAdminModes();};box.appendChild(row);}}
+function collectAdminModes(){return [...document.querySelectorAll('#adminModesList .adminModeRow')].map((row,i)=>({id:row.dataset.modeId||`tryb-${Date.now()}-${i}`,name:row.querySelector('.modeNameInput').value,description:row.querySelector('.modeDescInput').value,base:row.querySelector('.modeBaseInput').value,enabled:row.querySelector('.modeEnabledInput').checked}));}
+async function adminSaveModes(){adminConfig.customModes=collectAdminModes();try{const r=await api('/api/admin/config',{method:'POST',body:JSON.stringify({config:{...collectAdminConfig(),customModes:adminConfig.customModes}})});fillAdminConfig(r.config);applyGameConfig(r.config);adminMsg(adminUI.modesMsg,'Tryby zapisane i widoczne dla wszystkich.');}catch(e){adminMsg(adminUI.modesMsg,'Nie udało się zapisać trybów.',true);}}
+function adminAddMode(){adminConfig.customModes=adminConfig.customModes||[];adminConfig.customModes.push({id:`tryb-${Date.now()}`,name:'Nowy tryb',description:'Wariant utworzony przez administratora',base:'solo',enabled:true});renderAdminModes();}
+function adminFilesChanged(){const files=[...$('adminFiles').files];$('adminFileList').textContent=files.length?files.map(f=>`${f.name} • ${Math.ceil(f.size/1024)} KB`).join('\n'):'Nie wybrano plików.';}
+async function adminDeploy(){const files=[...$('adminFiles').files];if(!files.length){adminMsg(adminUI.deployMsg,'Wybierz pliki.',true);return;}adminMsg(adminUI.deployMsg,'Wysyłanie plików i tworzenie commita…');try{const encoded=[];for(const f of files){const bytes=new Uint8Array(await f.arrayBuffer());let binary='';for(let i=0;i<bytes.length;i+=0x8000)binary+=String.fromCharCode(...bytes.subarray(i,i+0x8000));encoded.push({name:f.name,content:btoa(binary)});}const r=await api('/api/admin/deploy',{method:'POST',timeout:60000,body:JSON.stringify({files:encoded,message:$('adminCommitMessage').value})});adminMsg(adminUI.deployMsg,`Gotowe. Commit ${String(r.commit||'').slice(0,8)}. Render rozpocznie wdrożenie.`);}catch(e){adminMsg(adminUI.deployMsg,'Aktualizacja nie powiodła się. Sprawdź GITHUB_TOKEN i GITHUB_REPO.',true);}}
+adminUI.open?.addEventListener('click',()=>adminOpen(true));adminUI.loginClose?.addEventListener('click',()=>adminOpen(false));adminUI.close?.addEventListener('click',()=>adminOpen(false));adminUI.login?.addEventListener('click',()=>adminAuth('password'));adminUI.recoverBtn?.addEventListener('click',()=>adminAuth('recovery'));adminUI.forgot?.addEventListener('click',()=>{adminUI.passwordArea.style.display='none';adminUI.recoveryArea.style.display='block';});adminUI.back?.addEventListener('click',()=>{adminUI.passwordArea.style.display='block';adminUI.recoveryArea.style.display='none';});adminUI.logout?.addEventListener('click',async()=>{await api('/api/admin/logout',{method:'POST',body:'{}'}).catch(()=>{});adminUI.dashboard.style.display='none';adminUI.loginCard.style.display='block';});
+document.querySelectorAll('.adminTab').forEach(tab=>tab.addEventListener('click',()=>{document.querySelectorAll('.adminTab').forEach(x=>x.classList.toggle('active',x===tab));document.querySelectorAll('.adminPane').forEach(p=>p.classList.toggle('active',p.dataset.adminPane===tab.dataset.adminTab));}));
+$('adminSaveSettings')?.addEventListener('click',adminSaveConfig);$('adminSearchBtn')?.addEventListener('click',()=>adminSearchPlayers($('adminPlayerSearch').value));$('adminSavePlayer')?.addEventListener('click',adminSavePlayer);$('adminAddMode')?.addEventListener('click',adminAddMode);$('adminSaveModes')?.addEventListener('click',adminSaveModes);$('adminFiles')?.addEventListener('change',adminFilesChanged);$('adminDeployBtn')?.addEventListener('click',adminDeploy);
+
 ui.crosshair.style.left=mouse.x+'px';ui.crosshair.style.top=mouse.y+'px';
 addEventListener('beforeunload',()=>{if(duelActive||duelSearching||duelMatchId)stopDuelSession(true);else if(running)commitRun();else{profile.coins=walletCoins;saveProgress();}});
-updateModeUI();reset();showLobby();syncProfile().then(fetchRanking);
+fetchGameConfig();setInterval(()=>{if(!document.hidden)fetchGameConfig();},15000);updateModeUI();reset();showLobby();syncProfile().then(fetchRanking);
 })();

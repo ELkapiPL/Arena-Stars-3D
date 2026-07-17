@@ -7,14 +7,19 @@ Każdy gracz rozgrywa osobny mecz solo; online są profile i TOP 200.
 """
 from __future__ import annotations
 
+import base64
+import hmac
 import json
 import math
 import random
 import mimetypes
 import os
+import secrets
 import socket
 import threading
 import time
+import urllib.error
+import urllib.request
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -23,12 +28,14 @@ from urllib.parse import parse_qs, urlparse
 
 ROOT = Path(__file__).resolve().parent
 DATA_FILE = ROOT / "players.json"
+SETTINGS_FILE = ROOT / "game_settings.json"
 DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
 HOST = "0.0.0.0"
 PORT = int(os.environ.get("PORT", "8765"))
 VISIBLE_RANKING_SIZE = 200
 ACTIVE_TIMEOUT = 20.0
-MAX_BODY = 64 * 1024
+MAX_BODY = 256 * 1024
+ADMIN_UPLOAD_MAX_BODY = 8 * 1024 * 1024
 DUEL_PLAYER_TIMEOUT = 12.0
 DUEL_WAIT_TIMEOUT = 45.0
 DUEL_BOT_WAIT = 30.0
@@ -60,6 +67,38 @@ duel_waiting: dict[str, dict[str, Any]] = {}
 duel_player_match: dict[str, str] = {}
 duel_matches: dict[str, dict[str, Any]] = {}
 duel_counter = 0
+
+
+# Sekrety administracyjne są wyłącznie po stronie serwera.
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "").strip()
+ADMIN_RECOVERY_CODE = os.environ.get("ADMIN_RECOVERY_CODE", "").strip()
+ADMIN_PLAYER_ID = clean_admin_player_id = os.environ.get("ADMIN_PLAYER_ID", "").strip()
+GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "").strip()
+GITHUB_REPO = os.environ.get("GITHUB_REPO", os.environ.get("RENDER_GIT_REPO_SLUG", "")).strip()
+GITHUB_BRANCH = os.environ.get("GITHUB_BRANCH", os.environ.get("RENDER_GIT_BRANCH", "main")).strip() or "main"
+RENDER_DEPLOY_HOOK = os.environ.get("RENDER_DEPLOY_HOOK", "").strip()
+ADMIN_SESSION_TTL = 8 * 60 * 60
+ADMIN_ALLOWED_FILES = {"index.html", "game.js", "server.py", "requirements.txt", "Dockerfile", "render.yaml", ".python-version"}
+admin_sessions: dict[str, dict[str, Any]] = {}
+admin_login_attempts: dict[str, dict[str, float | int]] = {}
+
+DEFAULT_GAME_CONFIG: dict[str, Any] = {
+    "survivalBotLevel": 5,
+    "duelBotLevel": 5,
+    "duelBotWaitSeconds": 30,
+    "duelHpMultiplier": 3.5,
+    "duelMaxRounds": 3,
+    "duelWinsToTakeMatch": 2,
+    "duelWinCoins": 25,
+    "duelWinTrophies": 10,
+    "duelDrawCoins": 5,
+    "duelDrawTrophies": 4,
+    "soloEnabled": True,
+    "duelEnabled": True,
+    "announcement": "",
+    "customModes": [],
+}
+game_config: dict[str, Any] = dict(DEFAULT_GAME_CONFIG)
 
 
 def now() -> float:
@@ -111,6 +150,237 @@ def public_row(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+
+def clamp_int(value: Any, lower: int, upper: int, default: int) -> int:
+    try:
+        number = int(float(value))
+    except (TypeError, ValueError):
+        return default
+    return max(lower, min(upper, number))
+
+
+def clean_mode_text(value: Any, limit: int) -> str:
+    text = " ".join(str(value or "").strip().split())
+    text = "".join(ch for ch in text if ch.isprintable() and ch not in "<>\r\n\t")
+    return text[:limit]
+
+
+def sanitize_game_config(value: Any) -> dict[str, Any]:
+    source = value if isinstance(value, dict) else {}
+    result = dict(DEFAULT_GAME_CONFIG)
+    result["survivalBotLevel"] = clamp_int(source.get("survivalBotLevel"), 1, 10, 5)
+    result["duelBotLevel"] = clamp_int(source.get("duelBotLevel"), 1, 10, 5)
+    result["duelBotWaitSeconds"] = clamp_int(source.get("duelBotWaitSeconds"), 3, 120, 30)
+    result["duelHpMultiplier"] = round(clean_float(source.get("duelHpMultiplier"), 1.0, 10.0, 3.5), 2)
+    result["duelMaxRounds"] = clamp_int(source.get("duelMaxRounds"), 1, 9, 3)
+    result["duelWinsToTakeMatch"] = clamp_int(source.get("duelWinsToTakeMatch"), 1, result["duelMaxRounds"], 2)
+    result["duelWinCoins"] = clamp_int(source.get("duelWinCoins"), 0, 1_000_000, 25)
+    result["duelWinTrophies"] = clamp_int(source.get("duelWinTrophies"), 0, 1_000_000, 10)
+    result["duelDrawCoins"] = clamp_int(source.get("duelDrawCoins"), 0, 1_000_000, 5)
+    result["duelDrawTrophies"] = clamp_int(source.get("duelDrawTrophies"), 0, 1_000_000, 4)
+    result["soloEnabled"] = bool(source.get("soloEnabled", True))
+    result["duelEnabled"] = bool(source.get("duelEnabled", True))
+    result["announcement"] = clean_mode_text(source.get("announcement"), 180)
+    modes: list[dict[str, Any]] = []
+    raw_modes = source.get("customModes")
+    if isinstance(raw_modes, list):
+        seen: set[str] = set()
+        for raw in raw_modes[:20]:
+            if not isinstance(raw, dict):
+                continue
+            mode_id = clean_id(raw.get("id"))[:30]
+            if not mode_id or mode_id in {"solo", "duel"} or mode_id in seen:
+                continue
+            name = clean_mode_text(raw.get("name"), 32) or "Nowy tryb"
+            description = clean_mode_text(raw.get("description"), 110)
+            base = "duel" if str(raw.get("base")) == "duel" else "solo"
+            modes.append({"id": mode_id, "name": name, "description": description, "base": base, "enabled": bool(raw.get("enabled", True))})
+            seen.add(mode_id)
+    result["customModes"] = modes
+    return result
+
+
+def public_game_config() -> dict[str, Any]:
+    return sanitize_game_config(game_config)
+
+
+def load_game_config() -> None:
+    global game_config
+    try:
+        if DATABASE_URL:
+            with db_connect() as conn, conn.cursor() as cur:
+                cur.execute("SELECT value FROM game_settings WHERE key = 'global'")
+                row = cur.fetchone()
+                game_config = sanitize_game_config(row[0] if row else DEFAULT_GAME_CONFIG)
+        else:
+            raw = json.loads(SETTINGS_FILE.read_text(encoding="utf-8")) if SETTINGS_FILE.exists() else DEFAULT_GAME_CONFIG
+            game_config = sanitize_game_config(raw)
+    except Exception as exc:
+        print(f"Nie udało się wczytać ustawień gry: {exc}")
+        game_config = dict(DEFAULT_GAME_CONFIG)
+
+
+def save_game_config(value: Any) -> dict[str, Any]:
+    global game_config
+    cleaned = sanitize_game_config(value)
+    if DATABASE_URL:
+        with db_connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO game_settings (key, value, updated_at)
+                VALUES ('global', %s::jsonb, NOW())
+                ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+                """,
+                (json.dumps(cleaned, ensure_ascii=False),),
+            )
+    else:
+        SETTINGS_FILE.write_text(json.dumps(cleaned, ensure_ascii=False, indent=2), encoding="utf-8")
+    game_config = cleaned
+    return public_game_config()
+
+
+def profile_full_row(row: dict[str, Any]) -> dict[str, Any]:
+    upgrades = row.get("upgrades") if isinstance(row.get("upgrades"), dict) else {}
+    return {
+        "id": clean_id(row.get("id") or row.get("player_id")),
+        "name": clean_name(row.get("name")),
+        "points": clean_number(row.get("points")),
+        "trophies": clean_number(row.get("trophies")),
+        "coins": clean_number(row.get("coins")),
+        "upgrades": {
+            "move": clamp_int(upgrades.get("move", row.get("move_level")), 0, 5, 0),
+            "fire": clamp_int(upgrades.get("fire", row.get("fire_level")), 0, 5, 0),
+            "hp": clamp_int(upgrades.get("hp", row.get("hp_level")), 0, 5, 0),
+        },
+        "skin": clean_skin(row.get("skin")),
+        "cosmicOwned": bool(row.get("cosmic_owned", row.get("cosmicOwned", False))),
+        "heroVersion1": bool(row.get("hero_version1", row.get("heroVersion1", False))),
+        "adminRevision": clean_number(row.get("admin_revision", row.get("adminRevision", 0))),
+    }
+
+
+def admin_secret_equal(provided: Any, expected: str) -> bool:
+    if not expected:
+        return False
+    left = str(provided or "").strip().casefold().encode("utf-8")
+    right = expected.strip().casefold().encode("utf-8")
+    return hmac.compare_digest(left, right)
+
+
+def cleanup_admin_sessions() -> None:
+    current = now()
+    for token, session in list(admin_sessions.items()):
+        if float(session.get("expires", 0)) <= current:
+            admin_sessions.pop(token, None)
+
+
+def create_admin_session(player_id: str) -> str:
+    cleanup_admin_sessions()
+    token = secrets.token_urlsafe(32)
+    admin_sessions[token] = {"playerId": player_id, "expires": now() + ADMIN_SESSION_TTL}
+    return token
+
+
+def verify_admin_session(token: str) -> dict[str, Any] | None:
+    cleanup_admin_sessions()
+    session = admin_sessions.get(token)
+    if not session:
+        return None
+    session["expires"] = now() + ADMIN_SESSION_TTL
+    return session
+
+
+def admin_account_allowed(player_id: str) -> bool:
+    required = clean_id(ADMIN_PLAYER_ID)
+    return not required or clean_id(player_id) == required
+
+
+def admin_login_locked(ip: str) -> float:
+    row = admin_login_attempts.get(ip) or {}
+    until = float(row.get("locked_until", 0))
+    return max(0.0, until - now())
+
+
+def record_admin_login_failure(ip: str) -> None:
+    current = now()
+    row = admin_login_attempts.get(ip) or {"count": 0, "first": current, "locked_until": 0}
+    if current - float(row.get("first", current)) > 600:
+        row = {"count": 0, "first": current, "locked_until": 0}
+    row["count"] = int(row.get("count", 0)) + 1
+    if int(row["count"]) >= 5:
+        row["locked_until"] = current + 300
+        row["count"] = 0
+        row["first"] = current
+    admin_login_attempts[ip] = row
+
+
+def github_api(method: str, path: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    if not GITHUB_TOKEN or not GITHUB_REPO:
+        raise RuntimeError("Brak GITHUB_TOKEN lub GITHUB_REPO w ustawieniach Rendera.")
+    url = f"https://api.github.com{path}"
+    body = json.dumps(payload).encode("utf-8") if payload is not None else None
+    request = urllib.request.Request(url, data=body, method=method)
+    request.add_header("Accept", "application/vnd.github+json")
+    request.add_header("Authorization", f"Bearer {GITHUB_TOKEN}")
+    request.add_header("X-GitHub-Api-Version", "2022-11-28")
+    request.add_header("User-Agent", "Arena-Stars-Admin")
+    if body is not None:
+        request.add_header("Content-Type", "application/json")
+    try:
+        with urllib.request.urlopen(request, timeout=25) as response:
+            raw = response.read()
+            return json.loads(raw.decode("utf-8")) if raw else {}
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", "replace")[:500]
+        raise RuntimeError(f"GitHub API HTTP {exc.code}: {detail}") from exc
+
+
+def deploy_files_to_github(files: Any, message: str) -> dict[str, Any]:
+    if not isinstance(files, list) or not files:
+        raise ValueError("Nie wybrano plików.")
+    decoded: list[tuple[str, bytes]] = []
+    total = 0
+    for item in files[:10]:
+        if not isinstance(item, dict):
+            continue
+        name = Path(str(item.get("name") or "")).name
+        if name not in ADMIN_ALLOWED_FILES:
+            raise ValueError(f"Plik {name or '?'} nie jest dozwolony.")
+        try:
+            content = base64.b64decode(str(item.get("content") or ""), validate=True)
+        except Exception as exc:
+            raise ValueError(f"Nieprawidłowa zawartość pliku {name}.") from exc
+        if len(content) > 2 * 1024 * 1024:
+            raise ValueError(f"Plik {name} jest większy niż 2 MB.")
+        total += len(content)
+        if total > 6 * 1024 * 1024:
+            raise ValueError("Łączny rozmiar plików przekracza 6 MB.")
+        decoded.append((name, content))
+    if not decoded:
+        raise ValueError("Nie znaleziono dozwolonych plików.")
+
+    repo = GITHUB_REPO.strip("/")
+    branch = GITHUB_BRANCH
+    ref = github_api("GET", f"/repos/{repo}/git/ref/heads/{branch}")
+    parent_sha = str(ref.get("object", {}).get("sha") or "")
+    if not parent_sha:
+        raise RuntimeError("Nie udało się odczytać gałęzi GitHub.")
+    parent_commit = github_api("GET", f"/repos/{repo}/git/commits/{parent_sha}")
+    base_tree = str(parent_commit.get("tree", {}).get("sha") or "")
+    tree_entries = []
+    for name, content in decoded:
+        blob = github_api("POST", f"/repos/{repo}/git/blobs", {"content": base64.b64encode(content).decode("ascii"), "encoding": "base64"})
+        tree_entries.append({"path": name, "mode": "100644", "type": "blob", "sha": blob["sha"]})
+    tree = github_api("POST", f"/repos/{repo}/git/trees", {"base_tree": base_tree, "tree": tree_entries})
+    commit = github_api("POST", f"/repos/{repo}/git/commits", {"message": clean_mode_text(message, 100) or "Aktualizacja z panelu administratora", "tree": tree["sha"], "parents": [parent_sha]})
+    github_api("PATCH", f"/repos/{repo}/git/refs/heads/{branch}", {"sha": commit["sha"], "force": False})
+    if RENDER_DEPLOY_HOOK:
+        try:
+            urllib.request.urlopen(urllib.request.Request(RENDER_DEPLOY_HOOK, data=b"", method="POST"), timeout=10).read()
+        except Exception as exc:
+            print(f"Commit zapisany, ale deploy hook nie odpowiedział: {exc}")
+    return {"ok": True, "commit": commit.get("sha"), "files": [name for name, _ in decoded], "repo": repo, "branch": branch}
+
 # ----------------------------- Neon Postgres -----------------------------
 
 def db_connect():
@@ -138,38 +408,65 @@ def init_database() -> None:
             )
             """
         )
-        cur.execute(
-            "CREATE INDEX IF NOT EXISTS players_ranking_idx "
-            "ON players (points DESC, trophies DESC, player_id ASC)"
-        )
+        for statement in (
+            "ALTER TABLE players ADD COLUMN IF NOT EXISTS coins BIGINT NOT NULL DEFAULT 0",
+            "ALTER TABLE players ADD COLUMN IF NOT EXISTS move_level INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE players ADD COLUMN IF NOT EXISTS fire_level INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE players ADD COLUMN IF NOT EXISTS hp_level INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE players ADD COLUMN IF NOT EXISTS skin VARCHAR(16) NOT NULL DEFAULT 'classic'",
+            "ALTER TABLE players ADD COLUMN IF NOT EXISTS cosmic_owned BOOLEAN NOT NULL DEFAULT FALSE",
+            "ALTER TABLE players ADD COLUMN IF NOT EXISTS hero_version1 BOOLEAN NOT NULL DEFAULT FALSE",
+            "ALTER TABLE players ADD COLUMN IF NOT EXISTS admin_revision BIGINT NOT NULL DEFAULT 0",
+        ):
+            cur.execute(statement)
+        cur.execute("CREATE TABLE IF NOT EXISTS game_settings (key TEXT PRIMARY KEY, value JSONB NOT NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())")
+        cur.execute("CREATE INDEX IF NOT EXISTS players_ranking_idx ON players (points DESC, trophies DESC, player_id ASC)")
 
 
 def db_upsert_profile(payload: dict[str, Any]) -> dict[str, Any] | None:
     player_id = clean_id(payload.get("playerId"))
     if not player_id:
         return None
-    name = clean_name(payload.get("name"))
-    points = clean_number(payload.get("points"))
-    trophies = clean_number(payload.get("trophies"))
+    incoming = profile_full_row({
+        "id": player_id, "name": payload.get("name"), "points": payload.get("points"),
+        "trophies": payload.get("trophies"), "coins": payload.get("coins"),
+        "upgrades": payload.get("upgrades"), "skin": payload.get("skin"),
+        "cosmicOwned": payload.get("cosmicOwned"), "heroVersion1": payload.get("heroVersion1"),
+        "adminRevision": payload.get("adminRevision"),
+    })
+    known_revision = clean_number(payload.get("adminRevision"))
     with db_connect() as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            INSERT INTO players (player_id, name, points, trophies, updated_at)
-            VALUES (%s, %s, %s, %s, NOW())
-            ON CONFLICT (player_id) DO UPDATE SET
-                name = EXCLUDED.name,
-                points = GREATEST(players.points, EXCLUDED.points),
-                trophies = GREATEST(players.trophies, EXCLUDED.trophies),
-                updated_at = NOW()
-            RETURNING player_id, name, points, trophies
-            """,
-            (player_id, name, points, trophies),
-        )
+        cur.execute("SELECT player_id, name, points, trophies, coins, move_level, fire_level, hp_level, skin, cosmic_owned, hero_version1, admin_revision FROM players WHERE player_id=%s", (player_id,))
         row = cur.fetchone()
+        if row:
+            old = profile_full_row({"id":row[0],"name":row[1],"points":row[2],"trophies":row[3],"coins":row[4],"move_level":row[5],"fire_level":row[6],"hp_level":row[7],"skin":row[8],"cosmic_owned":row[9],"hero_version1":row[10],"admin_revision":row[11]})
+            if old["adminRevision"] > known_revision:
+                merged = old
+                merged["name"] = incoming["name"]
+            else:
+                merged = incoming
+                merged["points"] = max(old["points"], incoming["points"])
+                merged["trophies"] = max(old["trophies"], incoming["trophies"])
+                merged["coins"] = max(old["coins"], incoming["coins"])
+                merged["upgrades"] = {k:max(old["upgrades"][k],incoming["upgrades"][k]) for k in ("move","fire","hp")}
+                merged["cosmicOwned"] = old["cosmicOwned"] or incoming["cosmicOwned"]
+                merged["heroVersion1"] = old["heroVersion1"] or incoming["heroVersion1"]
+                merged["skin"] = incoming["skin"] if incoming["skin"] == "classic" or merged["cosmicOwned"] else old["skin"]
+                merged["adminRevision"] = old["adminRevision"]
+            cur.execute("""
+                UPDATE players SET name=%s, points=%s, trophies=%s, coins=%s, move_level=%s, fire_level=%s, hp_level=%s,
+                    skin=%s, cosmic_owned=%s, hero_version1=%s, admin_revision=%s, updated_at=NOW() WHERE player_id=%s
+                RETURNING player_id, name, points, trophies, coins, move_level, fire_level, hp_level, skin, cosmic_owned, hero_version1, admin_revision
+            """, (merged["name"],merged["points"],merged["trophies"],merged["coins"],merged["upgrades"]["move"],merged["upgrades"]["fire"],merged["upgrades"]["hp"],merged["skin"],merged["cosmicOwned"],merged["heroVersion1"],merged["adminRevision"],player_id))
+        else:
+            cur.execute("""
+                INSERT INTO players (player_id,name,points,trophies,coins,move_level,fire_level,hp_level,skin,cosmic_owned,hero_version1,admin_revision,updated_at)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,0,NOW())
+                RETURNING player_id, name, points, trophies, coins, move_level, fire_level, hp_level, skin, cosmic_owned, hero_version1, admin_revision
+            """, (player_id,incoming["name"],incoming["points"],incoming["trophies"],incoming["coins"],incoming["upgrades"]["move"],incoming["upgrades"]["fire"],incoming["upgrades"]["hp"],incoming["skin"],incoming["cosmicOwned"],incoming["heroVersion1"]))
+        result = cur.fetchone()
     touch(player_id)
-    if not row:
-        return None
-    return {"id": row[0], "name": row[1], "points": row[2], "trophies": row[3]}
+    return profile_full_row({"id":result[0],"name":result[1],"points":result[2],"trophies":result[3],"coins":result[4],"move_level":result[5],"fire_level":result[6],"hp_level":result[7],"skin":result[8],"cosmic_owned":result[9],"hero_version1":result[10],"admin_revision":result[11]}) if result else None
 
 
 def db_leaderboard_payload(player_id: str = "") -> dict[str, Any]:
@@ -238,6 +535,10 @@ def load_profiles() -> None:
                 "name": clean_name(entry.get("name")),
                 "points": clean_number(entry.get("points")),
                 "trophies": clean_number(entry.get("trophies")),
+                "coins": clean_number(entry.get("coins")),
+                "upgrades": {"move": clamp_int((entry.get("upgrades") or {}).get("move"),0,5,0), "fire": clamp_int((entry.get("upgrades") or {}).get("fire"),0,5,0), "hp": clamp_int((entry.get("upgrades") or {}).get("hp"),0,5,0)},
+                "skin": clean_skin(entry.get("skin")), "cosmicOwned": bool(entry.get("cosmicOwned", False)),
+                "heroVersion1": bool(entry.get("heroVersion1", False)), "adminRevision": clean_number(entry.get("adminRevision")),
             }
         profiles = cleaned
     except (OSError, json.JSONDecodeError):
@@ -254,17 +555,23 @@ def json_upsert_profile(payload: dict[str, Any]) -> dict[str, Any] | None:
     player_id = clean_id(payload.get("playerId"))
     if not player_id:
         return None
-    old = profiles.get(player_id, {"id": player_id, "name": "Gracz", "points": 0, "trophies": 0})
-    entry = {
-        "id": player_id,
-        "name": clean_name(payload.get("name", old["name"])),
-        "points": max(clean_number(old.get("points")), clean_number(payload.get("points"))),
-        "trophies": max(clean_number(old.get("trophies")), clean_number(payload.get("trophies"))),
-    }
+    incoming = profile_full_row({"id":player_id,"name":payload.get("name"),"points":payload.get("points"),"trophies":payload.get("trophies"),"coins":payload.get("coins"),"upgrades":payload.get("upgrades"),"skin":payload.get("skin"),"cosmicOwned":payload.get("cosmicOwned"),"heroVersion1":payload.get("heroVersion1"),"adminRevision":payload.get("adminRevision")})
+    old = profile_full_row(profiles.get(player_id, {"id":player_id,"name":"Gracz"}))
+    known = clean_number(payload.get("adminRevision"))
+    if old["adminRevision"] > known:
+        entry = old
+        entry["name"] = incoming["name"]
+    else:
+        entry = incoming
+        entry["points"] = max(old["points"], incoming["points"])
+        entry["trophies"] = max(old["trophies"], incoming["trophies"])
+        entry["coins"] = max(old["coins"], incoming["coins"])
+        entry["upgrades"] = {k:max(old["upgrades"][k],incoming["upgrades"][k]) for k in ("move","fire","hp")}
+        entry["cosmicOwned"] = old["cosmicOwned"] or incoming["cosmicOwned"]
+        entry["heroVersion1"] = old["heroVersion1"] or incoming["heroVersion1"]
+        entry["adminRevision"] = old["adminRevision"]
     profiles[player_id] = entry
-    save_profiles()
-    touch(player_id)
-    return entry
+    save_profiles(); touch(player_id); return entry
 
 
 def json_leaderboard_payload(player_id: str = "") -> dict[str, Any]:
@@ -295,6 +602,53 @@ def upsert_profile(payload: dict[str, Any]) -> dict[str, Any] | None:
 def leaderboard_payload(player_id: str = "") -> dict[str, Any]:
     return db_leaderboard_payload(player_id) if DATABASE_URL else json_leaderboard_payload(player_id)
 
+
+
+def admin_find_players(query: str = "", limit: int = 50) -> list[dict[str, Any]]:
+    query = clean_mode_text(query, 80)
+    limit = clamp_int(limit, 1, 100, 50)
+    if DATABASE_URL:
+        with db_connect() as conn, conn.cursor() as cur:
+            if query:
+                cur.execute("""SELECT player_id,name,points,trophies,coins,move_level,fire_level,hp_level,skin,cosmic_owned,hero_version1,admin_revision FROM players WHERE player_id ILIKE %s OR name ILIKE %s ORDER BY points DESC LIMIT %s""", (f"%{query}%",f"%{query}%",limit))
+            else:
+                cur.execute("""SELECT player_id,name,points,trophies,coins,move_level,fire_level,hp_level,skin,cosmic_owned,hero_version1,admin_revision FROM players ORDER BY updated_at DESC LIMIT %s""", (limit,))
+            rows = cur.fetchall()
+        return [profile_full_row({"id":r[0],"name":r[1],"points":r[2],"trophies":r[3],"coins":r[4],"move_level":r[5],"fire_level":r[6],"hp_level":r[7],"skin":r[8],"cosmic_owned":r[9],"hero_version1":r[10],"admin_revision":r[11]}) for r in rows]
+    rows = [profile_full_row(v) for v in profiles.values()]
+    if query:
+        q = query.casefold(); rows = [r for r in rows if q in r["id"].casefold() or q in r["name"].casefold()]
+    rows.sort(key=lambda r:(-r["points"],-r["trophies"],r["name"].casefold()))
+    return rows[:limit]
+
+
+def admin_update_player(payload: dict[str, Any]) -> dict[str, Any]:
+    player_id = clean_id(payload.get("playerId"))
+    if not player_id:
+        raise ValueError("Brak identyfikatora gracza.")
+    current = admin_find_players(player_id, 100)
+    old = next((r for r in current if r["id"] == player_id), profile_full_row({"id":player_id,"name":payload.get("name") or "Gracz"}))
+    entry = profile_full_row({
+        "id":player_id, "name":payload.get("name",old["name"]), "points":payload.get("points",old["points"]),
+        "trophies":payload.get("trophies",old["trophies"]), "coins":payload.get("coins",old["coins"]),
+        "upgrades":payload.get("upgrades",old["upgrades"]), "skin":payload.get("skin",old["skin"]),
+        "cosmicOwned":payload.get("cosmicOwned",old["cosmicOwned"]), "heroVersion1":payload.get("heroVersion1",old["heroVersion1"]),
+        "adminRevision":old["adminRevision"]+1,
+    })
+    if entry["skin"] == "cosmic": entry["cosmicOwned"] = True
+    if DATABASE_URL:
+        with db_connect() as conn, conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO players (player_id,name,points,trophies,coins,move_level,fire_level,hp_level,skin,cosmic_owned,hero_version1,admin_revision,updated_at)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
+                ON CONFLICT (player_id) DO UPDATE SET name=EXCLUDED.name,points=EXCLUDED.points,trophies=EXCLUDED.trophies,coins=EXCLUDED.coins,
+                    move_level=EXCLUDED.move_level,fire_level=EXCLUDED.fire_level,hp_level=EXCLUDED.hp_level,skin=EXCLUDED.skin,
+                    cosmic_owned=EXCLUDED.cosmic_owned,hero_version1=EXCLUDED.hero_version1,admin_revision=players.admin_revision+1,updated_at=NOW()
+                RETURNING player_id,name,points,trophies,coins,move_level,fire_level,hp_level,skin,cosmic_owned,hero_version1,admin_revision
+            """, (player_id,entry["name"],entry["points"],entry["trophies"],entry["coins"],entry["upgrades"]["move"],entry["upgrades"]["fire"],entry["upgrades"]["hp"],entry["skin"],entry["cosmicOwned"],entry["heroVersion1"],entry["adminRevision"]))
+            r=cur.fetchone()
+        return profile_full_row({"id":r[0],"name":r[1],"points":r[2],"trophies":r[3],"coins":r[4],"move_level":r[5],"fire_level":r[6],"hp_level":r[7],"skin":r[8],"cosmic_owned":r[9],"hero_version1":r[10],"admin_revision":r[11]})
+    profiles[player_id]=entry; save_profiles(); return entry
 
 # ----------------------------- pojedynki 1v1 -----------------------------
 
@@ -484,7 +838,7 @@ def duel_payload(match: dict[str, Any], player_id: str) -> dict[str, Any]:
         "winnerId": match.get("winner_id"),
         "reason": match.get("reason", ""),
         "round": int(match.get("round", 1)),
-        "maxRounds": DUEL_MAX_ROUNDS,
+        "maxRounds": int(game_config.get("duelMaxRounds", DUEL_MAX_ROUNDS)),
         "yourWins": int(wins.get(player_id, 0)),
         "opponentWins": int(wins.get(opponent_id, 0)),
         "roundDraws": int(match.get("round_draws", 0)),
@@ -494,7 +848,7 @@ def duel_payload(match: dict[str, Any], player_id: str) -> dict[str, Any]:
         "serverTime": round(current, 4),
         "stateSeq": int(match.get("state_seq", 0)),
         "ackShotSeq": int(match["players"].get(player_id, {}).get("last_client_shot_seq", 0)),
-        "build": "mirror-view-shot-channel-v1",
+        "build": "admin-panel-v1",
     }
 
 
@@ -548,11 +902,11 @@ def complete_duel_round(match: dict[str, Any], winner_id: str | None) -> None:
         match["round_result"] = winner_id
     match["round_event_seq"] = int(match.get("round_event_seq", 0)) + 1
 
-    champion = next((pid for pid, value in wins.items() if int(value) >= DUEL_WINS_TO_TAKE_MATCH), None)
+    champion = next((pid for pid, value in wins.items() if int(value) >= int(game_config.get("duelWinsToTakeMatch", DUEL_WINS_TO_TAKE_MATCH))), None)
     if champion is not None:
         finish_duel(match, champion, "Koniec meczu: zwycięstwo 2 rundy.")
         return
-    if current_round >= DUEL_MAX_ROUNDS:
+    if current_round >= int(game_config.get("duelMaxRounds", DUEL_MAX_ROUNDS)):
         # Zgodnie z zasadą: wygrywa tylko osoba z 2 rundami. Bez 2 zwycięstw jest remis meczu.
         finish_duel(match, None, "Koniec meczu: po 3 rundach nikt nie wygrał dwóch rund.")
         return
@@ -568,6 +922,12 @@ def update_duel_bots(match: dict[str, Any], step: float, current: float) -> None
         if not target:
             continue
 
+        level = clamp_int(game_config.get("duelBotLevel"), 1, 10, 5)
+        speed_factor = 0.65 + level * 0.07
+        fire_factor = 1.35 - level * 0.075
+        aim_spread = max(0.025, 0.19 - level * 0.015)
+        bot["speed"] = float(bot.get("base_speed", bot["speed"])) * speed_factor
+        bot["fire_cooldown"] = max(0.07, float(bot.get("base_fire_cooldown", bot["fire_cooldown"])) * fire_factor)
         dx, dz = target["x"] - bot["x"], target["z"] - bot["z"]
         distance = max(0.001, math.hypot(dx, dz))
         nx, nz = dx / distance, dz / distance
@@ -635,7 +995,7 @@ def update_duel_bots(match: dict[str, Any], step: float, current: float) -> None
         if clear_shot and distance < 16.5 and current - bot["last_shot"] >= bot["fire_cooldown"]:
             bot["last_shot"] = current
             bot["revealed_until"] = current + 0.85
-            aim = bot["angle"] + random.uniform(-0.055, 0.055)
+            aim = bot["angle"] + random.uniform(-aim_spread, aim_spread)
             spawn_duel_bullet(match, bot, aim)
 
 
@@ -732,7 +1092,7 @@ def cleanup_duels() -> None:
 
 def create_duel_player(payload: dict[str, Any], player_id: str, x: float, z: float, angle: float) -> dict[str, Any]:
     base_hp = clean_float(payload.get("maxHp"), 100, 400, 150)
-    max_hp = int(round(base_hp * DUEL_HP_MULTIPLIER))
+    max_hp = int(round(base_hp * float(game_config.get("duelHpMultiplier", DUEL_HP_MULTIPLIER))))
     return {
         "id": player_id,
         "name": clean_name(payload.get("name")),
@@ -766,6 +1126,8 @@ def create_duel_bot(payload: dict[str, Any], bot_id: str, x: float, z: float, an
         "strafe_dir": random.choice((-1.0, 1.0)),
         "next_turn": now() + 0.8,
         "stuck_for": 0.0,
+        "base_speed": bot["speed"],
+        "base_fire_cooldown": bot["fire_cooldown"],
     })
     return bot
 
@@ -823,7 +1185,8 @@ def join_duel(payload: dict[str, Any]) -> dict[str, Any]:
     if waiting:
         waiting.update({"last_seen": now(), "name": clean_name(payload.get("name")), "payload": payload})
         elapsed = now() - waiting["created_at"]
-        if elapsed >= DUEL_BOT_WAIT:
+        bot_wait = float(game_config.get("duelBotWaitSeconds", DUEL_BOT_WAIT))
+        if elapsed >= bot_wait:
             duel_waiting.pop(player_id, None)
             bot_id = f"bot-{int(now() * 1000)}-{player_id[:10]}"
             match = create_duel_match(payload, player_id, payload, bot_id, second_is_bot=True)
@@ -832,7 +1195,7 @@ def join_duel(payload: dict[str, Any]) -> dict[str, Any]:
             "ok": True,
             "status": "waiting",
             "waitingSince": waiting["created_at"],
-            "waitRemaining": max(0.0, DUEL_BOT_WAIT - elapsed),
+            "waitRemaining": max(0.0, bot_wait - elapsed),
         }
 
     opponent_id = next((pid for pid in duel_waiting if pid != player_id), None)
@@ -851,7 +1214,7 @@ def join_duel(payload: dict[str, Any]) -> dict[str, Any]:
         "ok": True,
         "status": "waiting",
         "waitingSince": duel_waiting[player_id]["created_at"],
-        "waitRemaining": DUEL_BOT_WAIT,
+        "waitRemaining": float(game_config.get("duelBotWaitSeconds", DUEL_BOT_WAIT)),
     }
 
 
@@ -996,13 +1359,16 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt: str, *args: Any) -> None:
         print(f"[{self.log_date_time_string()}] {self.address_string()} - {fmt % args}")
 
-    def send_json(self, data: Any, status: int = 200) -> None:
+    def send_json(self, data: Any, status: int = 200, extra_headers: dict[str, str] | None = None) -> None:
         raw = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(raw)))
         self.send_header("Cache-Control", "no-store")
         self.send_header("Connection", "keep-alive")
+        if extra_headers:
+            for key, value in extra_headers.items():
+                self.send_header(key, value)
         self.end_headers()
         try:
             self.wfile.write(raw)
@@ -1010,12 +1376,12 @@ class Handler(BaseHTTPRequestHandler):
             # Przeglądarka mogła anulować spóźnione zapytanie; serwer ma działać dalej.
             pass
 
-    def read_json(self) -> dict[str, Any] | None:
+    def read_json(self, max_length: int = MAX_BODY) -> dict[str, Any] | None:
         try:
             length = int(self.headers.get("Content-Length", "0"))
         except ValueError:
             return None
-        if length <= 0 or length > MAX_BODY:
+        if length <= 0 or length > max_length:
             return None
         try:
             value = json.loads(self.rfile.read(length).decode("utf-8"))
@@ -1023,8 +1389,60 @@ class Handler(BaseHTTPRequestHandler):
         except (UnicodeDecodeError, json.JSONDecodeError):
             return None
 
+    def client_ip(self) -> str:
+        forwarded = self.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+        return forwarded or str(self.client_address[0])
+
+    def admin_token(self) -> str:
+        cookie = self.headers.get("Cookie", "")
+        for part in cookie.split(";"):
+            key, _, value = part.strip().partition("=")
+            if key == "arena_admin":
+                return value
+        return ""
+
+    def admin_session(self) -> dict[str, Any] | None:
+        return verify_admin_session(self.admin_token())
+
+    def require_admin(self) -> dict[str, Any] | None:
+        session = self.admin_session()
+        if not session:
+            self.send_json({"error": "Brak ważnej sesji administratora."}, HTTPStatus.UNAUTHORIZED)
+        return session
+
+    def send_admin_login(self, player_id: str) -> None:
+        token = create_admin_session(player_id)
+        secure = bool(os.environ.get("RENDER")) or self.headers.get("X-Forwarded-Proto") == "https"
+        cookie = f"arena_admin={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age={ADMIN_SESSION_TTL}" + ("; Secure" if secure else "")
+        self.send_json({"ok": True, "expiresIn": ADMIN_SESSION_TTL}, extra_headers={"Set-Cookie": cookie})
+
     def do_GET(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
+        if parsed.path == "/api/config":
+            self.send_json({"ok": True, "config": public_game_config()})
+            return
+        if parsed.path == "/api/admin/status":
+            query = parse_qs(parsed.query)
+            player_id = clean_id((query.get("playerId") or [""])[0])
+            session = self.admin_session()
+            self.send_json({
+                "ok": True, "configured": bool(ADMIN_PASSWORD and ADMIN_RECOVERY_CODE),
+                "authorized": bool(session), "accountMatches": admin_account_allowed(player_id),
+                "playerIdRequired": bool(clean_id(ADMIN_PLAYER_ID)),
+                "deploymentConfigured": bool(GITHUB_TOKEN and GITHUB_REPO),
+                "repo": GITHUB_REPO if session else "", "branch": GITHUB_BRANCH if session else "",
+            })
+            return
+        if parsed.path == "/api/admin/config":
+            if not self.require_admin(): return
+            self.send_json({"ok": True, "config": public_game_config()})
+            return
+        if parsed.path == "/api/admin/players":
+            if not self.require_admin(): return
+            query = parse_qs(parsed.query)
+            text = (query.get("q") or [""])[0]
+            self.send_json({"ok": True, "players": admin_find_players(text, 50)})
+            return
         if parsed.path == "/api/leaderboard":
             query = parse_qs(parsed.query)
             player_id = clean_id((query.get("playerId") or [""])[0])
@@ -1053,7 +1471,7 @@ class Handler(BaseHTTPRequestHandler):
                     with db_connect() as conn, conn.cursor() as cur:
                         cur.execute("SELECT 1")
                         cur.fetchone()
-                self.send_json({"ok": True, "storage": "neon" if DATABASE_URL else "json", "build": "mirror-view-shot-channel-v1"})
+                self.send_json({"ok": True, "storage": "neon" if DATABASE_URL else "json", "build": "admin-panel-v1"})
             except Exception as exc:
                 self.send_json({"ok": False, "error": str(exc)}, HTTPStatus.SERVICE_UNAVAILABLE)
             return
@@ -1061,9 +1479,51 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
-        payload = self.read_json()
+        payload = self.read_json(ADMIN_UPLOAD_MAX_BODY if parsed.path == "/api/admin/deploy" else MAX_BODY)
         if payload is None:
             self.send_json({"error": "Nieprawidłowe dane."}, HTTPStatus.BAD_REQUEST)
+            return
+        if parsed.path in {"/api/admin/login", "/api/admin/recover"}:
+            ip = self.client_ip()
+            wait = admin_login_locked(ip)
+            if wait > 0:
+                self.send_json({"error": f"Za dużo prób. Spróbuj ponownie za {int(wait)+1} s."}, HTTPStatus.TOO_MANY_REQUESTS); return
+            player_id = clean_id(payload.get("playerId"))
+            if not ADMIN_PASSWORD or not ADMIN_RECOVERY_CODE:
+                self.send_json({"error": "Panel administratora nie jest skonfigurowany w Renderze."}, HTTPStatus.SERVICE_UNAVAILABLE); return
+            if not admin_account_allowed(player_id):
+                record_admin_login_failure(ip); self.send_json({"error": "To konto nie ma dostępu do panelu."}, HTTPStatus.FORBIDDEN); return
+            expected = ADMIN_PASSWORD if parsed.path.endswith("login") else ADMIN_RECOVERY_CODE
+            provided = payload.get("password") if parsed.path.endswith("login") else payload.get("code")
+            if not admin_secret_equal(provided, expected):
+                record_admin_login_failure(ip); self.send_json({"error": "Nieprawidłowe hasło lub kod."}, HTTPStatus.UNAUTHORIZED); return
+            admin_login_attempts.pop(ip, None); self.send_admin_login(player_id); return
+        if parsed.path == "/api/admin/logout":
+            token = self.admin_token(); admin_sessions.pop(token, None)
+            self.send_json({"ok": True}, extra_headers={"Set-Cookie": "arena_admin=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0"}); return
+        if parsed.path == "/api/admin/config":
+            if not self.require_admin(): return
+            try:
+                with lock: config = save_game_config(payload.get("config"))
+                self.send_json({"ok": True, "config": config})
+            except Exception as exc:
+                self.send_json({"error": f"Nie udało się zapisać ustawień: {exc}"}, HTTPStatus.INTERNAL_SERVER_ERROR)
+            return
+        if parsed.path == "/api/admin/player":
+            if not self.require_admin(): return
+            try:
+                with lock: player = admin_update_player(payload)
+                self.send_json({"ok": True, "player": player})
+            except Exception as exc:
+                self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+        if parsed.path == "/api/admin/deploy":
+            if not self.require_admin(): return
+            try:
+                result = deploy_files_to_github(payload.get("files"), str(payload.get("message") or ""))
+                self.send_json(result)
+            except Exception as exc:
+                self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
             return
         if parsed.path == "/api/profile":
             try:
@@ -1073,7 +1533,7 @@ class Handler(BaseHTTPRequestHandler):
                         self.send_json({"error": "Brak identyfikatora gracza."}, HTTPStatus.BAD_REQUEST)
                         return
                     response = leaderboard_payload(entry["id"])
-                    response.update({"ok": True, "profile": public_row(entry)})
+                    response.update({"ok": True, "profile": profile_full_row(entry)})
                     self.send_json(response)
             except Exception as exc:
                 print(f"Błąd zapisu profilu: {exc}")
@@ -1164,6 +1624,7 @@ def local_ip() -> str:
 if __name__ == "__main__":
     load_profiles()
     init_database()
+    load_game_config()
     threading.Thread(target=duel_tick_loop, name="duel-tick", daemon=True).start()
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     print("\nArena Stars 3D — PRZETRWANIE + POJEDYNKI 1V1/BOT + TOP 200")

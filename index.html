@@ -204,6 +204,24 @@
       }
     }
 
+
+    /* Panel administratora */
+    #adminOpenBtn{position:absolute;z-index:6;left:22px;bottom:22px;padding:10px 14px;border:1px solid rgba(255,255,255,.25);border-radius:13px;background:rgba(7,15,34,.78);color:#dff8ff;font:900 10px inherit;letter-spacing:.08em;cursor:pointer;backdrop-filter:blur(10px)}
+    #adminOpenBtn:hover{border-color:#67e6ff;box-shadow:0 0 18px rgba(83,218,255,.22)}
+    #adminOverlay{display:none;position:fixed;inset:0;z-index:80;background:rgba(2,6,18,.86);backdrop-filter:blur(14px);color:#eef7ff;overflow:auto}
+    #adminOverlay.open{display:grid;place-items:center}
+    .adminCard{width:min(1040px,94vw);max-height:92vh;overflow:auto;border:1px solid rgba(122,224,255,.28);border-radius:24px;background:linear-gradient(145deg,rgba(15,28,58,.98),rgba(7,13,31,.98));box-shadow:0 30px 90px rgba(0,0,0,.62);padding:20px}
+    .adminLoginCard{width:min(470px,92vw)}
+    .adminTop{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:14px}.adminTop h2{margin:0;font-size:22px}.adminClose{border:0;border-radius:10px;background:rgba(255,255,255,.1);color:#fff;padding:8px 11px;font-weight:900;cursor:pointer}
+    .adminHint{font-size:11px;line-height:1.45;color:#aebede}.adminId{margin:10px 0;padding:9px;border-radius:10px;background:rgba(255,255,255,.06);font:800 10px monospace;overflow-wrap:anywhere}
+    .adminField{display:grid;gap:5px;margin:9px 0}.adminField label{font-size:10px;font-weight:1000;color:#9bdfff;letter-spacing:.05em}.adminField input,.adminField select,.adminField textarea{width:100%;box-sizing:border-box;border:1px solid rgba(255,255,255,.18);border-radius:10px;background:rgba(0,0,0,.28);color:#fff;padding:10px;font:800 11px inherit;outline:none}.adminField textarea{min-height:72px;resize:vertical}
+    .adminPrimary,.adminSecondary,.adminDanger{border:0;border-radius:11px;padding:10px 14px;font-weight:1000;cursor:pointer}.adminPrimary{background:linear-gradient(180deg,#6ef1ff,#438dff);color:#07162b}.adminSecondary{background:rgba(255,255,255,.1);color:#fff}.adminDanger{background:linear-gradient(180deg,#ff6d8c,#d22f58);color:#fff}.adminActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.adminMsg{min-height:18px;margin-top:8px;font-size:10px;color:#8ff0b8}.adminMsg.bad{color:#ff9eb1}
+    #adminDashboard{display:none}.adminTabs{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px}.adminTab{border:1px solid rgba(255,255,255,.14);border-radius:10px;background:rgba(255,255,255,.06);color:#cfe2ff;padding:8px 11px;font-weight:900;cursor:pointer}.adminTab.active{background:#56dfff;color:#07172d}.adminPane{display:none}.adminPane.active{display:block}
+    .adminGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.adminSection{border:1px solid rgba(255,255,255,.1);border-radius:15px;background:rgba(255,255,255,.04);padding:13px}.adminSection h3{margin:0 0 9px;font-size:14px;color:#85eaff}.adminCheck{display:flex;align-items:center;gap:8px;margin:8px 0;font-size:11px;font-weight:800}.adminCheck input{width:17px;height:17px}
+    .adminPlayerList{display:grid;gap:7px;max-height:220px;overflow:auto}.adminPlayerRow{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:9px;border-radius:10px;background:rgba(255,255,255,.06);cursor:pointer}.adminPlayerRow:hover{outline:1px solid #5ce4ff}.adminPlayerRow small{display:block;color:#95a8ca;margin-top:3px}.adminModeRow{display:grid;grid-template-columns:1fr 110px 80px auto;gap:8px;align-items:center;margin:7px 0;padding:8px;border-radius:10px;background:rgba(255,255,255,.05)}
+    .adminUploadBox{border:2px dashed rgba(105,230,255,.35);border-radius:14px;padding:18px;text-align:center}.adminUploadBox input{max-width:100%}.adminFileList{margin-top:9px;font:800 10px monospace;color:#bfeeff;white-space:pre-wrap}.adminStatusPill{display:inline-block;padding:4px 8px;border-radius:999px;background:rgba(255,255,255,.08);font-size:9px;font-weight:900}.adminStatusPill.ok{background:rgba(63,223,154,.16);color:#79f3b7}.adminStatusPill.bad{background:rgba(255,72,104,.16);color:#ff9bad}
+    @media(max-width:760px){.adminGrid{grid-template-columns:1fr}.adminModeRow{grid-template-columns:1fr}.adminCard{padding:14px}#adminOpenBtn{left:10px;bottom:10px}}
+
   </style>
 </head>
 <body class="lobby-mode">
@@ -272,6 +290,7 @@
       </div>
       <div class="saveNote">Postęp zapisuje się w przeglądarce. Wybierz Przetrwanie z botami albo Pojedynki 1v1.</div>
       <div id="modeMenu" aria-label="Wybór trybu gry"><div class="modeMenuTitle">WYBIERZ TRYB</div><button id="soloModeOption" class="modeOption"><span class="modeIcon">🤖</span><span><span class="modeName">Przetrwanie z botami</span><span class="modeDesc">Klasyczny tryb z falami robotów, monetami, pucharkami i ulepszeniami.</span></span></button><button id="duelModeOption" class="modeOption"><span class="modeIcon">⚔️</span><span><span class="modeName">Pojedynki 1v1</span><span class="modeDesc">Szybka arena z 2 ścianami i 4 polami krzaków. Czekaj do 30 sekund na gracza albo walcz z botem.</span></span></button></div>
+      <button id="adminOpenBtn">⚙ PANEL ADMINISTRACYJNY</button>
       <button id="modeBtn">TRYBY ▾</button>
       <button id="playBtn">GRAJ ▶</button>
     </div>
@@ -290,7 +309,62 @@
       </div>
     </div>
   </div>
+
+  <div id="adminOverlay" aria-hidden="true">
+    <section id="adminLoginCard" class="adminCard adminLoginCard">
+      <div class="adminTop"><h2>Panel administracyjny</h2><button id="adminLoginClose" class="adminClose">✕</button></div>
+      <p class="adminHint">Dostęp jest sprawdzany na serwerze. Hasło nie znajduje się w kodzie strony. Wielkość liter nie ma znaczenia.</p>
+      <div class="adminId">ID tego konta: <span id="adminPlayerId"></span></div>
+      <div id="adminPasswordArea">
+        <div class="adminField"><label>HASŁO ADMINISTRATORA</label><input id="adminPasswordInput" type="password" autocomplete="current-password"></div>
+        <div class="adminActions"><button id="adminLoginBtn" class="adminPrimary">ZALOGUJ</button><button id="adminForgotBtn" class="adminSecondary">NIE PAMIĘTAM HASŁA</button></div>
+      </div>
+      <div id="adminRecoveryArea" style="display:none">
+        <div class="adminField"><label>KOD ZAPASOWY</label><input id="adminRecoveryInput" type="password" autocomplete="one-time-code"></div>
+        <div class="adminActions"><button id="adminRecoveryBtn" class="adminPrimary">UŻYJ KODU ZAPASOWEGO</button><button id="adminBackToPassword" class="adminSecondary">WRÓĆ</button></div>
+      </div>
+      <div id="adminLoginMsg" class="adminMsg"></div>
+    </section>
+
+    <section id="adminDashboard" class="adminCard">
+      <div class="adminTop"><div><h2>Centrum sterowania Arena Stars</h2><span id="adminDeployStatus" class="adminStatusPill">Sprawdzanie wdrożeń…</span></div><div class="adminActions"><button id="adminLogoutBtn" class="adminSecondary">WYLOGUJ</button><button id="adminCloseBtn" class="adminClose">✕</button></div></div>
+      <div class="adminTabs"><button class="adminTab active" data-admin-tab="settings">USTAWIENIA</button><button class="adminTab" data-admin-tab="players">GRACZE</button><button class="adminTab" data-admin-tab="modes">TRYBY</button><button class="adminTab" data-admin-tab="deploy">AKTUALIZACJA</button></div>
+
+      <div class="adminPane active" data-admin-pane="settings">
+        <div class="adminGrid">
+          <div class="adminSection"><h3>Boty i pojedynki</h3>
+            <div class="adminField"><label>POZIOM BOTÓW W PRZETRWANIU (1–10)</label><input id="cfgSurvivalBot" type="number" min="1" max="10"></div>
+            <div class="adminField"><label>POZIOM BOTA 1V1 (1–10)</label><input id="cfgDuelBot" type="number" min="1" max="10"></div>
+            <div class="adminField"><label>CZEKANIE NA GRACZA PRZED BOTEM (SEKUNDY)</label><input id="cfgBotWait" type="number" min="3" max="120"></div>
+            <div class="adminField"><label>MNOŻNIK ŻYCIA W 1V1</label><input id="cfgHpMultiplier" type="number" min="1" max="10" step="0.1"></div>
+            <div class="adminField"><label>MAKSYMALNA LICZBA RUND</label><input id="cfgRounds" type="number" min="1" max="9"></div>
+            <div class="adminField"><label>WYGRANE RUNDY POTRZEBNE DO ZWYCIĘSTWA</label><input id="cfgWins" type="number" min="1" max="9"></div>
+          </div>
+          <div class="adminSection"><h3>Nagrody i dostępność</h3>
+            <div class="adminGrid"><div class="adminField"><label>MONETY ZA WYGRANĄ</label><input id="cfgWinCoins" type="number" min="0"></div><div class="adminField"><label>PUCHARKI ZA WYGRANĄ</label><input id="cfgWinTrophies" type="number" min="0"></div><div class="adminField"><label>MONETY ZA REMIS</label><input id="cfgDrawCoins" type="number" min="0"></div><div class="adminField"><label>PUCHARKI ZA REMIS</label><input id="cfgDrawTrophies" type="number" min="0"></div></div>
+            <label class="adminCheck"><input id="cfgSoloEnabled" type="checkbox"> Przetrwanie dostępne</label><label class="adminCheck"><input id="cfgDuelEnabled" type="checkbox"> Pojedynki dostępne</label>
+            <div class="adminField"><label>WIADOMOŚĆ W LOBBY</label><textarea id="cfgAnnouncement" maxlength="180"></textarea></div>
+          </div>
+        </div>
+        <div class="adminActions"><button id="adminSaveSettings" class="adminPrimary">ZAPISZ USTAWIENIA DLA WSZYSTKICH</button></div><div id="adminSettingsMsg" class="adminMsg"></div>
+      </div>
+
+      <div class="adminPane" data-admin-pane="players">
+        <div class="adminGrid"><div class="adminSection"><h3>Znajdź gracza</h3><div class="adminField"><label>NICK LUB ID</label><input id="adminPlayerSearch" placeholder="Wpisz nazwę albo ID"></div><button id="adminSearchBtn" class="adminPrimary">SZUKAJ</button><div id="adminPlayerList" class="adminPlayerList"></div></div>
+        <div class="adminSection"><h3>Edytuj profil</h3><div class="adminField"><label>ID GRACZA</label><input id="editPlayerId" readonly></div><div class="adminField"><label>NICK</label><input id="editPlayerName"></div><div class="adminGrid"><div class="adminField"><label>PUNKTY</label><input id="editPoints" type="number" min="0"></div><div class="adminField"><label>PUCHARKI</label><input id="editTrophies" type="number" min="0"></div><div class="adminField"><label>MONETY</label><input id="editCoins" type="number" min="0"></div><div class="adminField"><label>SKÓRKA</label><select id="editSkin"><option value="classic">Klasyczna</option><option value="cosmic">Kosmiczny Strażnik</option></select></div><div class="adminField"><label>POZIOM RUCHU</label><input id="editMove" type="number" min="0" max="5"></div><div class="adminField"><label>POZIOM STRZAŁU</label><input id="editFire" type="number" min="0" max="5"></div><div class="adminField"><label>POZIOM ŻYCIA</label><input id="editHp" type="number" min="0" max="5"></div></div><label class="adminCheck"><input id="editCosmic" type="checkbox"> Kosmiczny Strażnik odblokowany</label><label class="adminCheck"><input id="editVersion" type="checkbox"> Lepsza wersja I odblokowana</label><button id="adminSavePlayer" class="adminPrimary">ZAPISZ PROFIL</button><div id="adminPlayerMsg" class="adminMsg"></div></div></div>
+      </div>
+
+      <div class="adminPane" data-admin-pane="modes">
+        <div class="adminSection"><h3>Tryby tworzone z istniejących silników</h3><p class="adminHint">Możesz dodać nową pozycję w menu, opartą na Przetrwaniu albo Pojedynkach. Całkiem nowa mechanika nadal wymaga zmiany kodu.</p><div id="adminModesList"></div><div class="adminActions"><button id="adminAddMode" class="adminSecondary">+ DODAJ TRYB</button><button id="adminSaveModes" class="adminPrimary">ZAPISZ TRYBY</button></div><div id="adminModesMsg" class="adminMsg"></div></div>
+      </div>
+
+      <div class="adminPane" data-admin-pane="deploy">
+        <div class="adminSection"><h3>Aktualizacja gry z dysku</h3><p class="adminHint">Panel wysyła wybrane pliki do repozytorium GitHub. Render wdroży nowy commit automatycznie. Dozwolone są wyłącznie pliki gry z bezpiecznej listy.</p><div class="adminUploadBox"><input id="adminFiles" type="file" multiple accept=".html,.js,.py,.txt,.yaml,.yml"><div id="adminFileList" class="adminFileList">Nie wybrano plików.</div></div><div class="adminField"><label>OPIS AKTUALIZACJI</label><input id="adminCommitMessage" value="Aktualizacja gry z panelu administratora"></div><div class="adminActions"><button id="adminDeployBtn" class="adminPrimary">AKTUALIZUJ GRĘ NA SERWERZE</button></div><div id="adminDeployMsg" class="adminMsg"></div></div>
+      </div>
+    </section>
+  </div>
+
   <div id="error"></div>
-  <script src="game.js?v=hud-bez-nakladania-v2"></script>
+  <script src="game.js?v=admin-panel-v1"></script>
 </body>
 </html>
