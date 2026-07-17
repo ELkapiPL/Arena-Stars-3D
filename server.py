@@ -36,6 +36,17 @@ DUEL_FINISH_TTL = 30.0
 DUEL_ARENA = 17.5
 DUEL_BULLET_SPEED = 18.0
 DUEL_BULLET_DAMAGE = 22
+DUEL_PLAYER_RADIUS = 0.75
+DUEL_BUSH_REVEAL_DISTANCE = 4.5
+# Szybka, symetryczna mapa: dwie ściany i cztery małe pola krzaków.
+DUEL_WALLS = (
+    (-5.4, 0.0, 3.4, 1.7),
+    (5.4, 0.0, 3.4, 1.7),
+)
+DUEL_BUSHES = (
+    (-10.2, -5.7, 1.85), (-10.2, 5.7, 1.85),
+    (10.2, -5.7, 1.85), (10.2, 5.7, 1.85),
+)
 
 lock = threading.RLock()
 profiles: dict[str, dict[str, Any]] = {}
@@ -305,18 +316,55 @@ def normalize_duel_angle(value: Any, default: float = 0.0) -> float:
     return math.atan2(math.sin(angle), math.cos(angle))
 
 
-def duel_public_player(player: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "id": player["id"],
-        "name": player["name"],
-        "skin": player["skin"],
-        "x": round(float(player["x"]), 3),
-        "z": round(float(player["z"]), 3),
-        "angle": round(normalize_duel_angle(player["angle"]), 4),
-        "hp": max(0, int(round(player["hp"]))),
-        "maxHp": int(player["max_hp"]),
-        "isBot": bool(player.get("is_bot", False)),
+def duel_point_in_bush(x: float, z: float) -> bool:
+    return any((x - bx) ** 2 + (z - bz) ** 2 < radius ** 2 for bx, bz, radius in DUEL_BUSHES)
+
+
+def duel_hits_wall(x: float, z: float, radius: float = 0.12) -> bool:
+    if abs(x) > DUEL_ARENA - radius or abs(z) > DUEL_ARENA - radius:
+        return True
+    for wx, wz, width, depth in DUEL_WALLS:
+        if wx - width / 2 - radius < x < wx + width / 2 + radius and wz - depth / 2 - radius < z < wz + depth / 2 + radius:
+            return True
+    return False
+
+
+def resolve_duel_position(x: float, z: float, radius: float = DUEL_PLAYER_RADIUS) -> tuple[float, float, bool]:
+    x = max(-DUEL_ARENA + radius, min(DUEL_ARENA - radius, x))
+    z = max(-DUEL_ARENA + radius, min(DUEL_ARENA - radius, z))
+    collided = False
+    for wx, wz, width, depth in DUEL_WALLS:
+        min_x, max_x = wx - width / 2 - radius, wx + width / 2 + radius
+        min_z, max_z = wz - depth / 2 - radius, wz + depth / 2 + radius
+        if min_x < x < max_x and min_z < z < max_z:
+            collided = True
+            distances = ((abs(x - min_x), "left"), (abs(max_x - x), "right"), (abs(z - min_z), "top"), (abs(max_z - z), "bottom"))
+            side = min(distances, key=lambda item: item[0])[1]
+            if side == "left": x = min_x
+            elif side == "right": x = max_x
+            elif side == "top": z = min_z
+            else: z = max_z
+    return x, z, collided
+
+
+def duel_public_player(player: dict[str, Any], viewer: dict[str, Any] | None = None) -> dict[str, Any]:
+    in_bush = duel_point_in_bush(float(player["x"]), float(player["z"]))
+    hidden = False
+    if viewer is not None and viewer["id"] != player["id"] and in_bush:
+        distance = math.hypot(float(player["x"]) - float(viewer["x"]), float(player["z"]) - float(viewer["z"]))
+        hidden = distance > DUEL_BUSH_REVEAL_DISTANCE and now() >= float(player.get("revealed_until", 0.0))
+    row = {
+        "id": player["id"], "name": player["name"], "skin": player["skin"],
+        "hp": max(0, int(round(player["hp"]))), "maxHp": int(player["max_hp"]),
+        "isBot": bool(player.get("is_bot", False)), "hidden": hidden, "inBush": in_bush,
     }
+    if not hidden:
+        row.update({
+            "x": round(float(player["x"]), 3), "z": round(float(player["z"]), 3),
+            "angle": round(normalize_duel_angle(player["angle"]), 4),
+            "vx": round(float(player.get("vx", 0.0)), 3), "vz": round(float(player.get("vz", 0.0)), 3),
+        })
+    return row
 
 
 def duel_payload(match: dict[str, Any], player_id: str) -> dict[str, Any]:
@@ -326,19 +374,23 @@ def duel_payload(match: dict[str, Any], player_id: str) -> dict[str, Any]:
         "status": match["status"],
         "matchId": match["id"],
         "startIn": max(0.0, float(match["start_at"] - current)) if match["status"] == "countdown" else 0.0,
-        "players": [duel_public_player(player) for player in match["players"].values()],
+        "players": [duel_public_player(player, match["players"].get(player_id)) for player in match["players"].values()],
         "bullets": [
             {
                 "id": bullet["id"],
                 "ownerId": bullet["owner_id"],
                 "x": round(float(bullet["x"]), 3),
                 "z": round(float(bullet["z"]), 3),
+                "vx": round(float(bullet["vx"]), 3),
+                "vz": round(float(bullet["vz"]), 3),
             }
             for bullet in match["bullets"]
         ],
         "winnerId": match.get("winner_id"),
         "reason": match.get("reason", ""),
         "you": player_id,
+        "serverTime": round(current, 4),
+        "stateSeq": int(match.get("state_seq", 0)),
     }
 
 
@@ -374,11 +426,18 @@ def update_duel_bots(match: dict[str, Any], step: float, current: float) -> None
             mx, mz = -nz * side + nx * 0.12, nx * side + nz * 0.12
             length = max(0.001, math.hypot(mx, mz))
             mx, mz = mx / length, mz / length
-        bot["x"] = max(-DUEL_ARENA, min(DUEL_ARENA, bot["x"] + mx * bot["speed"] * step))
-        bot["z"] = max(-DUEL_ARENA, min(DUEL_ARENA, bot["z"] + mz * bot["speed"] * step))
+        old_x, old_z = bot["x"], bot["z"]
+        next_x = bot["x"] + mx * bot["speed"] * step
+        next_z = bot["z"] + mz * bot["speed"] * step
+        bot["x"], bot["z"], collided = resolve_duel_position(next_x, next_z)
+        if collided:
+            bot["strafe_dir"] = -bot.get("strafe_dir", 1.0)
+        bot["vx"] = (bot["x"] - old_x) / max(step, 0.001)
+        bot["vz"] = (bot["z"] - old_z) / max(step, 0.001)
         bot["last_seen"] = current
         if distance < 16.5 and current - bot["last_shot"] >= bot["fire_cooldown"]:
             bot["last_shot"] = current
+            bot["revealed_until"] = current + 0.85
             match["bullet_seq"] += 1
             aim = bot["angle"] + random.uniform(-0.075, 0.075)
             match["bullets"].append({
@@ -421,7 +480,7 @@ def advance_duel(match: dict[str, Any]) -> None:
             bullet["x"] += bullet["vx"] * step
             bullet["z"] += bullet["vz"] * step
             bullet["life"] -= step
-            if bullet["life"] <= 0 or abs(bullet["x"]) > DUEL_ARENA or abs(bullet["z"]) > DUEL_ARENA:
+            if bullet["life"] <= 0 or duel_hits_wall(bullet["x"], bullet["z"], 0.16):
                 continue
             target = next((p for p in players if p["id"] != bullet["owner_id"]), None)
             if target and (bullet["x"] - target["x"]) ** 2 + (bullet["z"] - target["z"]) ** 2 < 0.98 ** 2:
@@ -464,6 +523,7 @@ def create_duel_player(payload: dict[str, Any], player_id: str, x: float, z: flo
         "last_shot": 0.0,
         "last_seen": now(),
         "last_move": now(),
+        "vx": 0.0, "vz": 0.0, "revealed_until": 0.0,
         "is_bot": False,
     }
 
@@ -499,6 +559,7 @@ def create_duel_match(first_payload: dict[str, Any], first_id: str, second_paylo
         "bullet_seq": 0,
         "winner_id": None,
         "reason": "",
+        "state_seq": 0,
     }
     duel_matches[match_id] = match
     duel_player_match[first_id] = match_id
@@ -592,13 +653,16 @@ def duel_action(payload: dict[str, Any]) -> dict[str, Any] | None:
     if distance > max_distance:
         scale = max_distance / distance
         dx, dz = dx * scale, dz * scale
-    player["x"] = max(-DUEL_ARENA, min(DUEL_ARENA, player["x"] + dx))
-    player["z"] = max(-DUEL_ARENA, min(DUEL_ARENA, player["z"] + dz))
+    old_x, old_z = player["x"], player["z"]
+    player["x"], player["z"], _ = resolve_duel_position(player["x"] + dx, player["z"] + dz)
+    player["vx"] = (player["x"] - old_x) / elapsed
+    player["vz"] = (player["z"] - old_z) / elapsed
     player["angle"] = normalize_duel_angle(payload.get("angle"), player["angle"])
     player["last_move"] = current
 
     if payload.get("shoot") and match["status"] == "playing" and current - player["last_shot"] >= player["fire_cooldown"] * 0.92:
         player["last_shot"] = current
+        player["revealed_until"] = current + 0.85
         match["bullet_seq"] += 1
         angle = player["angle"]
         import math
@@ -613,6 +677,7 @@ def duel_action(payload: dict[str, Any]) -> dict[str, Any] | None:
             "damage": DUEL_BULLET_DAMAGE,
         })
     advance_duel(match)
+    match["state_seq"] = int(match.get("state_seq", 0)) + 1
     return duel_payload(match, player_id)
 
 
@@ -628,7 +693,8 @@ def leave_duel(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "ArenaStarsRenderNeon/1.0"
+    server_version = "ArenaStarsRenderNeon/1.1"
+    protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt: str, *args: Any) -> None:
         print(f"[{self.log_date_time_string()}] {self.address_string()} - {fmt % args}")
@@ -639,6 +705,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(raw)))
         self.send_header("Cache-Control", "no-store")
+        self.send_header("Connection", "keep-alive")
         self.end_headers()
         self.wfile.write(raw)
 
@@ -751,6 +818,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(raw)))
         self.send_header("Cache-Control", "no-cache")
+        self.send_header("Connection", "keep-alive")
         self.end_headers()
         self.wfile.write(raw)
 
