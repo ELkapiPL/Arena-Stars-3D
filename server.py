@@ -38,6 +38,7 @@ DUEL_BULLET_SPEED = 18.0
 DUEL_BULLET_DAMAGE = 22
 DUEL_PLAYER_RADIUS = 0.75
 DUEL_BUSH_REVEAL_DISTANCE = 4.5
+DUEL_TICK_RATE = 20.0  # niezależna symulacja bota i pocisków 20 razy na sekundę
 # Szybka, symetryczna mapa: dwie ściany i cztery małe pola krzaków.
 DUEL_WALLS = (
     (-5.4, 0.0, 3.4, 1.7),
@@ -427,11 +428,28 @@ def update_duel_bots(match: dict[str, Any], step: float, current: float) -> None
             length = max(0.001, math.hypot(mx, mz))
             mx, mz = mx / length, mz / length
         old_x, old_z = bot["x"], bot["z"]
-        next_x = bot["x"] + mx * bot["speed"] * step
-        next_z = bot["z"] + mz * bot["speed"] * step
-        bot["x"], bot["z"], collided = resolve_duel_position(next_x, next_z)
+        move_x = mx * bot["speed"] * step
+        move_z = mz * bot["speed"] * step
+        next_x = bot["x"] + move_x
+        next_z = bot["z"] + move_z
+        resolved_x, resolved_z, collided = resolve_duel_position(next_x, next_z)
         if collided:
-            bot["strafe_dir"] = -bot.get("strafe_dir", 1.0)
+            # Spróbuj prześlizgnąć się wzdłuż ściany zamiast stać w miejscu.
+            slide_x = resolve_duel_position(bot["x"] + move_x, bot["z"])
+            slide_z = resolve_duel_position(bot["x"], bot["z"] + move_z)
+            dist_x = math.hypot(slide_x[0] - bot["x"], slide_x[1] - bot["z"])
+            dist_z = math.hypot(slide_z[0] - bot["x"], slide_z[1] - bot["z"])
+            if max(dist_x, dist_z) > 0.002:
+                resolved_x, resolved_z = (slide_x[0], slide_x[1]) if dist_x >= dist_z else (slide_z[0], slide_z[1])
+            else:
+                bot["strafe_dir"] = -bot.get("strafe_dir", 1.0)
+                # Mały boczny impuls zapobiega zakleszczeniu przy narożniku.
+                side = bot["strafe_dir"]
+                resolved_x, resolved_z, _ = resolve_duel_position(
+                    bot["x"] - nz * side * bot["speed"] * step,
+                    bot["z"] + nx * side * bot["speed"] * step,
+                )
+        bot["x"], bot["z"] = resolved_x, resolved_z
         bot["vx"] = (bot["x"] - old_x) / max(step, 0.001)
         bot["vz"] = (bot["z"] - old_z) / max(step, 0.001)
         bot["last_seen"] = current
@@ -692,8 +710,22 @@ def leave_duel(payload: dict[str, Any]) -> dict[str, Any]:
     return {"ok": True}
 
 
+def duel_tick_loop() -> None:
+    """Symuluje boty i pociski niezależnie od częstotliwości zapytań przeglądarki."""
+    interval = 1.0 / DUEL_TICK_RATE
+    while True:
+        started = time.monotonic()
+        try:
+            with lock:
+                cleanup_duels()
+        except Exception as exc:
+            print(f"Błąd pętli pojedynku: {exc}")
+        elapsed = time.monotonic() - started
+        time.sleep(max(0.005, interval - elapsed))
+
+
 class Handler(BaseHTTPRequestHandler):
-    server_version = "ArenaStarsRenderNeon/1.1"
+    server_version = "ArenaStarsRenderNeon/1.2-stable"
     protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt: str, *args: Any) -> None:
@@ -817,7 +849,8 @@ class Handler(BaseHTTPRequestHandler):
         )
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(raw)))
-        self.send_header("Cache-Control", "no-cache")
+        cache_value = "no-store" if candidate.suffix.lower() in {".html", ".js", ".css"} else "no-cache"
+        self.send_header("Cache-Control", cache_value)
         self.send_header("Connection", "keep-alive")
         self.end_headers()
         self.wfile.write(raw)
@@ -837,6 +870,7 @@ def local_ip() -> str:
 if __name__ == "__main__":
     load_profiles()
     init_database()
+    threading.Thread(target=duel_tick_loop, name="duel-tick", daemon=True).start()
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     print("\nArena Stars 3D — PRZETRWANIE + POJEDYNKI 1V1/BOT + TOP 200")
     print(f"Adres lokalny: http://localhost:{PORT}")

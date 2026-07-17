@@ -280,7 +280,7 @@ function beginDuelMatch(data){
   history.replaceState(null,'','#pojedynki');
   processDuelState(data,true);last=performance.now();
   // HTTP/1.1 utrzymuje połączenie, a 70 ms daje płynniejszy ruch bez zalewania serwera.
-  clearInterval(duelNetworkTimer);duelNetworkTimer=setInterval(sendDuelFrame,70);
+  clearInterval(duelNetworkTimer);duelNetworkTimer=setInterval(sendDuelFrame,85);
 }
 function processDuelState(data,initial=false){
   if(!data||data.matchId!==duelMatchId)return;
@@ -296,7 +296,11 @@ function processDuelState(data,initial=false){
   }
   duelMatchStatus=incomingStatus;
   const previousBullets=new Map(duelServerBullets.map(b=>[b.id,b]));
-  duelServerBullets=(Array.isArray(data.bullets)?data.bullets:[]).map(b=>{
+  const incomingBullets=Array.isArray(data.bullets)?data.bullets:[];
+  let confirmedOwnShots=0;
+  for(const b of incomingBullets)if(b.ownerId===playerId&&!previousBullets.has(b.id))confirmedOwnShots++;
+  if(confirmedOwnShots>0)duelPredictedBullets.splice(0,Math.min(confirmedOwnShots,duelPredictedBullets.length));
+  duelServerBullets=incomingBullets.map(b=>{
     const old=previousBullets.get(b.id),x=Number(b.x)||0,z=Number(b.z)||0;
     return {...b,targetX:x,targetZ:z,renderX:old?.renderX??x,renderZ:old?.renderZ??z,vx:Number(b.vx)||0,vz:Number(b.vz)||0,sampleAt:receivedAt};
   });
@@ -346,7 +350,7 @@ function duelPlayerShoot(){
   if(!duelActive||duelMatchStatus!=='playing'||!player||player.fire>0||player.reload>0)return;
   if(player.ammo<=0){startReload();return;}
   player.fire=player.fireCooldown;player.ammo--;duelShootQueued=true;
-  const a=player.angle;duelPredictedBullets.push({x:player.x+Math.sin(a)*1.05,z:player.z+Math.cos(a)*1.05,vx:Math.sin(a)*18,vz:Math.cos(a)*18,life:.20});
+  const a=player.angle;duelPredictedBullets.push({x:player.x+Math.sin(a)*1.05,z:player.z+Math.cos(a)*1.05,vx:Math.sin(a)*18,vz:Math.cos(a)*18,life:1.15});
   const color=profile.skin==='cosmic'?[.78,.38,1]:[.24,.85,1];
   burst(player.x+Math.sin(player.angle),player.z+Math.cos(player.angle),color,5,2.7);
   if(player.ammo<=0)startReload();else updateUI();
