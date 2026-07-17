@@ -470,7 +470,7 @@ def duel_payload(match: dict[str, Any], player_id: str) -> dict[str, Any]:
         "serverTime": round(current, 4),
         "stateSeq": int(match.get("state_seq", 0)),
         "ackShotSeq": int(match["players"].get(player_id, {}).get("last_client_shot_seq", 0)),
-        "build": "duel-fix-3",
+        "build": "bot-localny-final-1",
     }
 
 
@@ -852,7 +852,7 @@ def duel_tick_loop() -> None:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "ArenaStarsRenderNeon/1.3-duel-fix"
+    server_version = "ArenaStarsRenderNeon/1.4-bot-localny"
     protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt: str, *args: Any) -> None:
@@ -915,7 +915,7 @@ class Handler(BaseHTTPRequestHandler):
                     with db_connect() as conn, conn.cursor() as cur:
                         cur.execute("SELECT 1")
                         cur.fetchone()
-                self.send_json({"ok": True, "storage": "neon" if DATABASE_URL else "json", "build": "duel-fix-3"})
+                self.send_json({"ok": True, "storage": "neon" if DATABASE_URL else "json", "build": "bot-localny-final-1"})
             except Exception as exc:
                 self.send_json({"ok": False, "error": str(exc)}, HTTPStatus.SERVICE_UNAVAILABLE)
             return
