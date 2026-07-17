@@ -231,7 +231,7 @@ function clearDuelTimers(){
 function stopDuelSession(notify=true){
   const oldMatch=duelMatchId;
   clearDuelTimers();
-  duelSearching=false;duelActive=false;duelEnded=false;duelMatchId='';duelOpponent=null;duelServerBullets=[];duelPredictedBullets=[];duelShootQueued=false;duelMatchStatus='';duelStartIn=0;duelNetworkFailures=0;duelFrameSeq=0;
+  duelSearching=false;duelActive=false;duelEnded=false;duelMatchId='';duelOpponent=null;duelServerBullets=[];duelPredictedBullets=[];duelShootQueued=false;duelMatchStatus='';duelStartIn=0;duelStartDeadline=0;duelNetworkFailures=0;duelFrameSeq=0;
   document.body.classList.remove('duel-mode');
   if(location.hash==='#pojedynki')history.replaceState(null,'',location.pathname+location.search);
   if(notify&&(oldMatch||playerId)){
@@ -263,7 +263,7 @@ function startDuelQueue(){
   if(duelSearching||duelActive)return;
   chooseDuelMode();
   if(running&&!duelActive)commitRun();
-  reset();running=false;duelSearching=true;duelEnded=false;duelNetworkFailures=0;duelMatchId='';duelOpponent=null;duelServerBullets=[];duelPredictedBullets=[];duelFrameSeq=0;
+  reset();running=false;duelSearching=true;duelEnded=false;duelNetworkFailures=0;duelMatchId='';duelOpponent=null;duelServerBullets=[];duelPredictedBullets=[];duelFrameSeq=0;duelStartDeadline=0;
   document.body.classList.add('lobby-mode');document.body.classList.remove('duel-mode');
   ui.lobbyView.style.display='none';ui.gameOverView.style.display='none';ui.duelQueueView.style.display='grid';ui.overlay.style.display='block';
   setDuelQueueText('Łączenie z kolejką pojedynków 1v1…');
@@ -285,7 +285,16 @@ function beginDuelMatch(data){
 function processDuelState(data,initial=false){
   if(!data||data.matchId!==duelMatchId)return;
   const receivedAt=performance.now(),sampleDt=Math.max(.04,Math.min(.5,(receivedAt-duelLastStateAt)/1000));duelLastStateAt=receivedAt;
-  duelMatchStatus=data.status||duelMatchStatus;duelStartIn=Math.max(0,Number(data.startIn)||0);
+  const incomingStatus=data.status||duelMatchStatus;
+  const incomingStart=Math.max(0,Number(data.startIn)||0);
+  if(incomingStatus==='countdown'){
+    const proposedDeadline=receivedAt+incomingStart*1000;
+    if(!duelStartDeadline||initial||Math.abs(proposedDeadline-duelStartDeadline)>650)duelStartDeadline=proposedDeadline;
+    duelStartIn=Math.max(0,(duelStartDeadline-receivedAt)/1000);
+  }else{
+    duelStartDeadline=0;duelStartIn=0;
+  }
+  duelMatchStatus=incomingStatus;
   const previousBullets=new Map(duelServerBullets.map(b=>[b.id,b]));
   duelServerBullets=(Array.isArray(data.bullets)?data.bullets:[]).map(b=>{
     const old=previousBullets.get(b.id),x=Number(b.x)||0,z=Number(b.z)||0;
@@ -347,7 +356,15 @@ function updateDuel(dt){
   player.fire=Math.max(0,player.fire-dt);
   if(player.reload>0){player.reload=Math.max(0,player.reload-dt);if(player.reload===0){player.ammo=MAG_SIZE;showMessage('AMUNICJA GOTOWA!');}updateUI();}
   if(duelMatchStatus==='countdown'){
-    const n=Math.max(1,Math.ceil(duelStartIn));showMessage(`START ZA ${n}`);duelStartIn=Math.max(0,duelStartIn-dt);
+    const nowMs=performance.now();
+    if(!duelStartDeadline)duelStartDeadline=nowMs+Math.max(0,duelStartIn)*1000;
+    duelStartIn=Math.max(0,(duelStartDeadline-nowMs)/1000);
+    if(duelStartIn<=0.03){
+      // Awaryjny start lokalny: nawet gdy jedna odpowiedź HTTP zaginie, licznik nie zatrzyma się na „1”.
+      duelMatchStatus='playing';duelStartIn=0;duelStartDeadline=0;showMessage('START!');
+    }else{
+      const n=Math.max(1,Math.ceil(duelStartIn));showMessage(`START ZA ${n}`);
+    }
   }else if(duelMatchStatus==='playing'){
     let dx=(keys.KeyD?1:0)-(keys.KeyA?1:0),dz=(keys.KeyS?1:0)-(keys.KeyW?1:0),len=Math.hypot(dx,dz);
     if(len){dx/=len;dz/=len;player.x+=dx*player.speed*dt;player.z+=dz*player.speed*dt;resolveDuelEntity(player);}
@@ -436,7 +453,7 @@ function buyVersionOne(){
 let upgrades={...profile.upgrades};
 let running=false,runCommitted=false,last=performance.now(),score=0,wave=1,kills=0,walletCoins=profile.coins,runCoins=0,trophies=0,survivalTime=0,waveClock=0,spawnClock=0,shake=0,messageClock=0;
 let player,enemies=[],bullets=[],particles=[],stars=[],pickups=[],coins=[];
-let selectedMode=profile.mode==='duel'?'duel':'solo',duelSearching=false,duelActive=false,duelEnded=false,duelMatchId='',duelOpponent=null,duelServerBullets=[],duelPredictedBullets=[],duelShootQueued=false,duelNetworkBusy=false,duelNetworkTimer=0,duelJoinTimer=0,duelNetworkFailures=0,duelMatchStatus='',duelStartIn=0,duelLastStateAt=performance.now(),duelRtt=0,duelFrameSeq=0;
+let selectedMode=profile.mode==='duel'?'duel':'solo',duelSearching=false,duelActive=false,duelEnded=false,duelMatchId='',duelOpponent=null,duelServerBullets=[],duelPredictedBullets=[],duelShootQueued=false,duelNetworkBusy=false,duelNetworkTimer=0,duelJoinTimer=0,duelNetworkFailures=0,duelMatchStatus='',duelStartIn=0,duelStartDeadline=0,duelLastStateAt=performance.now(),duelRtt=0,duelFrameSeq=0;
 
 const obstacles=[
   {x:-6,z:-5,w:3.6,d:2.3,h:1.7,c:[.43,.29,.21]}, {x:6,z:5,w:3.6,d:2.3,h:1.7,c:[.43,.29,.21]},
