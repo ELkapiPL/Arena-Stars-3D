@@ -205,6 +205,16 @@ function chooseDuelMode(){
   selectedMode='duel';profile.mode='duel';saveProgress();updateModeUI();toggleModeMenu(false);
 }
 
+// W pojedynku obaj gracze korzystają z jednego, wspólnego układu świata.
+// Kąt 0 wskazuje +Z, a kamera obu osób patrzy zawsze w kierunku -Z.
+function normalizeDuelAngle(value){
+  const a=Number(value);
+  if(!Number.isFinite(a))return 0;
+  return Math.atan2(Math.sin(a),Math.cos(a));
+}
+function duelAngleDelta(from,to){return Math.atan2(Math.sin(to-from),Math.cos(to-from));}
+function smoothDuelAngle(from,to,t){return normalizeDuelAngle(from+duelAngleDelta(from,to)*t);}
+
 function duelPlayerSettings(){
   const versionOwned=profile.heroVersion1===true;
   const maxHp=Math.round((BASE_HP+20*(profile.upgrades.hp||0))*(versionOwned?VERSION_ONE_HP:1));
@@ -277,9 +287,20 @@ function processDuelState(data,initial=false){
   const list=Array.isArray(data.players)?data.players:[],me=list.find(p=>p.id===playerId),other=list.find(p=>p.id!==playerId);
   if(me&&player){
     if(initial||Math.hypot((me.x||0)-player.x,(me.z||0)-player.z)>1.6){player.x=Number(me.x)||0;player.z=Number(me.z)||0;}
+    const serverAngle=normalizeDuelAngle(me.angle);
+    // Przy rozpoczęciu meczu ustawiamy dokładnie ten sam kierunek, który zna serwer.
+    // Później korygujemy tylko duży błąd, aby nie walczyć z celowaniem myszy gracza.
+    if(initial||Math.abs(duelAngleDelta(player.angle,serverAngle))>1.75)player.angle=serverAngle;
     player.hp=Math.max(0,Number(me.hp)||0);player.maxHp=Math.max(1,Number(me.maxHp)||player.maxHp);
   }
-  duelOpponent=other?{...other}:null;
+  if(other){
+    const targetX=Number(other.x)||0,targetZ=Number(other.z)||0,targetAngle=normalizeDuelAngle(other.angle);
+    if(!duelOpponent||duelOpponent.id!==other.id){
+      duelOpponent={...other,renderX:targetX,renderZ:targetZ,renderAngle:targetAngle,targetX,targetZ,targetAngle};
+    }else{
+      Object.assign(duelOpponent,other,{targetX,targetZ,targetAngle});
+    }
+  }else duelOpponent=null;
   if(ui.hudModeText)ui.hudModeText.textContent=other?.isBot?'Pojedynek z botem':'Pojedynek 1v1';
   if(ui.duelOpponentName)ui.duelOpponentName.textContent=other?`${other.name.toUpperCase()}${other.isBot?' • BOT':''}`:'OCZEKIWANIE NA PRZECIWNIKA';
   if(ui.duelOpponentHp)ui.duelOpponentHp.textContent=other?`${Math.max(0,other.hp)} / ${other.maxHp} HP`:'—';
@@ -290,7 +311,7 @@ async function sendDuelFrame(){
   if(!duelActive||!duelMatchId||!player||duelNetworkBusy)return;
   duelNetworkBusy=true;const shot=duelShootQueued;duelShootQueued=false;
   try{
-    const data=await api('/api/duel/action',{method:'POST',body:JSON.stringify({matchId:duelMatchId,playerId,x:player.x,z:player.z,angle:player.angle,shoot:shot})});
+    const data=await api('/api/duel/action',{method:'POST',body:JSON.stringify({matchId:duelMatchId,playerId,x:player.x,z:player.z,angle:normalizeDuelAngle(player.angle),shoot:shot})});
     duelNetworkFailures=0;processDuelState(data,false);
   }catch(_){
     if(shot)duelShootQueued=true;
@@ -316,7 +337,14 @@ function updateDuel(dt){
   }else if(duelMatchStatus==='playing'){
     let dx=(keys.KeyD?1:0)-(keys.KeyA?1:0),dz=(keys.KeyS?1:0)-(keys.KeyW?1:0),len=Math.hypot(dx,dz);
     if(len){dx/=len;dz/=len;player.x+=dx*player.speed*dt;player.z+=dz*player.speed*dt;player.x=Math.max(-17.2,Math.min(17.2,player.x));player.z=Math.max(-17.2,Math.min(17.2,player.z));}
-    player.angle=Math.atan2(mouse.worldX-player.x,mouse.worldZ-player.z);if(mouse.down)duelPlayerShoot();
+    player.angle=normalizeDuelAngle(Math.atan2(mouse.worldX-player.x,mouse.worldZ-player.z));if(mouse.down)duelPlayerShoot();
+  }
+  if(duelOpponent){
+    // Wygładzenie sieciowe bez zmiany osi i bez lustrzanego odbicia kierunku.
+    const follow=1-Math.exp(-14*dt),turn=1-Math.exp(-18*dt);
+    duelOpponent.renderX+=(duelOpponent.targetX-duelOpponent.renderX)*follow;
+    duelOpponent.renderZ+=(duelOpponent.targetZ-duelOpponent.renderZ)*follow;
+    duelOpponent.renderAngle=smoothDuelAngle(duelOpponent.renderAngle,duelOpponent.targetAngle,turn);
   }
   for(let i=particles.length-1;i>=0;i--){const p=particles[i];p.life-=dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.z+=p.vz*dt;p.vy-=10*dt;p.vx*=.97;p.vz*=.97;if(p.y<.05){p.y=.05;p.vy*=-.25;}if(p.life<=0)particles.splice(i,1);}
   shake=Math.max(0,shake-dt);if(messageClock>0){messageClock-=dt;if(messageClock<=0)ui.centerMsg.style.opacity='0';}
@@ -508,7 +536,10 @@ function screenToGround(cx,cy){const r=canvas.getBoundingClientRect(),x=(cx-r.le
 function resize(){const dpr=Math.min(devicePixelRatio||1,2),w=Math.floor(innerWidth*dpr),h=Math.floor(innerHeight*dpr);if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;gl.viewport(0,0,w,h);}M4.perspective(proj,Math.PI/3,w/h,.1,100);}
 function healthBar(x,z,hp,maxHp,y=2.2,width=1.25){draw(mesh.cube,x,y,z,width,.075,.08,0,[.16,.12,.16]);const f=Math.max(0,hp/maxHp);draw(mesh.cube,x-(width*(1-f)),y+.01,z,width*f,.08,.085,0,f>.45?[.2,.95,.35]:[1,.25,.18]);}
 function render(){
-  resize();const sx=shake?rnd(-shake,shake)*.35:0,sz=shake?rnd(-shake,shake)*.35:0;const focusX=player?.x||0,focusZ=player?.z||0;M4.lookAt(view,[focusX+sx,20,focusZ+15+sz],[focusX,0,focusZ-1],[0,1,0]);M4.multiply(viewProj,proj,view);M4.invert(invVP,viewProj);screenToGround(mouse.x,mouse.y);
+  resize();const sx=shake?rnd(-shake,shake)*.35:0,sz=shake?rnd(-shake,shake)*.35:0;const focusX=player?.x||0,focusZ=player?.z||0;
+  // Kamera ma identyczną orientację świata dla pierwszego i drugiego gracza.
+  // Nie obracamy jej o 180 stopni po przeciwnej stronie areny.
+  M4.lookAt(view,[focusX+sx,20,focusZ+15+sz],[focusX,0,focusZ-1],[0,1,0]);M4.multiply(viewProj,proj,view);M4.invert(invVP,viewProj);screenToGround(mouse.x,mouse.y);
   gl.enable(gl.DEPTH_TEST);gl.enable(gl.CULL_FACE);gl.clearColor(.08,.14,.24,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.useProgram(program);gl.uniformMatrix4fv(loc.vp,false,viewProj);gl.uniform3f(loc.light,.45,-1,.35);
   // podłoże i delikatna kratka
   draw(mesh.cube,0,-.45,0,20,.45,20,0,[.20,.49,.38]);
@@ -543,11 +574,11 @@ function render(){
     healthBar(player.x,player.z,player.hp,player.maxHp,2.05,1.25);
   }
   if(duelActive&&duelOpponent){
-    const o=duelOpponent,cosmic=o.skin==='cosmic',anim=performance.now()*.002;
-    draw(mesh.cyl,o.x,.12,o.z,.98,.05,.98,0,[1,.25,.55],.8);
-    if(cosmic){draw(mesh.sphere,o.x,.82,o.z,.72,.82,.72,0,[.43,.10,.48]);draw(mesh.sphere,o.x,.84,o.z,.53,.66,.53,0,[.78,.20,.68]);draw(mesh.sphere,o.x,.90,o.z,.62,.43,.62,0,[1,.42,.85],.32);draw(mesh.cube,o.x+Math.sin(o.angle)*.75,.82,o.z+Math.cos(o.angle)*.75,.18,.18,.62,o.angle,[.30,.04,.20]);draw(mesh.sphere,o.x+Math.sin(anim)*1.02,.93,o.z+Math.cos(anim)*1.02,.11,.11,.11,0,[1,.72,.25]);}
-    else{draw(mesh.sphere,o.x,.82,o.z,.72,.82,.72,0,[.93,.18,.42]);draw(mesh.sphere,o.x,.82,o.z,.49,.62,.49,0,[1,.37,.58]);draw(mesh.cube,o.x+Math.sin(o.angle)*.75,.82,o.z+Math.cos(o.angle)*.75,.18,.18,.62,o.angle,[.28,.10,.18]);draw(mesh.sphere,o.x,.82,o.z,.78,.86,.78,0,[1,.55,.70],.13);}
-    healthBar(o.x,o.z,o.hp,o.maxHp,2.05,1.25);
+    const o=duelOpponent,ox=o.renderX??o.x,oz=o.renderZ??o.z,oa=o.renderAngle??normalizeDuelAngle(o.angle),cosmic=o.skin==='cosmic',anim=performance.now()*.002;
+    draw(mesh.cyl,ox,.12,oz,.98,.05,.98,0,[1,.25,.55],.8);
+    if(cosmic){draw(mesh.sphere,ox,.82,oz,.72,.82,.72,0,[.43,.10,.48]);draw(mesh.sphere,ox,.84,oz,.53,.66,.53,0,[.78,.20,.68]);draw(mesh.sphere,ox,.90,oz,.62,.43,.62,0,[1,.42,.85],.32);draw(mesh.cube,ox+Math.sin(oa)*.75,.82,oz+Math.cos(oa)*.75,.18,.18,.62,oa,[.30,.04,.20]);draw(mesh.sphere,ox+Math.sin(anim)*1.02,.93,oz+Math.cos(anim)*1.02,.11,.11,.11,0,[1,.72,.25]);}
+    else{draw(mesh.sphere,ox,.82,oz,.72,.82,.72,0,[.93,.18,.42]);draw(mesh.sphere,ox,.82,oz,.49,.62,.49,0,[1,.37,.58]);draw(mesh.cube,ox+Math.sin(oa)*.75,.82,oz+Math.cos(oa)*.75,.18,.18,.62,oa,[.28,.10,.18]);draw(mesh.sphere,ox,.82,oz,.78,.86,.78,0,[1,.55,.70],.13);}
+    healthBar(ox,oz,o.hp,o.maxHp,2.05,1.25);
   }
   if(!duelActive)for(const e of enemies){draw(mesh.cyl,e.x,.11,e.z,e.r*1.18,.04,e.r*1.18,0,e.color,.65);const c=e.hit>0?[1,1,1]:e.color;draw(mesh.sphere,e.x,e.r*.95,e.z,e.r,e.r*1.05,e.r,0,c);draw(mesh.sphere,e.x,e.r*1.14,e.z,e.r*.62,e.r*.63,e.r*.62,0,[Math.min(1,c[0]+.22),Math.min(1,c[1]+.22),Math.min(1,c[2]+.22)]);if(e.type==='shooter')draw(mesh.cube,e.x+Math.sin(e.angle)*e.r*.95,e.r*.95,e.z+Math.cos(e.angle)*e.r*.95,.16,.16,.58,e.angle,[.18,.16,.19]);if(e.type==='tank'){draw(mesh.cube,e.x,e.r*1.05,e.z,e.r*.95,.24,e.r*.95,0,[.25,.11,.31]);}for(let lv=0;lv<(e.level||1);lv++)draw(mesh.sphere,e.x+(lv-((e.level||1)-1)/2)*.24,e.r*2.28,e.z,.08,.08,.08,0,[1,.78,.12]);healthBar(e.x,e.z,e.hp,e.maxHp,e.r*2.35,e.r*.9);}
   if(duelActive){for(const b of duelServerBullets){const mine=b.ownerId===playerId,c=mine?(profile.skin==='cosmic'?[.78,.38,1]:[.24,.85,1]):[1,.25,.48];draw(mesh.sphere,b.x,.72,b.z,.21,.21,.21,0,c);}}else for(const b of bullets)draw(mesh.sphere,b.x,b.y,b.z,b.size,b.size,b.size,0,b.color);

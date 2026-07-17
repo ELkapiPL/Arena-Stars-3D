@@ -294,6 +294,17 @@ def clean_float(value: Any, lower: float, upper: float, default: float = 0.0) ->
     return max(lower, min(upper, number))
 
 
+def normalize_duel_angle(value: Any, default: float = 0.0) -> float:
+    """Kanonizuje kierunek celowania do zakresu [-pi, pi]."""
+    try:
+        angle = float(value)
+    except (TypeError, ValueError):
+        angle = float(default)
+    if not math.isfinite(angle):
+        angle = float(default)
+    return math.atan2(math.sin(angle), math.cos(angle))
+
+
 def duel_public_player(player: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": player["id"],
@@ -301,7 +312,7 @@ def duel_public_player(player: dict[str, Any]) -> dict[str, Any]:
         "skin": player["skin"],
         "x": round(float(player["x"]), 3),
         "z": round(float(player["z"]), 3),
-        "angle": round(float(player["angle"]), 4),
+        "angle": round(normalize_duel_angle(player["angle"]), 4),
         "hp": max(0, int(round(player["hp"]))),
         "maxHp": int(player["max_hp"]),
         "isBot": bool(player.get("is_bot", False)),
@@ -583,7 +594,7 @@ def duel_action(payload: dict[str, Any]) -> dict[str, Any] | None:
         dx, dz = dx * scale, dz * scale
     player["x"] = max(-DUEL_ARENA, min(DUEL_ARENA, player["x"] + dx))
     player["z"] = max(-DUEL_ARENA, min(DUEL_ARENA, player["z"] + dz))
-    player["angle"] = clean_float(payload.get("angle"), -20.0, 20.0, player["angle"])
+    player["angle"] = normalize_duel_angle(payload.get("angle"), player["angle"])
     player["last_move"] = current
 
     if payload.get("shoot") and match["status"] == "playing" and current - player["last_shot"] >= player["fire_cooldown"] * 0.92:
