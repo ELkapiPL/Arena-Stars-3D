@@ -85,8 +85,7 @@ DB_SCHEMA_VERSION = 9
 PROFILE_DATA_VERSION = 2
 ARENA_PASS_SEASON = 1
 ARENA_PASS_LEVELS = 20
-ARENA_PASS_FREE_STEP = 2000
-ARENA_PASS_PREMIUM_STEP = 3000
+ARENA_PASS_TROPHY_STEP = 40
 ARENA_VIP_PRICE_PLN = 13
 ARENA_VIP_PLUS_PRICE_PLN = 21
 ARENA_VIP_PAYMENT_URL = os.environ.get("ARENA_VIP_PAYMENT_URL", "").strip()
@@ -222,7 +221,7 @@ def persistent_storage_public_status() -> dict[str, Any]:
         "databaseConfigured": bool(DATABASE_URL),
         "sqlRequired": bool(REQUIRE_SQL),
         "schemaVersion": DB_SCHEMA_VERSION if DB_READY else 0,
-        "build": "arena-karnet-vip-mobile-v13",
+        "build": "arena-karnet-40-pucharkow-v14",
     }
     if DB_READY:
         payload["connectedAt"] = DB_CONNECTED_AT
@@ -557,7 +556,7 @@ def db_schema_status() -> dict[str, Any]:
         "matches": matches_count,
         "activeSessions": sessions_count,
         "connectedAt": DB_CONNECTED_AT,
-        "build": "arena-karnet-vip-mobile-v13",
+        "build": "arena-karnet-40-pucharkow-v14",
     }
 
 
@@ -1930,33 +1929,32 @@ def arena_pass_status(account_id: str) -> dict[str, Any]:
     data = clean_profile_data(profile.get("data"))
     tier = arena_pass_effective_tier(account_id, data)
     claims = {str(x) for x in data.get("arenaPassClaims", []) if isinstance(x, (str, int))}
-    points = clean_number(profile.get("points"), 2_000_000_000)
+    trophies = clean_number(profile.get("trophies"), 2_000_000_000)
     levels: list[dict[str, Any]] = []
     for level in range(1, ARENA_PASS_LEVELS + 1):
-        row: dict[str, Any] = {"level": level, "freeThreshold": level * ARENA_PASS_FREE_STEP, "premiumThreshold": level * ARENA_PASS_PREMIUM_STEP}
+        row: dict[str, Any] = {"level": level, "freeThreshold": level * ARENA_PASS_TROPHY_STEP, "premiumThreshold": level * ARENA_PASS_TROPHY_STEP}
         for track in ("free", "vip", "vip_plus"):
             reward = ARENA_PASS_REWARDS.get(track, {}).get(level)
             if not reward:
                 row[track] = None
                 continue
             key = f"s{ARENA_PASS_SEASON}:{track}:{level}"
-            threshold = level * (ARENA_PASS_FREE_STEP if track == "free" else ARENA_PASS_PREMIUM_STEP)
+            threshold = level * ARENA_PASS_TROPHY_STEP
             access = track == "free" or (track == "vip" and pass_tier_rank(tier) >= 1) or (track == "vip_plus" and pass_tier_rank(tier) >= 2)
             icon, label = arena_pass_reward_label(reward)
             row[track] = {
                 "key": key, "icon": icon, "label": label, "claimed": key in claims,
-                "unlocked": points >= threshold, "access": access,
-                "claimable": bool(access and points >= threshold and key not in claims),
+                "unlocked": trophies >= threshold, "access": access,
+                "claimable": bool(access and trophies >= threshold and key not in claims),
             }
         levels.append(row)
-    next_free = min(ARENA_PASS_LEVELS * ARENA_PASS_FREE_STEP, (points // ARENA_PASS_FREE_STEP + 1) * ARENA_PASS_FREE_STEP)
-    next_premium = min(ARENA_PASS_LEVELS * ARENA_PASS_PREMIUM_STEP, (points // ARENA_PASS_PREMIUM_STEP + 1) * ARENA_PASS_PREMIUM_STEP)
+    next_trophy = min(ARENA_PASS_LEVELS * ARENA_PASS_TROPHY_STEP, (trophies // ARENA_PASS_TROPHY_STEP + 1) * ARENA_PASS_TROPHY_STEP)
     return {
         "ok": True, "season": ARENA_PASS_SEASON, "tier": tier, "storedTier": clean_pass_tier(data.get("arenaPassTier")),
-        "ownerBenefits": account_id == clean_id(ADMIN_PLAYER_ID), "points": points, "levels": levels,
-        "freeLevel": min(ARENA_PASS_LEVELS, points // ARENA_PASS_FREE_STEP),
-        "premiumLevel": min(ARENA_PASS_LEVELS, points // ARENA_PASS_PREMIUM_STEP),
-        "nextFree": next_free, "nextPremium": next_premium,
+        "ownerBenefits": account_id == clean_id(ADMIN_PLAYER_ID), "trophies": trophies, "levels": levels,
+        "freeLevel": min(ARENA_PASS_LEVELS, trophies // ARENA_PASS_TROPHY_STEP),
+        "premiumLevel": min(ARENA_PASS_LEVELS, trophies // ARENA_PASS_TROPHY_STEP),
+        "nextFree": next_trophy, "nextPremium": next_trophy,
         "prices": {"vip": ARENA_VIP_PRICE_PLN, "vip_plus": ARENA_VIP_PLUS_PRICE_PLN},
         "paymentUrls": {"vip": ARENA_VIP_PAYMENT_URL, "vip_plus": ARENA_VIP_PLUS_PAYMENT_URL},
         "arenaSkinOwned": bool(data.get("arenaVipPlusSkinOwned", False)),
@@ -2014,9 +2012,9 @@ def claim_arena_pass(account_id: str, payload: dict[str, Any]) -> dict[str, Any]
                     if not claim_all and level != wanted_level:
                         continue
                     access = track == "free" or (track == "vip" and pass_tier_rank(tier) >= 1) or (track == "vip_plus" and pass_tier_rank(tier) >= 2)
-                    threshold = level * (ARENA_PASS_FREE_STEP if track == "free" else ARENA_PASS_PREMIUM_STEP)
+                    threshold = level * ARENA_PASS_TROPHY_STEP
                     key = f"s{ARENA_PASS_SEASON}:{track}:{level}"
-                    if access and state["points"] >= threshold and key not in claims:
+                    if access and state["trophies"] >= threshold and key not in claims:
                         candidates.append((track, level, reward, key))
             if not candidates:
                 if claim_all:
@@ -2028,9 +2026,9 @@ def claim_arena_pass(account_id: str, payload: dict[str, Any]) -> dict[str, Any]
                     raise ValueError("Ta nagroda wymaga Arena Karnetu VIP lub VIP+.")
                 if wanted_track == "vip_plus" and pass_tier_rank(tier) < 2:
                     raise ValueError("Ta nagroda wymaga Arena Karnetu VIP+.")
-                threshold = wanted_level * (ARENA_PASS_FREE_STEP if wanted_track == "free" else ARENA_PASS_PREMIUM_STEP)
-                if state["points"] < threshold:
-                    raise ValueError(f"Potrzebujesz {threshold} punktów.")
+                threshold = wanted_level * ARENA_PASS_TROPHY_STEP
+                if state["trophies"] < threshold:
+                    raise ValueError(f"Potrzebujesz {threshold} pucharków.")
                 raise ValueError("Ta nagroda została już odebrana.")
             for _, _, reward, key in candidates:
                 _apply_arena_pass_reward(state, reward)

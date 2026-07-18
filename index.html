@@ -689,14 +689,14 @@
 
   <div id="passOverlay" aria-hidden="true">
     <section class="passPanel" role="dialog" aria-modal="true" aria-label="Arena Karnet">
-      <header class="passHeader"><div><h2>🎟️ ARENA KARNET</h2><p>Poziomy odblokowują się automatycznie za posiadane punkty. Zakup VIP lub VIP+ odblokowuje tylko dodatkowe tory nagród.</p></div><button id="passCloseBtn" class="passClose" type="button">✕</button></header>
+      <header class="passHeader"><div><h2>🎟️ ARENA KARNET</h2><p>Poziomy odblokowują się automatycznie za posiadane pucharki. Każdy kolejny poziom wymaga 40 pucharków. Zakup VIP lub VIP+ odblokowuje tylko dodatkowe tory nagród.</p></div><button id="passCloseBtn" class="passClose" type="button">✕</button></header>
       <div class="passSummary">
-        <div class="passProgressCard"><div class="passProgressTop"><span id="passPointsText">0 punktów</span><span id="passTierBadge" class="passTierBadge">BEZPŁATNY</span></div><div class="passProgressBar"><div id="passProgressFill" class="passProgressFill"></div></div><div id="passNextText" class="passRewardState">Ładowanie postępu…</div></div>
+        <div class="passProgressCard"><div class="passProgressTop"><span id="passPointsText">0 pucharków</span><span id="passTierBadge" class="passTierBadge">BEZPŁATNY</span></div><div class="passProgressBar"><div id="passProgressFill" class="passProgressFill"></div></div><div id="passNextText" class="passRewardState">Ładowanie postępu…</div></div>
         <div class="passBuyCard"><b>ODBLOCKUJ DODATKOWE NAGRODY</b><div class="passBuyRow"><button id="passBuyVipBtn" class="passBuyBtn vip" type="button">ARENA KARNET VIP • 13 ZŁ</button><button id="passBuyVipPlusBtn" class="passBuyBtn vipPlus" type="button">ARENA KARNET VIP+ • 21 ZŁ</button><button id="passClaimAllBtn" class="passClaimAll" type="button">ODBIERZ WSZYSTKIE</button></div></div>
       </div>
       <div id="passMessage" aria-live="polite"></div>
-      <div class="passLegend"><b>Bezpłatny:</b> nagroda co 2000 punktów. <b>VIP i VIP+:</b> poziom co 3000 punktów. VIP daje lepszą nagrodę co 4 poziomy, a VIP+ daje nagrodę na każdym z 20 poziomów i automatycznie obejmuje również nagrody VIP.</div>
-      <div class="passScroller"><div class="passTracksWrap"><div class="passTrackLabels"><div class="passTrackLabel spacer"></div><div class="passTrackLabel">BEZPŁATNY<br>CO 2000 ⭐</div><div class="passTrackLabel vip">VIP<br>13 ZŁ</div><div class="passTrackLabel vip_plus">VIP+<br>21 ZŁ</div></div><div id="passGrid" class="passGrid"></div></div></div>
+      <div class="passLegend"><b>Wszystkie tory:</b> kolejny poziom odblokowuje się co 40 pucharków. VIP daje lepszą nagrodę co 4 poziomy, a VIP+ daje nagrodę na każdym z 20 poziomów i automatycznie obejmuje również nagrody VIP.</div>
+      <div class="passScroller"><div class="passTracksWrap"><div class="passTrackLabels"><div class="passTrackLabel spacer"></div><div class="passTrackLabel">BEZPŁATNY<br>CO 40 🏆</div><div class="passTrackLabel vip">VIP<br>13 ZŁ</div><div class="passTrackLabel vip_plus">VIP+<br>21 ZŁ</div></div><div id="passGrid" class="passGrid"></div></div></div>
     </section>
   </div>
 
@@ -1043,6 +1043,6 @@
 </script>
 
 
-<script src="game.js?v=arena-karnet-vip-mobile-v13"></script>
+<script src="game.js?v=arena-karnet-40-pucharkow-v14"></script>
 </body>
 </html>

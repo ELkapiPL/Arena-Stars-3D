@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-window.__arenaBuild='arena-karnet-vip-mobile-v13';
+window.__arenaBuild='arena-karnet-40-pucharkow-v14';
 
 const canvas = document.getElementById('game');
 const earlyMobileHint=((navigator.maxTouchPoints||0)>0&&matchMedia('(pointer: coarse)').matches)||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
@@ -279,7 +279,7 @@ function loadProgress(){
 let profile=loadProgress();
 profile.name=persistNickname(profile.name);
 let profileDirty=false,profileSyncBusy=false,profileChangeSeq=0,lastConfigRevision=0,backgroundSyncBusy=false;
-const CLIENT_VERSION='arena-karnet-vip-mobile-v13';
+const CLIENT_VERSION='arena-karnet-40-pucharkow-v14';
 function saveProgress(markDirty=true){try{profile.name=persistNickname(profile.name);localStorage.setItem(SAVE_KEY,JSON.stringify(profile));if(markDirty){profileDirty=true;profileChangeSeq++;}}catch(_){} }
 function getPlayerId(){
   try{let id=localStorage.getItem(PLAYER_ID_KEY);if(!id){id=(crypto.randomUUID?crypto.randomUUID():`gracz-${Date.now()}-${Math.random().toString(16).slice(2)}`);localStorage.setItem(PLAYER_ID_KEY,id);}return id;}
@@ -1420,14 +1420,14 @@ function passRewardCard(reward,track){
 function renderArenaPass(state){
   arenaPassState=state;if(!state||!ui.passGrid)return;
   const tier=state.tier||'free',tierLabels={free:'BEZPŁATNY',vip:'VIP',vip_plus:'VIP+'};
-  ui.passPointsText.textContent=`${Math.floor(state.points||0).toLocaleString('pl-PL')} punktów`;
+  ui.passPointsText.textContent=`${Math.floor(state.trophies||0).toLocaleString('pl-PL')} pucharków`;
   ui.passTierBadge.textContent=state.ownerBenefits?'VIP+ • WŁAŚCICIEL':tierLabels[tier];ui.passTierBadge.className=`passTierBadge ${tier}`;
-  const premiumLevel=Math.min(20,Number(state.premiumLevel)||0),progress=premiumLevel>=20?100:Math.max(0,Math.min(100,((Number(state.points)||0)%3000)/3000*100));ui.passProgressFill.style.width=`${progress}%`;
-  ui.passNextText.textContent=premiumLevel>=20?'Wszystkie poziomy VIP/VIP+ odblokowane.':`Następny poziom VIP/VIP+: ${(Number(state.nextPremium)||3000).toLocaleString('pl-PL')} punktów • bezpłatny poziom: ${Number(state.freeLevel)||0}/20`;
+  const premiumLevel=Math.min(20,Number(state.premiumLevel)||0),progress=premiumLevel>=20?100:Math.max(0,Math.min(100,((Number(state.trophies)||0)%40)/40*100));ui.passProgressFill.style.width=`${progress}%`;
+  ui.passNextText.textContent=premiumLevel>=20?'Wszystkie poziomy karnetu odblokowane.':`Następny poziom: ${(Number(state.nextPremium)||40).toLocaleString('pl-PL')} pucharków • poziom: ${Number(state.freeLevel)||0}/20`;
   ui.passBuyVipBtn.disabled=passTierRank(tier)>=1;ui.passBuyVipPlusBtn.disabled=passTierRank(tier)>=2;
   ui.passBuyVipBtn.textContent=passTierRank(tier)>=1?'VIP AKTYWNY':'ARENA KARNET VIP • 13 ZŁ';ui.passBuyVipPlusBtn.textContent=passTierRank(tier)>=2?'VIP+ AKTYWNY':'ARENA KARNET VIP+ • 21 ZŁ';
   ui.passClaimAllBtn.disabled=!state.claimableCount;ui.passClaimAllBtn.textContent=state.claimableCount?`ODBIERZ WSZYSTKIE (${state.claimableCount})`:'BRAK NAGRÓD DO ODEBRANIA';
-  ui.passGrid.innerHTML=(state.levels||[]).map(row=>`<div class="passLevelColumn"><div class="passLevelHead"><span>POZIOM</span><strong>${row.level}</strong><small>${Number(row.premiumThreshold).toLocaleString('pl-PL')} ⭐</small></div>${passRewardCard(row.free,'free')}${passRewardCard(row.vip,'vip')}${passRewardCard(row.vip_plus,'vip_plus')}</div>`).join('');
+  ui.passGrid.innerHTML=(state.levels||[]).map(row=>`<div class="passLevelColumn"><div class="passLevelHead"><span>POZIOM</span><strong>${row.level}</strong><small>${Number(row.premiumThreshold).toLocaleString('pl-PL')} 🏆</small></div>${passRewardCard(row.free,'free')}${passRewardCard(row.vip,'vip')}${passRewardCard(row.vip_plus,'vip_plus')}</div>`).join('');
   ui.passGrid.querySelectorAll('[data-pass-track]').forEach(button=>button.addEventListener('click',()=>claimArenaPass({track:button.dataset.passTrack,level:Number(button.dataset.passLevel)})));
 }
 async function loadArenaPass(){if(arenaPassBusy||!currentAccount)return;arenaPassBusy=true;try{const state=await api('/api/pass/status');renderArenaPass(state);}catch(e){setPassMessage(e?.message||'Nie udało się wczytać Arena Karnetu.',true);}finally{arenaPassBusy=false;}}
