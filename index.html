@@ -244,6 +244,67 @@
     .chatUser:not(.online):after{content:'OFFLINE';margin-left:auto;color:#8fa2c2;font-size:8px;font-weight:1000}
     .chatUser.online:after{content:'ONLINE';margin-left:auto;color:#65f1aa;font-size:8px;font-weight:1000}
 
+
+    /* ===== WERSJA MOBILNA: sterowanie dwiema gałkami i układ poziomy ===== */
+    #mobileControls,#rotatePhoneOverlay{display:none}
+    #mobileControls{position:fixed;inset:0;z-index:4;pointer-events:none;touch-action:none;user-select:none;-webkit-user-select:none}
+    .mobileStick{position:absolute;width:clamp(88px,22vh,126px);height:clamp(88px,22vh,126px);border-radius:50%;pointer-events:auto;touch-action:none;background:rgba(7,14,28,.30);border:2px solid rgba(255,255,255,.22);box-shadow:inset 0 0 0 10px rgba(255,255,255,.035),0 8px 24px rgba(0,0,0,.22);backdrop-filter:blur(3px)}
+    .mobileStickKnob{position:absolute;left:50%;top:50%;width:48%;height:48%;transform:translate(-50%,-50%);border-radius:50%;background:rgba(188,217,255,.48);border:2px solid rgba(255,255,255,.50);box-shadow:0 4px 14px rgba(0,0,0,.30);transition:transform .035s linear}
+    .mobileStickLabel{position:absolute;inset:auto 0 10px;text-align:center;font-size:10px;font-weight:1000;letter-spacing:.09em;color:rgba(255,255,255,.72);pointer-events:none}
+    #mobileMoveStick{left:max(18px,calc(env(safe-area-inset-left) + 10px));bottom:max(18px,calc(env(safe-area-inset-bottom) + 10px))}
+    #mobileAttackStick{right:max(18px,calc(env(safe-area-inset-right) + 10px));bottom:max(18px,calc(env(safe-area-inset-bottom) + 10px));background:rgba(123,12,27,.38);border-color:rgba(255,113,126,.52)}
+    #mobileAttackStick .mobileStickKnob{background:rgba(239,49,70,.72);border-color:rgba(255,196,201,.78);box-shadow:0 0 22px rgba(255,52,74,.34)}
+    #mobileAttackStick.firing{background:rgba(173,14,34,.54);box-shadow:inset 0 0 0 10px rgba(255,85,98,.08),0 0 28px rgba(255,47,73,.28)}
+    .mobilePowerBtn{--charge:0deg;position:absolute;width:clamp(58px,14vh,78px);height:clamp(58px,14vh,78px);border-radius:50%;pointer-events:auto;touch-action:none;border:2px solid rgba(255,255,255,.38);color:#fff;font-size:10px;font-weight:1000;letter-spacing:.04em;text-shadow:0 2px 5px rgba(0,0,0,.75);box-shadow:0 7px 20px rgba(0,0,0,.30);overflow:hidden}
+    .mobilePowerBtn:before{content:"";position:absolute;inset:4px;border-radius:50%;background:rgba(9,14,28,.40);z-index:0}
+    .mobilePowerBtn:after{content:"";position:absolute;inset:0;border-radius:50%;background:conic-gradient(rgba(255,255,255,.78) var(--charge),rgba(255,255,255,.10) 0);opacity:.44;z-index:-1}
+    .mobilePowerBtn span{position:relative;z-index:1}
+    #mobileSuperBtn{right:max(128px,calc(env(safe-area-inset-right) + 120px));bottom:max(20px,calc(env(safe-area-inset-bottom) + 12px));background:rgba(205,157,4,.56)}
+    #mobileHyperBtn{right:max(114px,calc(env(safe-area-inset-right) + 106px));bottom:max(100px,calc(env(safe-area-inset-bottom) + 92px));width:clamp(52px,12vh,68px);height:clamp(52px,12vh,68px);background:rgba(102,38,155,.56)}
+    #mobileSuperBtn.ready{background:#ffd428;color:#2d2200;border-color:#fff4a3;box-shadow:0 0 18px rgba(255,219,48,.92),0 0 42px rgba(255,190,20,.45);animation:mobileReadyPulse 1s ease-in-out infinite alternate}
+    #mobileHyperBtn.ready{background:#a837f2;border-color:#e8b6ff;box-shadow:0 0 18px rgba(191,68,255,.95),0 0 42px rgba(143,36,255,.48);animation:mobileReadyPulse 1s ease-in-out infinite alternate}
+    #mobileHyperBtn.active{background:#e541ff;border-color:#fff;box-shadow:0 0 26px rgba(235,66,255,1),0 0 52px rgba(113,36,255,.72)}
+    .mobilePowerBtn:active{transform:scale(.92)}
+    @keyframes mobileReadyPulse{from{filter:brightness(1)}to{filter:brightness(1.28)}}
+
+    #rotatePhoneOverlay{position:fixed;inset:0;z-index:10050;place-items:center;padding:24px;background:radial-gradient(circle at 50% 42%,#253066,#090d20 70%);color:#fff;text-align:center}
+    .rotatePhoneCard{width:min(420px,92vw);padding:28px 22px;border-radius:24px;background:rgba(8,14,34,.90);border:1px solid rgba(255,255,255,.18);box-shadow:0 24px 70px rgba(0,0,0,.48)}
+    .rotatePhoneIcon{font-size:68px;display:block;animation:rotateHint 1.7s ease-in-out infinite alternate}
+    .rotatePhoneCard h2{margin:12px 0 8px;font-size:24px}.rotatePhoneCard p{margin:0 0 18px;color:#c4d0ea;line-height:1.45}
+    #rotateLockBtn{border:0;border-radius:14px;padding:12px 18px;background:linear-gradient(180deg,#67e9ff,#3887ff);color:#061329;font-weight:1000;cursor:pointer}
+    @keyframes rotateHint{from{transform:rotate(0deg)}to{transform:rotate(90deg)}}
+
+    body.mobile-device.mobile-portrait #rotatePhoneOverlay{display:grid}
+    body.mobile-device:not(.lobby-mode):not(.mobile-portrait) #mobileControls{display:block}
+    body.mobile-device:not(.lobby-mode) #crosshair,body.mobile-device:not(.lobby-mode) #controls{display:none!important}
+    body.mobile-device:not(.lobby-mode) #hud{font-size:10px}
+    body.mobile-device:not(.lobby-mode) .top{left:max(7px,env(safe-area-inset-left));right:max(7px,env(safe-area-inset-right));top:max(6px,env(safe-area-inset-top));gap:6px}
+    body.mobile-device:not(.lobby-mode) .top>.card:last-child{display:none}
+    body.mobile-device:not(.lobby-mode) #stats{min-width:112px;padding:6px 8px;border-radius:10px;font-size:9px;line-height:1.35;background:rgba(8,14,29,.54);backdrop-filter:blur(4px)}
+    body.mobile-device.duel-mode #stats{display:none}
+    body.mobile-device.duel-mode #duelOpponentHud{display:block;left:max(8px,env(safe-area-inset-left));right:auto;top:max(7px,env(safe-area-inset-top));transform:none;min-width:152px;max-width:31vw;padding:6px 8px;border-radius:10px;text-align:left;background:rgba(8,14,29,.56)}
+    body.mobile-device.duel-mode .duelHudName{font-size:10px}.mobile-device.duel-mode .duelHudHp{font-size:9px;margin-top:2px}
+    body.mobile-device:not(.lobby-mode) #shop{left:max(7px,env(safe-area-inset-left));top:74px;width:150px;padding:7px;border-radius:10px;background:rgba(8,14,29,.48);opacity:.84}
+    body.mobile-device:not(.lobby-mode) #shopTitle{font-size:8px;margin-bottom:4px}
+    body.mobile-device:not(.lobby-mode) .upgradeBtn{padding:5px 6px;margin:4px 0;border-radius:8px;font-size:9px;box-shadow:0 2px 0 #101d36}
+    body.mobile-device:not(.lobby-mode) .upgradeName{font-size:9px}.mobile-device:not(.lobby-mode) .upgradeMeta{font-size:8px}
+    body.mobile-device:not(.lobby-mode) #playerHudStack{position:absolute;right:max(8px,env(safe-area-inset-right));top:max(7px,env(safe-area-inset-top));bottom:auto;width:clamp(155px,24vw,190px);gap:5px;pointer-events:none}
+    body.mobile-device:not(.lobby-mode) #playerHudStack #ammoWrap,body.mobile-device:not(.lobby-mode) #playerHudStack #healthWrap{position:relative;inset:auto;width:100%;padding:5px 7px;border-radius:10px;background:rgba(8,14,29,.52);border-color:rgba(255,255,255,.12);box-shadow:none;backdrop-filter:blur(4px);opacity:.88}
+    body.mobile-device:not(.lobby-mode) #playerHudStack .labelRow{font-size:8px;margin:0 1px 2px}.mobile-device:not(.lobby-mode) #playerHudStack .small{font-size:7px!important}
+    body.mobile-device:not(.lobby-mode) #playerHudStack .bar{height:7px;border-width:1px}.mobile-device:not(.lobby-mode) #playerHudStack #ammoBar,.mobile-device:not(.lobby-mode) #playerHudStack #superBar,.mobile-device:not(.lobby-mode) #playerHudStack #hyperBar{height:6px;margin-top:3px}
+    body.mobile-device:not(.lobby-mode) #playerHudStack .labelRow[style]{margin-top:3px!important}
+    body.mobile-device:not(.lobby-mode) #centerMsg{top:13%;font-size:clamp(17px,4.2vh,25px);max-width:54vw}
+
+    @media (pointer:coarse) and (orientation:landscape) and (max-height:520px){
+      body.mobile-device:not(.lobby-mode) #shop{top:62px;width:140px}
+      body.mobile-device:not(.lobby-mode) #stats{font-size:8px;min-width:102px}
+      body.mobile-device:not(.lobby-mode) #playerHudStack{width:160px}
+      .mobileStick{width:88px;height:88px}
+      .mobilePowerBtn{width:58px;height:58px;font-size:8px}
+      #mobileHyperBtn{width:52px;height:52px;right:max(106px,calc(env(safe-area-inset-right) + 98px));bottom:max(92px,calc(env(safe-area-inset-bottom) + 84px))}
+      #mobileSuperBtn{right:max(116px,calc(env(safe-area-inset-right) + 108px))}
+    }
+
   </style>
 </head>
 <body class="lobby-mode">
@@ -266,6 +327,17 @@
       <div id="healthWrap" class="card"><div class="labelRow"><span>ZDROWIE</span><span id="healthText">150 / 150</span></div><div class="bar"><div id="healthFill" class="fill"></div></div><div class="labelRow" style="margin-top:7px"><span>SUPER <span class="small">[Q] • ładowanie 60% wolniejsze</span></span><span id="superText">0%</span></div><div id="superBar" class="bar"><div id="superFill" class="fill" style="width:0%"></div></div><div class="labelRow" style="margin-top:7px"><span>HIPERDOŁADOWANIE <span class="small">[E] • 9 s</span></span><span id="hyperText">0%</span></div><div id="hyperBar" class="bar"><div id="hyperFill" class="fill" style="width:0%"></div></div></div>
     </div>
     <div id="controls" class="card"><kbd>WASD</kbd> ruch<br><kbd>MYSZ</kbd> celowanie i strzał<br><span class="small">Magazynek: 30 • przeładowanie: 1,5 s</span><br><kbd>Q</kbd> superatak<br><kbd>E</kbd> hiperdoładowanie (9 s)<br><kbd>1/2/3</kbd> kup stałe ulepszenie<br><kbd>R</kbd> restart</div>
+  </div>
+
+
+  <div id="mobileControls" aria-label="Sterowanie dotykowe">
+    <div id="mobileMoveStick" class="mobileStick" aria-label="Gałka ruchu"><div id="mobileMoveKnob" class="mobileStickKnob"></div><div class="mobileStickLabel">RUCH</div></div>
+    <button id="mobileHyperBtn" class="mobilePowerBtn" type="button" aria-label="Hiperdoładowanie"><span>HIPER</span></button>
+    <button id="mobileSuperBtn" class="mobilePowerBtn" type="button" aria-label="Superatak"><span>SUPER</span></button>
+    <div id="mobileAttackStick" class="mobileStick" aria-label="Gałka ataku"><div id="mobileAttackKnob" class="mobileStickKnob"></div><div class="mobileStickLabel">ATAK</div></div>
+  </div>
+  <div id="rotatePhoneOverlay" role="dialog" aria-modal="true" aria-label="Obróć telefon poziomo">
+    <div class="rotatePhoneCard"><span class="rotatePhoneIcon">📱</span><h2>Obróć telefon poziomo</h2><p>Gra na telefonie działa tylko w układzie poziomym. Obróć urządzenie, aby zobaczyć całą arenę i sterowanie.</p><button id="rotateLockBtn" type="button">WŁĄCZ TRYB POZIOMY</button></div>
   </div>
 
   <div id="overlay">
@@ -434,6 +506,6 @@
   </div>
 
   <div id="error"></div>
-  <script src="game.js?v=admin-ban-sync-zip-v5"></script>
+  <script src="game.js?v=mobile-landscape-dual-stick-v1"></script>
 </body>
 </html>

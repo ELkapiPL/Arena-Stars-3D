@@ -16,7 +16,7 @@ const ui = {
   score:$('score'), wave:$('wave'), kills:$('kills'), coins:$('coins'), trophies:$('trophies'), healthText:$('healthText'), healthFill:$('healthFill'), ammoText:$('ammoText'), ammoFill:$('ammoFill'),
   superText:$('superText'), superFill:$('superFill'), hyperText:$('hyperText'), hyperFill:$('hyperFill'), finalScore:$('finalScore'), finalKills:$('finalKills'), finalCoins:$('finalCoins'), finalTrophies:$('finalTrophies'),
   savedTrophies:$('savedTrophies'), savedPoints:$('savedPoints'), savedCoins:$('savedCoins'), skinNotice:$('skinNotice'), versionOneBtn:$('versionOneBtn'), versionNotice:$('versionNotice'), rankingBody:$('rankingBody'), rankingPosition:$('rankingPosition'), rankingLive:$('rankingLive'), rankingTotal:$('rankingTotal'), nicknameInput:$('nicknameInput'), saveNameBtn:$('saveNameBtn'), onlineStatus:$('onlineStatus'), onlineHudCount:$('onlineHudCount'), modeBtn:$('modeBtn'), modeMenu:$('modeMenu'), soloModeOption:$('soloModeOption'), duelModeOption:$('duelModeOption'), duelQueueView:$('duelQueueView'), duelQueueText:$('duelQueueText'), duelCancelBtn:$('duelCancelBtn'), duelOpponentName:$('duelOpponentName'), duelOpponentHp:$('duelOpponentHp'), hudModeText:$('hudModeText'), gameOverTitle:$('gameOverTitle'), gameOverBadge:$('gameOverBadge'), endStats:$('endStats'),
-  crosshair:$('crosshair'), centerMsg:$('centerMsg'),
+  crosshair:$('crosshair'), centerMsg:$('centerMsg'), mobileControls:$('mobileControls'), mobileMoveStick:$('mobileMoveStick'), mobileMoveKnob:$('mobileMoveKnob'), mobileAttackStick:$('mobileAttackStick'), mobileAttackKnob:$('mobileAttackKnob'), mobileSuperBtn:$('mobileSuperBtn'), mobileHyperBtn:$('mobileHyperBtn'), rotatePhoneOverlay:$('rotatePhoneOverlay'), rotateLockBtn:$('rotateLockBtn'),
   upgradeButtons:[...document.querySelectorAll('[data-upgrade]')],
   persistentLevelEls:[...document.querySelectorAll('[data-persistent-level]')],
   skinCards:[...document.querySelectorAll('[data-skin]')]
@@ -78,6 +78,69 @@ function draw(m,x,y,z,sx,sy,sz,rot,color,alpha=1){M4.identity(model);M4.translat
 // ---------- Świat gry ----------
 const ARENA=18;
 const keys={}; let mouse={x:innerWidth/2,y:innerHeight/2,down:false,worldX:0,worldZ:-4};
+
+// ---------- Telefon / tablet ----------
+const deviceQuery=new URLSearchParams(location.search);
+const forcedMobile=deviceQuery.get('mobile')==='1';
+const forcedDesktop=deviceQuery.get('desktop')==='1';
+const coarsePointer=matchMedia('(pointer: coarse)');
+const isMobileDevice=!forcedDesktop&&(forcedMobile||((navigator.maxTouchPoints||0)>0&&coarsePointer.matches)||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent));
+const mobileInput={moveX:0,moveZ:0,aimX:0,aimY:-1,movePointer:null,attackPointer:null};
+let mobilePortraitBlocked=false;
+function resetMobileInput(){mobileInput.moveX=0;mobileInput.moveZ=0;mobileInput.movePointer=null;mobileInput.attackPointer=null;mouse.down=false;ui.mobileMoveKnob?.style.setProperty('transform','translate(-50%,-50%)');ui.mobileAttackKnob?.style.setProperty('transform','translate(-50%,-50%)');ui.mobileAttackStick?.classList.remove('firing');}
+function updateMobileOrientation(){
+  if(!isMobileDevice)return;
+  const portrait=innerHeight>innerWidth;
+  mobilePortraitBlocked=portrait;
+  document.body.classList.add('mobile-device');
+  document.body.classList.toggle('mobile-portrait',portrait);
+  if(portrait)resetMobileInput();
+}
+async function requestLandscapeOrientation(fullscreen=false){
+  if(!isMobileDevice)return;
+  try{if(fullscreen&&!document.fullscreenElement&&document.documentElement.requestFullscreen)await document.documentElement.requestFullscreen({navigationUI:'hide'});}catch(_){}
+  try{if(screen.orientation?.lock)await screen.orientation.lock('landscape');}catch(_){}
+  updateMobileOrientation();
+}
+function setStickPosition(stick,knob,clientX,clientY){
+  const r=stick.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2,max=r.width*.34;
+  let dx=clientX-cx,dy=clientY-cy,dist=Math.hypot(dx,dy);
+  if(dist>max){dx=dx/dist*max;dy=dy/dist*max;dist=max;}
+  knob.style.transform=`translate(calc(-50% + ${dx}px),calc(-50% + ${dy}px))`;
+  const strength=Math.min(1,dist/max),dead=.10;
+  if(strength<dead)return {x:0,y:0,strength:0};
+  return {x:dx/max,y:dy/max,strength};
+}
+function updateMobileAimScreen(){
+  if(!isMobileDevice)return;
+  const reach=Math.max(130,Math.min(innerWidth*.34,innerHeight*.72));
+  mouse.x=innerWidth/2+mobileInput.aimX*reach;
+  mouse.y=innerHeight/2+mobileInput.aimY*reach;
+}
+function setupMobileControls(){
+  if(!isMobileDevice)return;
+  document.body.classList.add('mobile-device');
+  const move=ui.mobileMoveStick,moveKnob=ui.mobileMoveKnob,attack=ui.mobileAttackStick,attackKnob=ui.mobileAttackKnob;
+  const moveUpdate=e=>{if(e.pointerId!==mobileInput.movePointer)return;const v=setStickPosition(move,moveKnob,e.clientX,e.clientY);mobileInput.moveX=v.x;mobileInput.moveZ=v.y;e.preventDefault();};
+  move?.addEventListener('pointerdown',e=>{if(mobileInput.movePointer!==null)return;mobileInput.movePointer=e.pointerId;move.setPointerCapture(e.pointerId);moveUpdate(e);e.preventDefault();});
+  move?.addEventListener('pointermove',moveUpdate);
+  const endMove=e=>{if(e.pointerId!==mobileInput.movePointer)return;mobileInput.movePointer=null;mobileInput.moveX=0;mobileInput.moveZ=0;moveKnob.style.transform='translate(-50%,-50%)';e.preventDefault();};
+  move?.addEventListener('pointerup',endMove);move?.addEventListener('pointercancel',endMove);move?.addEventListener('lostpointercapture',endMove);
+
+  const attackUpdate=e=>{if(e.pointerId!==mobileInput.attackPointer)return;const v=setStickPosition(attack,attackKnob,e.clientX,e.clientY);if(v.strength>.10){mobileInput.aimX=v.x;mobileInput.aimY=v.y;}mouse.down=true;updateMobileAimScreen();e.preventDefault();};
+  attack?.addEventListener('pointerdown',e=>{if(mobileInput.attackPointer!==null)return;mobileInput.attackPointer=e.pointerId;attack.setPointerCapture(e.pointerId);attack.classList.add('firing');attackUpdate(e);playerShoot();e.preventDefault();});
+  attack?.addEventListener('pointermove',attackUpdate);
+  const endAttack=e=>{if(e.pointerId!==mobileInput.attackPointer)return;mobileInput.attackPointer=null;mouse.down=false;attack.classList.remove('firing');attackKnob.style.transform='translate(-50%,-50%)';e.preventDefault();};
+  attack?.addEventListener('pointerup',endAttack);attack?.addEventListener('pointercancel',endAttack);attack?.addEventListener('lostpointercapture',endAttack);
+
+  ui.mobileSuperBtn?.addEventListener('pointerdown',e=>{e.preventDefault();superAttack();if(navigator.vibrate&&(player?.super||0)<1)navigator.vibrate(25);});
+  ui.mobileHyperBtn?.addEventListener('pointerdown',e=>{e.preventDefault();activateHyper();if(navigator.vibrate&&(player?.hyperActive||0)>0)navigator.vibrate([25,25,25]);});
+  ui.rotateLockBtn?.addEventListener('click',()=>requestLandscapeOrientation(true));
+  addEventListener('resize',updateMobileOrientation,{passive:true});
+  addEventListener('orientationchange',()=>setTimeout(updateMobileOrientation,120),{passive:true});
+  document.addEventListener('touchmove',e=>{if(running&&!document.body.classList.contains('lobby-mode'))e.preventDefault();},{passive:false});
+  updateMobileOrientation();
+}
 const BASE_HP=150,BASE_SPEED=8.2,BASE_FIRE_COOLDOWN=.19,MAG_SIZE=30,RELOAD_TIME=1.5,UPGRADE_COSTS=[100,200,400,800,1600];
 const SUPER_CHARGE_MULTIPLIER=.4; // ładowanie jest o 60% wolniejsze
 const HYPER_CHARGE_RATIO=3,HYPER_DURATION=9,HYPER_SPEED_MULT=1.05,HYPER_FIRE_MULT=1.04,HYPER_DAMAGE_MULT=.93;
@@ -130,7 +193,7 @@ function loadProgress(){
 let profile=loadProgress();
 profile.name=persistNickname(profile.name);
 let profileDirty=false,profileSyncBusy=false,profileChangeSeq=0,lastConfigRevision=0,backgroundSyncBusy=false;
-const CLIENT_VERSION='duel-points-owner-free-v5';
+const CLIENT_VERSION='mobile-landscape-dual-stick-v1';
 function saveProgress(markDirty=true){try{profile.name=persistNickname(profile.name);localStorage.setItem(SAVE_KEY,JSON.stringify(profile));if(markDirty){profileDirty=true;profileChangeSeq++;}}catch(_){} }
 function getPlayerId(){
   try{let id=localStorage.getItem(PLAYER_ID_KEY);if(!id){id=(crypto.randomUUID?crypto.randomUUID():`gracz-${Date.now()}-${Math.random().toString(16).slice(2)}`);localStorage.setItem(PLAYER_ID_KEY,id);}return id;}
@@ -591,6 +654,7 @@ function updateLocalDuelBot(dt){
 }
 function updateDuel(dt){
   if(!duelActive||!player)return;
+  if(isMobileDevice&&mobilePortraitBlocked){mouse.down=false;return;}
   player.fire=Math.max(0,player.fire-dt);
   if(player.reload>0){player.reload=Math.max(0,player.reload-dt);if(player.reload===0){player.ammo=MAG_SIZE;showMessage('AMUNICJA GOTOWA!');}updateUI();}
   if((player.hyperActive||0)>0){player.hyperActive=Math.max(0,player.hyperActive-dt);if(player.hyperActive===0)showMessage('HIPERDOŁADOWANIE ZAKOŃCZONE');updateUI();}
@@ -605,7 +669,7 @@ function updateDuel(dt){
       const n=Math.max(1,Math.ceil(duelStartIn));showMessage(`START ZA ${n}`);
     }
   }else if(duelMatchStatus==='playing'){
-    let dx=(keys.KeyD?1:0)-(keys.KeyA?1:0),dz=(keys.KeyS?1:0)-(keys.KeyW?1:0);
+    let dx=isMobileDevice?mobileInput.moveX:(keys.KeyD?1:0)-(keys.KeyA?1:0),dz=isMobileDevice?mobileInput.moveZ:(keys.KeyS?1:0)-(keys.KeyW?1:0);
     if(duelMirrorView){dx=-dx;dz=-dz;}
     const len=Math.hypot(dx,dz);
     if(len){
@@ -799,9 +863,9 @@ function commitRun(){
   saveProgress();updateLobby();syncProfile().then(fetchRanking);
   recordMatchResult({mode:'solo',result:'finished',pointsDelta,trophiesDelta,coinsDelta,durationSeconds:survivalTime,details:{kills,wave,score}});
 }
-function showLobby(leaveDuel=true){if(leaveDuel&&(duelActive||duelSearching||duelMatchId))stopDuelSession(true);running=false;rankingCenterOnNextRender=true;document.body.classList.add('lobby-mode');document.body.classList.remove('duel-mode');ui.lobbyView.style.display='block';ui.duelQueueView.style.display='none';ui.gameOverView.style.display='none';ui.overlay.style.display='grid';if(ui.hudModeText)ui.hudModeText.textContent='Online';if(ui.gameOverBadge)ui.gameOverBadge.textContent='KONIEC MECZU • POSTĘP ZAPISANY';if(ui.gameOverTitle)ui.gameOverTitle.innerHTML='ROBOTY CIĘ<br>POKONAŁY';updateLobby();fetchRanking();}
+function showLobby(leaveDuel=true){if(leaveDuel&&(duelActive||duelSearching||duelMatchId))stopDuelSession(true);running=false;resetMobileInput();rankingCenterOnNextRender=true;document.body.classList.add('lobby-mode');document.body.classList.remove('duel-mode');ui.lobbyView.style.display='block';ui.duelQueueView.style.display='none';ui.gameOverView.style.display='none';ui.overlay.style.display='grid';if(ui.hudModeText)ui.hudModeText.textContent='Online';if(ui.gameOverBadge)ui.gameOverBadge.textContent='KONIEC MECZU • POSTĘP ZAPISANY';if(ui.gameOverTitle)ui.gameOverTitle.innerHTML='ROBOTY CIĘ<br>POKONAŁY';updateLobby();fetchRanking();}
 function startSoloGame(){if(running)commitRun();reset();running=true;document.body.classList.remove('lobby-mode');document.body.classList.remove('duel-mode');ui.lobbyView.style.display='block';ui.gameOverView.style.display='none';updateUI();ui.overlay.style.display='none';last=performance.now();}
-function startGame(){const base=selectedModeBase();if(base==='solo'&&gameConfig.soloEnabled!==false){startSoloGame();return;}if(base==='duel'&&gameConfig.duelEnabled!==false){startDuelQueue();return;}showMessage('TEN TRYB JEST WYŁĄCZONY');toggleModeMenu(true);}
+function startGame(){if(isMobileDevice)requestLandscapeOrientation(false);resetMobileInput();const base=selectedModeBase();if(base==='solo'&&gameConfig.soloEnabled!==false){startSoloGame();return;}if(base==='duel'&&gameConfig.duelEnabled!==false){startDuelQueue();return;}showMessage('TEN TRYB JEST WYŁĄCZONY');toggleModeMenu(true);}
 function gameOver(){running=false;commitRun();if(ui.gameOverBadge)ui.gameOverBadge.textContent='KONIEC MECZU • POSTĘP ZAPISANY';if(ui.gameOverTitle)ui.gameOverTitle.innerHTML='ROBOTY CIĘ<br>POKONAŁY';if(ui.endStats)ui.endStats.innerHTML='<div class="endStat">Punkty ⭐<span id="finalScore">0</span></div><div class="endStat">Pokonani 🤖<span id="finalKills">0</span></div><div class="endStat">Monety 🪙<span id="finalCoins">0</span></div><div class="endStat">Pucharki 🏆<span id="finalTrophies">0</span></div>';ui.finalScore=$('finalScore');ui.finalKills=$('finalKills');ui.finalCoins=$('finalCoins');ui.finalTrophies=$('finalTrophies');ui.finalScore.textContent=score;ui.finalKills.textContent=kills;ui.finalCoins.textContent=runCoins;ui.finalTrophies.textContent=trophies;ui.gameOverView.querySelector('p').textContent='Wybierz następną akcję.';ui.lobbyView.style.display='none';ui.gameOverView.style.display='grid';document.body.classList.add('lobby-mode');ui.overlay.style.display='block';}
 function showMessage(t){ui.centerMsg.textContent=t;ui.centerMsg.style.opacity='1';messageClock=1.4;}
 function updateUI(){
@@ -813,6 +877,8 @@ function updateUI(){
   ui.hyperText.textContent=hyperActive?`${player.hyperActive.toFixed(1)} s`:`${Math.floor(hyperValue)}%`;
   ui.hyperFill.style.width=hyperActive?`${player.hyperActive/HYPER_DURATION*100}%`:`${Math.min(100,hyperValue)}%`;
   ui.hyperFill.classList.toggle('active',hyperActive);
+  if(ui.mobileSuperBtn){const superValue=Math.max(0,Math.min(100,player?.super||0));ui.mobileSuperBtn.style.setProperty('--charge',`${superValue*3.6}deg`);ui.mobileSuperBtn.classList.toggle('ready',superValue>=100);ui.mobileSuperBtn.setAttribute('aria-label',superValue>=100?'Superatak gotowy':'Superatak '+Math.floor(superValue)+' procent');}
+  if(ui.mobileHyperBtn){const hyperCharge=Math.max(0,Math.min(100,player?.hyper||0));ui.mobileHyperBtn.style.setProperty('--charge',`${hyperCharge*3.6}deg`);ui.mobileHyperBtn.classList.toggle('ready',hyperCharge>=100&&!hyperActive);ui.mobileHyperBtn.classList.toggle('active',hyperActive);ui.mobileHyperBtn.setAttribute('aria-label',hyperActive?'Hiperdoładowanie aktywne':(hyperCharge>=100?'Hiperdoładowanie gotowe':'Hiperdoładowanie '+Math.floor(hyperCharge)+' procent'));}
   for(const button of ui.upgradeButtons){
     const type=button.dataset.upgrade,level=upgrades[type]||0,cost=shopCost(UPGRADE_COSTS[level]);
     const levelEl=button.querySelector('[data-level]'),costEl=button.querySelector('[data-cost]');
@@ -876,10 +942,11 @@ function damagePlayer(d){if(player.inv>0)return;if((player.hyperActive||0)>0)d*=
 
 function update(dt){
   if(!running)return;
+  if(isMobileDevice&&mobilePortraitBlocked){mouse.down=false;return;}
   if(duelActive){updateDuel(dt);return;}
   survivalTime+=dt;const earnedTrophies=Math.floor(survivalTime/4);if(earnedTrophies>trophies){trophies=earnedTrophies;showMessage(`PUCHAREK ${trophies} 🏆`);updateUI();}
   player.fire=Math.max(0,player.fire-dt);if(player.reload>0){player.reload=Math.max(0,player.reload-dt);if(player.reload===0){player.ammo=MAG_SIZE;showMessage('AMUNICJA GOTOWA!');}updateUI();}player.inv=Math.max(0,player.inv-dt);player.regen=Math.max(0,player.regen-dt);const wasHyper=(player.hyperActive||0)>0;if(wasHyper){player.hyperActive=Math.max(0,player.hyperActive-dt);updateUI();if(player.hyperActive===0)showMessage('HIPERDOŁADOWANIE ZAKOŃCZONE');}if(player.regen<=0&&player.hp<player.maxHp){player.hp=Math.min(player.maxHp,player.hp+5*dt);updateUI();}
-  let dx=(keys.KeyD?1:0)-(keys.KeyA?1:0),dz=(keys.KeyS?1:0)-(keys.KeyW?1:0),l=Math.hypot(dx,dz);if(l){dx/=l;dz/=l;const moveSpeed=player.speed*((player.hyperActive||0)>0?HYPER_SPEED_MULT:1);player.x+=dx*moveSpeed*dt;player.z+=dz*moveSpeed*dt;resolve(player);}
+  let dx=isMobileDevice?mobileInput.moveX:(keys.KeyD?1:0)-(keys.KeyA?1:0),dz=isMobileDevice?mobileInput.moveZ:(keys.KeyS?1:0)-(keys.KeyW?1:0),l=Math.hypot(dx,dz);if(l){dx/=l;dz/=l;const moveSpeed=player.speed*((player.hyperActive||0)>0?HYPER_SPEED_MULT:1);player.x+=dx*moveSpeed*dt;player.z+=dz*moveSpeed*dt;resolve(player);}
   player.angle=Math.atan2(mouse.worldX-player.x,mouse.worldZ-player.z);if(mouse.down)playerShoot();
   waveClock+=dt;const target=Math.min(4+wave*2,22);spawnClock-=dt;if(spawnClock<=0&&enemies.length<target){spawnEnemy();spawnClock=Math.max(.35,1.35-wave*.055)*rnd(.75,1.2);}if(waveClock>24){wave++;waveClock=0;showMessage(`FALA ${wave}`);player.hp=Math.min(player.maxHp,player.hp+18);updateUI();}
 
@@ -913,7 +980,7 @@ function render(){
   // jest odwracane w updateDuel, więc W zawsze oznacza ruch w górę ekranu.
   if(duelActive&&duelMirrorView)M4.lookAt(view,[focusX-sx,20,focusZ-15-sz],[focusX,0,focusZ+1],[0,1,0]);
   else M4.lookAt(view,[focusX+sx,20,focusZ+15+sz],[focusX,0,focusZ-1],[0,1,0]);
-  M4.multiply(viewProj,proj,view);M4.invert(invVP,viewProj);screenToGround(mouse.x,mouse.y);
+  M4.multiply(viewProj,proj,view);M4.invert(invVP,viewProj);if(isMobileDevice)updateMobileAimScreen();screenToGround(mouse.x,mouse.y);
   gl.enable(gl.DEPTH_TEST);gl.enable(gl.CULL_FACE);gl.clearColor(.08,.14,.24,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.useProgram(program);gl.uniformMatrix4fv(loc.vp,false,viewProj);gl.uniform3f(loc.light,.45,-1,.35);
   // podłoże i delikatna kratka
   draw(mesh.cube,0,-.45,0,20,.45,20,0,[.20,.49,.38]);
@@ -961,6 +1028,8 @@ function render(){
   for(const p of particles)draw(mesh.cube,p.x,p.y,p.z,p.size,p.size,p.size,0,p.color,Math.max(0,p.life*2));
 }
 function loop(now){const dt=Math.min(.033,(now-last)/1000);last=now;update(dt);render();requestAnimationFrame(loop);}requestAnimationFrame(loop);
+
+setupMobileControls();
 
 addEventListener('keydown',e=>{keys[e.code]=true;if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();if(e.code==='KeyQ'&&!e.repeat)superAttack();if(e.code==='KeyE'&&!e.repeat)activateHyper();if(e.code==='KeyR'&&!e.repeat&&running)startGame();if(e.code==='Digit1'&&!e.repeat)buyUpgrade('move');if(e.code==='Digit2'&&!e.repeat)buyUpgrade('fire');if(e.code==='Digit3'&&!e.repeat)buyUpgrade('hp');});
 addEventListener('keyup',e=>keys[e.code]=false);
