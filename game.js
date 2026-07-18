@@ -193,13 +193,13 @@ function loadProgress(){
 let profile=loadProgress();
 profile.name=persistNickname(profile.name);
 let profileDirty=false,profileSyncBusy=false,profileChangeSeq=0,lastConfigRevision=0,backgroundSyncBusy=false;
-const CLIENT_VERSION='mobile-landscape-dual-stick-v1';
+const CLIENT_VERSION='auth-zip-sql-fix-v6';
 function saveProgress(markDirty=true){try{profile.name=persistNickname(profile.name);localStorage.setItem(SAVE_KEY,JSON.stringify(profile));if(markDirty){profileDirty=true;profileChangeSeq++;}}catch(_){} }
 function getPlayerId(){
   try{let id=localStorage.getItem(PLAYER_ID_KEY);if(!id){id=(crypto.randomUUID?crypto.randomUUID():`gracz-${Date.now()}-${Math.random().toString(16).slice(2)}`);localStorage.setItem(PLAYER_ID_KEY,id);}return id;}
   catch(_){return `gracz-${Date.now()}-${Math.random().toString(16).slice(2)}`;}
 }
-const playerId=getPlayerId();
+let playerId=getPlayerId();
 window.__arenaPlayerId=playerId;
 let ownerFreeShop=false;
 function shopCost(value){return ownerFreeShop?0:Math.max(0,Number(value)||0);}
@@ -1059,8 +1059,40 @@ function authMessage(text,bad=false){if(authUI.msg){authUI.msg.textContent=text|
 function showAccountBan(data){if(!authUI.overlay)return;authUI.overlay.classList.remove('hidden');authUI.card.style.display='none';authUI.banCard.style.display='block';authUI.banReason.textContent=data.banReason||'Blokada konta';const until=Number(data.bannedUntil)||0;authUI.banUntil.textContent=until?`Koniec blokady: ${new Date(until*1000).toLocaleString('pl-PL')}`:'Blokada aktywna';}
 function setAuthPane(name){document.querySelectorAll('.authTab').forEach(x=>x.classList.toggle('active',x.dataset.authTab===name));document.querySelectorAll('.authPane').forEach(x=>x.classList.toggle('active',x.dataset.authPane===name));authMessage('');}
 function applyServerProfile(serverProfile){if(!serverProfile)return;profile={...profile,...serverProfile,data:{...(profile.data||{}),...(serverProfile.data||{})},ownedSkins:{classic:true,cosmic:serverProfile.cosmicOwned===true},heroVersion1:serverProfile.heroVersion1===true,upgrades:{...profile.upgrades,...(serverProfile.upgrades||{})}};if(serverProfile.data?.mode)profile.mode=serverProfile.data.mode;walletCoins=profile.coins||0;saveProgress(false);}
-async function completeAccountLogin(data){currentAccount=data.account;if(!currentAccount)return;const accountId=currentAccount.playerId||currentAccount.id;if(accountId&&accountId!==playerId){localStorage.setItem(PLAYER_ID_KEY,accountId);location.reload();return;}ownerFreeShop=currentAccount.ownerBenefits===true;const adminButton=$('adminOpenBtn');if(adminButton){adminButton.hidden=!ownerFreeShop;adminButton.style.display=ownerFreeShop?'':'none';}profile.name=safePlayerName(currentAccount.username);persistNickname(profile.name);applyServerProfile(data.profile);if(ui.nicknameInput){ui.nicknameInput.value=profile.name;ui.nicknameInput.disabled=true;}if(ui.saveNameBtn){ui.saveNameBtn.disabled=true;ui.saveNameBtn.textContent='NAZWA KONTA';}if(authUI.accountUsername)authUI.accountUsername.textContent=currentAccount.username;authUI.overlay.classList.add('hidden');authUI.card.style.display='block';authUI.banCard.style.display='none';authFinished=true;updateLobby();syncProfile().then(fetchRanking);startChatPolling();}
+async function completeAccountLogin(data){
+  currentAccount=data?.account;
+  if(!currentAccount)return;
+  const accountId=currentAccount.playerId||currentAccount.id;
+  if(accountId&&accountId!==playerId){
+    playerId=accountId;
+    window.__arenaPlayerId=playerId;
+    try{localStorage.setItem(PLAYER_ID_KEY,accountId);}catch(_){}
+  }
+  ownerFreeShop=currentAccount.ownerBenefits===true;
+  const adminButton=$('adminOpenBtn');
+  if(adminButton){adminButton.hidden=!ownerFreeShop;adminButton.style.display=ownerFreeShop?'':'none';}
+  profile.name=safePlayerName(currentAccount.username);
+  persistNickname(profile.name);
+  applyServerProfile(data.profile);
+  if(ui.nicknameInput){ui.nicknameInput.value=profile.name;ui.nicknameInput.disabled=true;}
+  if(ui.saveNameBtn){ui.saveNameBtn.disabled=true;ui.saveNameBtn.textContent='NAZWA KONTA';}
+  if(authUI.accountUsername)authUI.accountUsername.textContent=currentAccount.username;
+  authUI.overlay.classList.add('hidden');
+  authUI.card.style.display='block';
+  authUI.banCard.style.display='none';
+  authFinished=true;
+  updateLobby();
+  syncProfile().then(fetchRanking).catch(()=>{});
+  startChatPolling();
+}
 async function authBootstrap(){try{const data=await api('/api/auth/status');if(data.authenticated){if(data.account?.banned){showAccountBan(data.account);return;}await completeAccountLogin(data);}else{authUI.overlay.classList.remove('hidden');}}catch(e){authMessage('Serwer kont nie odpowiada. Odśwież stronę za chwilę.',true);}}
+window.addEventListener('arena-auth-success',event=>{
+  completeAccountLogin(event.detail||window.__arenaPendingAuth||{}).catch(()=>authMessage('Nie udało się wczytać profilu po zalogowaniu.',true));
+});
+if(window.__arenaPendingAuth){
+  queueMicrotask(()=>completeAccountLogin(window.__arenaPendingAuth).catch(()=>authMessage('Nie udało się wczytać profilu po zalogowaniu.',true)));
+}
+
 let authBusy=false;
 function setAuthButtonBusy(button,busy,label){
   if(!button)return;
@@ -1222,33 +1254,40 @@ function collectAdminModes(){return [...document.querySelectorAll('#adminModesLi
 async function adminSaveModes(){adminConfig.customModes=collectAdminModes();try{const r=await api('/api/admin/config',{method:'POST',body:JSON.stringify({config:{...collectAdminConfig(),customModes:adminConfig.customModes}})});fillAdminConfig(r.config);applyGameConfig(r.config);adminMsg(adminUI.modesMsg,'Tryby zapisane i widoczne dla wszystkich.');}catch(e){adminMsg(adminUI.modesMsg,'Nie udało się zapisać trybów.',true);}}
 function adminAddMode(){adminConfig.customModes=adminConfig.customModes||[];adminConfig.customModes.push({id:`tryb-${Date.now()}`,name:'Nowy tryb',description:'Wariant utworzony przez administratora',base:'solo',enabled:true});renderAdminModes();}
 function adminFilesChanged(){
-  const files=[...$('adminFiles').files];
-  if(!files.length){$('adminFileList').textContent='Nie wybrano plików ani ZIP-a.';return;}
-  const zips=files.filter(f=>f.name.toLowerCase().endsWith('.zip'));
-  if(zips.length){
-    $('adminFileList').textContent=files.length===1?`ZIP: ${zips[0].name} • ${Math.ceil(zips[0].size/1024)} KB`:'Wybierz jeden ZIP albo zestaw zwykłych plików — nie oba naraz.';
-    return;
-  }
-  $('adminFileList').textContent=files.map(f=>`${f.name} • ${Math.ceil(f.size/1024)} KB`).join('\n');
-}
-async function fileToBase64(file){
-  const bytes=new Uint8Array(await file.arrayBuffer());let binary='';
-  for(let i=0;i<bytes.length;i+=0x8000)binary+=String.fromCharCode(...bytes.subarray(i,i+0x8000));
-  return btoa(binary);
+  const file=$('adminFiles')?.files?.[0];
+  if(!file){$('adminFileList').textContent='Nie wybrano paczki ZIP.';return;}
+  if(!file.name.toLowerCase().endsWith('.zip')){$('adminFileList').textContent='Wybierz plik z rozszerzeniem .zip.';return;}
+  $('adminFileList').textContent=`ZIP: ${file.name} • ${(file.size/1024/1024).toFixed(2)} MB`;
 }
 async function adminDeploy(){
-  const files=[...$('adminFiles').files];
-  if(!files.length){adminMsg(adminUI.deployMsg,'Wybierz jeden ZIP albo pliki gry.',true);return;}
-  const zips=files.filter(f=>f.name.toLowerCase().endsWith('.zip'));
-  if(zips.length&&files.length!==1){adminMsg(adminUI.deployMsg,'ZIP musi być wybrany sam, bez dodatkowych plików.',true);return;}
-  adminMsg(adminUI.deployMsg,zips.length?'Sprawdzanie ZIP-a i tworzenie commita…':'Wysyłanie plików i tworzenie commita…');
+  const file=$('adminFiles')?.files?.[0];
+  if(!file||!file.name.toLowerCase().endsWith('.zip')){adminMsg(adminUI.deployMsg,'Wybierz jedną paczkę ZIP.',true);return;}
+  if(file.size>40*1024*1024){adminMsg(adminUI.deployMsg,'ZIP jest większy niż 40 MB.',true);return;}
+  adminMsg(adminUI.deployMsg,'Wysyłanie ZIP-a, sprawdzanie plików i tworzenie commita…');
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),180000);
   try{
-    const payload={message:$('adminCommitMessage').value};
-    if(zips.length){payload.archive={name:zips[0].name,content:await fileToBase64(zips[0])};}
-    else{payload.files=[];for(const f of files)payload.files.push({name:f.name,content:await fileToBase64(f)});}
-    const r=await api('/api/admin/deploy',{method:'POST',timeoutMs:120000,body:JSON.stringify(payload)});
-    adminMsg(adminUI.deployMsg,`Gotowe. Wgrano: ${(r.files||[]).join(', ')}. Commit ${String(r.commit||'').slice(0,8)}. Render rozpocznie wdrożenie.`);
-  }catch(e){adminMsg(adminUI.deployMsg,e.message||'Aktualizacja nie powiodła się. Sprawdź ZIP, GITHUB_TOKEN i GITHUB_REPO.',true);}
+    const message=$('adminCommitMessage').value||'Aktualizacja gry z panelu administratora';
+    const encodedMessage=btoa(unescape(encodeURIComponent(message))).replace(/=+$/,'');
+    const response=await fetch('/api/admin/deploy-zip',{
+      method:'POST',
+      credentials:'same-origin',
+      cache:'no-store',
+      signal:controller.signal,
+      headers:{
+        'Content-Type':'application/zip',
+        'X-File-Name':encodeURIComponent(file.name),
+        'X-Commit-Message-B64':encodedMessage
+      },
+      body:file
+    });
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok){const error=new Error(data.error||`HTTP ${response.status}`);error.status=response.status;throw error;}
+    adminMsg(adminUI.deployMsg,`Gotowe. Rozpakowano i wgrano: ${(data.files||[]).join(', ')}. Commit ${String(data.commit||'').slice(0,8)}. Render rozpocznie wdrożenie.`);
+  }catch(e){
+    const msg=e?.name==='AbortError'?'Wysyłanie trwało zbyt długo. Sprawdź połączenie i spróbuj ponownie.':(e.message||'Aktualizacja ZIP nie powiodła się.');
+    adminMsg(adminUI.deployMsg,msg,true);
+  }finally{clearTimeout(timer);}
 }
 
 let adminSelectedAccount=null;

@@ -31,7 +31,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urlparse, unquote
 
 ROOT = Path(__file__).resolve().parent
 DATA_FILE = ROOT / "players.json"
@@ -45,11 +45,12 @@ VISIBLE_RANKING_SIZE = 200
 ACTIVE_TIMEOUT = 20.0
 MAX_BODY = 256 * 1024
 ADMIN_UPLOAD_MAX_BODY = 24 * 1024 * 1024
+ADMIN_UPLOAD_MAX_RAW = 40 * 1024 * 1024
 AUTH_SESSION_TTL = 30 * 24 * 60 * 60
 CHAT_MAX_MESSAGE = 300
 CHAT_MAX_RECIPIENTS = 20
 CHAT_HISTORY_LIMIT = 160
-DB_SCHEMA_VERSION = 5
+DB_SCHEMA_VERSION = 6
 PROFILE_DATA_VERSION = 1
 DUEL_PLAYER_TIMEOUT = 12.0
 DUEL_WAIT_TIMEOUT = 45.0
@@ -339,7 +340,14 @@ def profile_full_row(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def profile_from_db_row(row: Any) -> dict[str, Any] | None:
-    return profile_from_db_row(row)
+    if not row:
+        return None
+    return profile_full_row({
+        "id": row[0], "name": row[1], "points": row[2], "trophies": row[3], "coins": row[4],
+        "move_level": row[5], "fire_level": row[6], "hp_level": row[7], "skin": row[8],
+        "cosmic_owned": row[9], "hero_version1": row[10], "admin_revision": row[11],
+        "revision": row[12], "data_version": row[13], "profile_data": row[14],
+    })
 
 
 def db_get_profile(player_id: str) -> dict[str, Any] | None:
@@ -348,11 +356,9 @@ def db_get_profile(player_id: str) -> dict[str, Any] | None:
         return None
     if not DATABASE_URL:
         return profile_full_row(profiles.get(player_id, {})) if player_id in profiles else None
-    with db_connect() as conn:
-        conn.autocommit = False
-        with conn.cursor() as cur:
-            cur.execute(
-                """SELECT player_id,name,points,trophies,coins,move_level,fire_level,hp_level,skin,cosmic_owned,hero_version1,admin_revision,revision,data_version,profile_data
+    with db_connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            """SELECT player_id,name,points,trophies,coins,move_level,fire_level,hp_level,skin,cosmic_owned,hero_version1,admin_revision,revision,data_version,profile_data
                FROM players WHERE player_id=%s""",
             (player_id,),
         )
@@ -501,8 +507,8 @@ def decode_admin_zip(archive: Any) -> list[tuple[str, bytes]]:
         raw = base64.b64decode(str(archive.get("content") or ""), validate=True)
     except Exception as exc:
         raise ValueError("Nieprawidłowa zawartość ZIP-a.") from exc
-    if len(raw) > 14 * 1024 * 1024:
-        raise ValueError("ZIP jest większy niż 14 MB.")
+    if len(raw) > ADMIN_UPLOAD_MAX_RAW:
+        raise ValueError("ZIP jest większy niż 40 MB.")
     selected: dict[str, bytes] = {}
     total_unpacked = 0
     try:
@@ -527,11 +533,11 @@ def decode_admin_zip(archive: Any) -> list[tuple[str, bytes]]:
                     continue
                 if basename in selected:
                     raise ValueError(f"ZIP zawiera więcej niż jeden plik {basename}.")
-                if info.file_size > 4 * 1024 * 1024:
-                    raise ValueError(f"Plik {basename} w ZIP-ie jest większy niż 4 MB.")
+                if info.file_size > 10 * 1024 * 1024:
+                    raise ValueError(f"Plik {basename} w ZIP-ie jest większy niż 10 MB.")
                 total_unpacked += info.file_size
-                if total_unpacked > 16 * 1024 * 1024:
-                    raise ValueError("Rozpakowane pliki przekraczają 16 MB.")
+                if total_unpacked > 60 * 1024 * 1024:
+                    raise ValueError("Rozpakowane pliki przekraczają 60 MB.")
                 selected[basename] = bundle.read(info)
     except zipfile.BadZipFile as exc:
         raise ValueError("Archiwum ZIP jest uszkodzone.") from exc
@@ -540,14 +546,26 @@ def decode_admin_zip(archive: Any) -> list[tuple[str, bytes]]:
     return list(selected.items())
 
 
-def deploy_files_to_github(files: Any, archive: Any, message: str) -> dict[str, Any]:
-    if archive:
-        decoded = decode_admin_zip(archive)
-        source_type = "zip"
-    else:
-        decoded = decode_admin_files(files)
-        source_type = "files"
+def validate_update_bundle(decoded: list[tuple[str, bytes]]) -> list[tuple[str, bytes]]:
+    names = {name for name, _ in decoded}
+    required = {"index.html", "game.js", "server.py"}
+    missing = sorted(required - names)
+    if missing:
+        raise ValueError("ZIP nie jest pełną aktualizacją. Brakuje: " + ", ".join(missing))
+    return decoded
 
+def decode_admin_zip_bytes(raw: bytes, name: str = "aktualizacja.zip") -> list[tuple[str, bytes]]:
+    if not name.lower().endswith(".zip"):
+        raise ValueError("Wybrany plik nie jest archiwum ZIP.")
+    if not raw:
+        raise ValueError("ZIP jest pusty.")
+    if len(raw) > ADMIN_UPLOAD_MAX_RAW:
+        raise ValueError("ZIP jest większy niż 40 MB.")
+    archive = {"name": name, "content": base64.b64encode(raw).decode("ascii")}
+    return validate_update_bundle(decode_admin_zip(archive))
+
+def deploy_decoded_to_github(decoded: list[tuple[str, bytes]], message: str, source_type: str) -> dict[str, Any]:
+    decoded = validate_update_bundle(decoded)
     repo = GITHUB_REPO.strip("/")
     branch = GITHUB_BRANCH
     ref = github_api("GET", f"/repos/{repo}/git/ref/heads/{branch}")
@@ -569,6 +587,15 @@ def deploy_files_to_github(files: Any, archive: Any, message: str) -> dict[str, 
         except Exception as exc:
             print(f"Commit zapisany, ale deploy hook nie odpowiedział: {exc}")
     return {"ok": True, "commit": commit.get("sha"), "files": [name for name, _ in decoded], "repo": repo, "branch": branch, "source": source_type}
+
+def deploy_files_to_github(files: Any, archive: Any, message: str) -> dict[str, Any]:
+    if archive:
+        decoded = decode_admin_zip(archive)
+        source_type = "zip-json"
+    else:
+        decoded = decode_admin_files(files)
+        source_type = "files-json"
+    return deploy_decoded_to_github(decoded, message, source_type)
 
 
 # ----------------------------- konta, sesje, bany i czat -----------------------------
@@ -969,13 +996,41 @@ def admin_accounts(query: str = "") -> list[dict[str, Any]]:
 
 # ----------------------------- Neon Postgres -----------------------------
 
+_db_pool = None
+
+def init_db_pool() -> None:
+    global _db_pool
+    if not DATABASE_URL or _db_pool is not None:
+        return
+    try:
+        from psycopg_pool import ConnectionPool  # type: ignore
+    except ImportError:
+        _db_pool = None
+        return
+    max_size = max(2, min(8, int(os.environ.get("DB_POOL_MAX", "5"))))
+    _db_pool = ConnectionPool(
+        conninfo=DATABASE_URL, min_size=1, max_size=max_size, timeout=12,
+        kwargs={"autocommit": True, "connect_timeout": 10}, open=True,
+    )
+    _db_pool.wait(timeout=15)
+
+def close_db_pool() -> None:
+    global _db_pool
+    if _db_pool is not None:
+        try:
+            _db_pool.close()
+        finally:
+            _db_pool = None
+
 def db_connect():
     try:
         import psycopg  # type: ignore
     except ImportError as exc:
         raise RuntimeError(
-            "Brakuje pakietu psycopg. Uruchom: pip install -r requirements.txt"
+            "Brakuje pakietu psycopg. Wgraj requirements.txt i przebuduj usługę."
         ) from exc
+    if _db_pool is not None:
+        return _db_pool.connection()
     return psycopg.connect(DATABASE_URL, autocommit=True, connect_timeout=10)
 
 
@@ -1094,7 +1149,7 @@ def init_database() -> None:
         cur.execute("CREATE INDEX IF NOT EXISTS data_audit_account_idx ON data_audit (account_id, created_at DESC)")
         cur.execute(
             "INSERT INTO schema_migrations(version,description) VALUES (%s,%s) ON CONFLICT(version) DO NOTHING",
-            (DB_SCHEMA_VERSION, "Bany narastające, regulowana synchronizacja SQL i bezpieczne aktualizacje ZIP"),
+            (DB_SCHEMA_VERSION, "Naprawione sesje kont, pula połączeń SQL i bezpośrednie aktualizacje ZIP"),
         )
         cur.execute(
             """INSERT INTO server_state(key,value,revision,updated_at)
@@ -2156,6 +2211,15 @@ class Handler(BaseHTTPRequestHandler):
         except (UnicodeDecodeError, json.JSONDecodeError):
             return None
 
+    def read_bytes(self, max_length: int) -> bytes | None:
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            return None
+        if length <= 0 or length > max_length:
+            return None
+        return self.rfile.read(length)
+
     def client_ip(self) -> str:
         forwarded = self.headers.get("X-Forwarded-For", "").split(",")[0].strip()
         return forwarded or str(self.client_address[0])
@@ -2246,7 +2310,9 @@ class Handler(BaseHTTPRequestHandler):
             account = self.account_session()
             if not account:
                 self.send_json({"ok":True,"authenticated":False}); return
-            self.send_json({"ok":True,"authenticated":True,"account":account_public(account)}); return
+            account_id = clean_id(account.get("account_id"))
+            profile = db_get_profile(account_id) if DATABASE_URL else profile_full_row(profiles.get(account_id, {}))
+            self.send_json({"ok":True,"authenticated":True,"account":account_public(account),"profile":profile}); return
         if parsed.path == "/api/chat/users":
             account=self.require_account()
             if not account: return
@@ -2336,7 +2402,7 @@ class Handler(BaseHTTPRequestHandler):
                     with db_connect() as conn, conn.cursor() as cur:
                         cur.execute("SELECT 1")
                         cur.fetchone()
-                self.send_json({"ok": True, "storage": "postgres" if DATABASE_URL else "json", "build": "login-final-neon-v4", "schemaVersion": DB_SCHEMA_VERSION if DATABASE_URL else 0})
+                self.send_json({"ok": True, "storage": "postgres" if DATABASE_URL else "json", "build": "auth-zip-sql-fix-v6", "schemaVersion": DB_SCHEMA_VERSION if DATABASE_URL else 0})
             except Exception as exc:
                 self.send_json({"ok": False, "error": str(exc)}, HTTPStatus.SERVICE_UNAVAILABLE)
             return
@@ -2344,6 +2410,25 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
+        if parsed.path == "/api/admin/deploy-zip":
+            if not self.require_admin(): return
+            raw = self.read_bytes(ADMIN_UPLOAD_MAX_RAW)
+            if raw is None:
+                self.send_json({"error":"ZIP jest pusty albo przekracza 40 MB."}, HTTPStatus.REQUEST_ENTITY_TOO_LARGE); return
+            try:
+                file_name = unquote(self.headers.get("X-File-Name", "aktualizacja.zip"))
+                encoded = self.headers.get("X-Commit-Message-B64", "")
+                if encoded:
+                    encoded += "=" * (-len(encoded) % 4)
+                    message = base64.b64decode(encoded).decode("utf-8", "replace")
+                else:
+                    message = "Aktualizacja gry z panelu administratora"
+                decoded = decode_admin_zip_bytes(raw, Path(file_name).name)
+                result = deploy_decoded_to_github(decoded, message, "zip-raw")
+                self.send_json(result)
+            except Exception as exc:
+                self.send_json({"error":str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
         payload = self.read_json(ADMIN_UPLOAD_MAX_BODY if parsed.path == "/api/admin/deploy" else MAX_BODY)
         if payload is None:
             self.send_json({"error": "Nieprawidłowe dane."}, HTTPStatus.BAD_REQUEST)
@@ -2569,6 +2654,7 @@ def local_ip() -> str:
 if __name__ == "__main__":
     load_profiles()
     load_account_storage()
+    init_db_pool()
     init_database()
     load_game_config()
     threading.Thread(target=duel_tick_loop, name="duel-tick", daemon=True).start()
@@ -2584,3 +2670,4 @@ if __name__ == "__main__":
         print("\nSerwer zatrzymany.")
     finally:
         server.server_close()
+        close_db_pool()

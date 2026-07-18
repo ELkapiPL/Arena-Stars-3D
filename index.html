@@ -535,7 +535,7 @@
       </div>
 
       <div class="adminPane" data-admin-pane="deploy">
-        <div class="adminSection"><h3>Aktualizacja gry z ZIP-a lub plików</h3><p class="adminHint">Najłatwiej wybierz jeden ZIP zawierający folder gry. Panel sam odnajdzie dozwolone pliki, bezpiecznie je sprawdzi, wyśle do GitHuba i uruchomi wdrożenie Rendera. Możesz też wybrać pojedyncze pliki.</p><div class="adminUploadBox"><input id="adminFiles" type="file" multiple accept=".zip,.html,.js,.py,.txt,.yaml,.yml,.sql"><div id="adminFileList" class="adminFileList">Nie wybrano plików ani ZIP-a.</div></div><div class="adminField"><label>OPIS AKTUALIZACJI</label><input id="adminCommitMessage" value="Aktualizacja gry z panelu administratora"></div><div class="adminActions"><button id="adminDeployBtn" class="adminPrimary">AKTUALIZUJ GRĘ NA SERWERZE</button></div><div id="adminDeployMsg" class="adminMsg"></div></div>
+        <div class="adminSection"><h3>Aktualizacja gry z paczki ZIP</h3><p class="adminHint">Wybierz jeden ZIP otrzymany jako aktualizacja Arena Stars 3D. Panel rozpakowuje paczkę na serwerze, wybiera właściwe pliki, sprawdza kompletność i tworzy commit na GitHubie.</p><div class="adminUploadBox"><input id="adminFiles" type="file" accept=".zip,application/zip"><div id="adminFileList" class="adminFileList">Nie wybrano paczki ZIP.</div></div><div class="adminField"><label>OPIS AKTUALIZACJI</label><input id="adminCommitMessage" value="Aktualizacja gry z panelu administratora"></div><div class="adminActions"><button id="adminDeployBtn" class="adminPrimary">AKTUALIZUJ GRĘ NA SERWERZE</button></div><div id="adminDeployMsg" class="adminMsg"></div></div>
       </div>
     </section>
   </div>
@@ -622,10 +622,20 @@
         error.data = data;
         throw error;
       }
-      const id = data?.account?.playerId || data?.account?.id;
+      const verifyResponse = await fetch('/api/auth/status', {
+        method: 'GET', credentials: 'same-origin', cache: 'no-store', signal: controller.signal
+      });
+      const verified = await verifyResponse.json().catch(() => ({}));
+      if (!verifyResponse.ok || !verified.authenticated) {
+        throw new Error('Serwer utworzył sesję, ale przeglądarka jej nie zapisała. Włącz pliki cookie dla tej strony i spróbuj ponownie.');
+      }
+      const id = verified?.account?.playerId || verified?.account?.id || data?.account?.playerId || data?.account?.id;
       if (id) try { localStorage.setItem(PLAYER_KEY, id); } catch (_) {}
+      const result = {...data, account: verified.account || data.account, profile: data.profile};
+      window.__arenaPendingAuth = result;
+      byId('authOverlay')?.classList.add('hidden');
       message('Zalogowano. Wczytywanie gry…');
-      location.reload();
+      window.dispatchEvent(new CustomEvent('arena-auth-success', {detail: result}));
     } catch (error) {
       let text = error?.message || 'Nie udało się połączyć z serwerem kont.';
       if (error?.name === 'AbortError') text = 'Serwer odpowiada zbyt długo. Poczekaj chwilę i spróbuj ponownie.';
@@ -654,6 +664,6 @@
 })();
 </script>
 
-<script src="game.js?v=independent-auth-v7"></script>
+<script src="game.js?v=auth-zip-sql-fix-v6"></script>
 </body>
 </html>
