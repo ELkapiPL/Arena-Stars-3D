@@ -81,8 +81,16 @@ APP_PUBLIC_URL = os.environ.get("APP_PUBLIC_URL", "").strip().rstrip("/")
 CHAT_MAX_MESSAGE = 300
 CHAT_MAX_RECIPIENTS = 20
 CHAT_HISTORY_LIMIT = 160
-DB_SCHEMA_VERSION = 8
-PROFILE_DATA_VERSION = 1
+DB_SCHEMA_VERSION = 9
+PROFILE_DATA_VERSION = 2
+ARENA_PASS_SEASON = 1
+ARENA_PASS_LEVELS = 20
+ARENA_PASS_FREE_STEP = 2000
+ARENA_PASS_PREMIUM_STEP = 3000
+ARENA_VIP_PRICE_PLN = 13
+ARENA_VIP_PLUS_PRICE_PLN = 21
+ARENA_VIP_PAYMENT_URL = os.environ.get("ARENA_VIP_PAYMENT_URL", "").strip()
+ARENA_VIP_PLUS_PAYMENT_URL = os.environ.get("ARENA_VIP_PLUS_PAYMENT_URL", "").strip()
 DUEL_PLAYER_TIMEOUT = 12.0
 DUEL_WAIT_TIMEOUT = 45.0
 DUEL_BOT_WAIT = 30.0
@@ -160,6 +168,32 @@ DEFAULT_GAME_CONFIG: dict[str, Any] = {
 }
 game_config: dict[str, Any] = dict(DEFAULT_GAME_CONFIG)
 
+# Nagrody są wyliczane i przyznawane wyłącznie przez serwer.
+ARENA_PASS_REWARDS: dict[str, dict[int, dict[str, Any]]] = {
+    "free": {
+        1:{"coins":150}, 2:{"coins":200}, 3:{"coins":250}, 4:{"coins":300,"upgrade":"move"},
+        5:{"coins":350}, 6:{"coins":400}, 7:{"coins":450}, 8:{"coins":500,"upgrade":"fire"},
+        9:{"coins":550}, 10:{"coins":650}, 11:{"coins":750}, 12:{"coins":850,"upgrade":"hp"},
+        13:{"coins":950}, 14:{"coins":1100}, 15:{"coins":1250}, 16:{"coins":1400,"upgrade":"move"},
+        17:{"coins":1600}, 18:{"coins":1800}, 19:{"coins":2100}, 20:{"coins":3000},
+    },
+    "vip": {
+        4:{"coins":1000},
+        8:{"coins":1500,"upgrade":"fire"},
+        12:{"coins":2000,"cosmic":True},
+        16:{"coins":2500,"upgrade":"all"},
+        20:{"coins":5000,"heroVersion1":True},
+    },
+    "vip_plus": {
+        1:{"coins":500}, 2:{"coins":600}, 3:{"coins":700}, 4:{"coins":900},
+        5:{"coins":1000}, 6:{"coins":1100}, 7:{"coins":1200,"upgrade":"move"}, 8:{"coins":1400},
+        9:{"coins":1500}, 10:{"coins":1700,"upgrade":"fire"}, 11:{"coins":1900}, 12:{"coins":2200},
+        13:{"coins":2400,"upgrade":"hp"}, 14:{"coins":2700}, 15:{"coins":3000}, 16:{"coins":3400,"upgrade":"all"},
+        17:{"coins":3800}, 18:{"coins":4300}, 19:{"coins":5000},
+        20:{"coins":8000,"arenaSkin":True},
+    },
+}
+
 
 def now() -> float:
     return time.time()
@@ -188,7 +222,7 @@ def persistent_storage_public_status() -> dict[str, Any]:
         "databaseConfigured": bool(DATABASE_URL),
         "sqlRequired": bool(REQUIRE_SQL),
         "schemaVersion": DB_SCHEMA_VERSION if DB_READY else 0,
-        "build": "persistent-neon-sql-v11",
+        "build": "arena-karnet-vip-mobile-v13",
     }
     if DB_READY:
         payload["connectedAt"] = DB_CONNECTED_AT
@@ -244,6 +278,51 @@ def clean_profile_data(value: Any) -> dict[str, Any]:
     except (TypeError, ValueError):
         return {}
     return cleaned
+
+
+ARENA_PASS_PROTECTED_KEYS = {"arenaPassTier", "arenaPassClaims", "arenaPassSeason", "arenaVipPlusSkinOwned"}
+
+
+def clean_pass_tier(value: Any) -> str:
+    text = str(value or "free").strip().lower()
+    return text if text in {"free", "vip", "vip_plus"} else "free"
+
+
+def strip_pass_protected_data(value: Any) -> dict[str, Any]:
+    data = clean_profile_data(value)
+    for key in ARENA_PASS_PROTECTED_KEYS:
+        data.pop(key, None)
+    return data
+
+
+def pass_tier_rank(value: Any) -> int:
+    return {"free": 0, "vip": 1, "vip_plus": 2}.get(clean_pass_tier(value), 0)
+
+
+def arena_pass_reward_label(reward: dict[str, Any] | None) -> tuple[str, str]:
+    if not reward:
+        return ("—", "Brak nagrody")
+    parts: list[str] = []
+    icon = "🎁"
+    coins = clean_number(reward.get("coins"), 10_000_000)
+    if coins:
+        parts.append(f"{coins:,}".replace(",", " ") + " monet")
+        icon = "🪙"
+    upgrade = str(reward.get("upgrade") or "")
+    if upgrade:
+        names = {"move":"ruch", "fire":"strzał", "hp":"życie", "all":"wszystkie ulepszenia"}
+        parts.append("+1 " + names.get(upgrade, "ulepszenie"))
+        icon = "⚡" if upgrade == "move" else ("🎯" if upgrade == "fire" else ("❤️" if upgrade == "hp" else "💎"))
+    if reward.get("cosmic"):
+        parts.append("Kosmiczny Strażnik")
+        icon = "🪐"
+    if reward.get("heroVersion1"):
+        parts.append("Lepsza wersja I")
+        icon = "🚀"
+    if reward.get("arenaSkin"):
+        parts.append("Neonowy Władca Areny")
+        icon = "🔥"
+    return icon, " + ".join(parts) or "Nagroda"
 
 
 def touch(player_id: str) -> None:
@@ -401,6 +480,8 @@ def profile_full_row(row: dict[str, Any]) -> dict[str, Any]:
         "revision": clean_revision(row.get("revision", 0)),
         "dataVersion": clamp_int(row.get("data_version", row.get("dataVersion", PROFILE_DATA_VERSION)), 1, 9999, PROFILE_DATA_VERSION),
         "data": clean_profile_data(data),
+        "arenaPassTier": clean_pass_tier((data or {}).get("arenaPassTier") if isinstance(data, dict) else "free"),
+        "arenaSkinOwned": bool((data or {}).get("arenaVipPlusSkinOwned", False)) if isinstance(data, dict) else False,
     }
 
 
@@ -476,7 +557,7 @@ def db_schema_status() -> dict[str, Any]:
         "matches": matches_count,
         "activeSessions": sessions_count,
         "connectedAt": DB_CONNECTED_AT,
-        "build": "persistent-neon-sql-v11",
+        "build": "arena-karnet-vip-mobile-v13",
     }
 
 
@@ -1558,7 +1639,7 @@ def db_upsert_profile(payload: dict[str, Any]) -> dict[str, Any] | None:
     player_id = clean_id(payload.get("playerId"))
     if not player_id:
         return None
-    incoming_data = clean_profile_data(payload.get("data"))
+    incoming_data = strip_pass_protected_data(payload.get("data"))
     incoming = profile_full_row({
         "id": player_id, "name": payload.get("name"), "points": payload.get("points"),
         "trophies": payload.get("trophies"), "coins": payload.get("coins"),
@@ -1599,7 +1680,12 @@ def db_upsert_profile(payload: dict[str, Any]) -> dict[str, Any] | None:
                     merged["upgrades"] = {k:max(old["upgrades"][k],incoming["upgrades"][k]) for k in ("move","fire","hp")}
                     merged["cosmicOwned"] = old["cosmicOwned"] or incoming["cosmicOwned"]
                     merged["heroVersion1"] = old["heroVersion1"] or incoming["heroVersion1"]
-                    merged["skin"] = incoming["skin"] if incoming["skin"] == "classic" or merged["cosmicOwned"] else old["skin"]
+                    requested_skin = incoming["skin"]
+                    arena_owned = bool(old.get("data", {}).get("arenaVipPlusSkinOwned", False))
+                    if requested_skin == "classic" or (requested_skin == "cosmic" and merged["cosmicOwned"]) or (requested_skin == "arena_vip_plus" and arena_owned):
+                        merged["skin"] = requested_skin
+                    else:
+                        merged["skin"] = old["skin"]
                     merged["adminRevision"] = old["adminRevision"]
                     merged["data"] = {**old.get("data", {}), **incoming_data}
                     merged["dataVersion"] = max(old.get("dataVersion", 1), incoming.get("dataVersion", 1))
@@ -1616,7 +1702,7 @@ def db_upsert_profile(payload: dict[str, Any]) -> dict[str, Any] | None:
                     """INSERT INTO players (player_id,name,points,trophies,coins,move_level,fire_level,hp_level,skin,cosmic_owned,hero_version1,admin_revision,revision,data_version,profile_data,last_client_version,last_seen,updated_at)
                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,0,1,%s,%s::jsonb,%s,NOW(),NOW())
                        RETURNING player_id,name,points,trophies,coins,move_level,fire_level,hp_level,skin,cosmic_owned,hero_version1,admin_revision,revision,data_version,profile_data""",
-                    (player_id,incoming["name"],incoming["points"],incoming["trophies"],incoming["coins"],incoming["upgrades"]["move"],incoming["upgrades"]["fire"],incoming["upgrades"]["hp"],incoming["skin"],incoming["cosmicOwned"],incoming["heroVersion1"],incoming.get("dataVersion",PROFILE_DATA_VERSION),json.dumps(incoming_data,ensure_ascii=False),client_version),
+                    (player_id,incoming["name"],incoming["points"],incoming["trophies"],incoming["coins"],incoming["upgrades"]["move"],incoming["upgrades"]["fire"],incoming["upgrades"]["hp"],("classic" if incoming["skin"] == "arena_vip_plus" else incoming["skin"]),incoming["cosmicOwned"],incoming["heroVersion1"],incoming.get("dataVersion",PROFILE_DATA_VERSION),json.dumps(incoming_data,ensure_ascii=False),client_version),
                 )
             result = cur.fetchone()
             cur.execute(
@@ -1767,7 +1853,7 @@ def json_upsert_profile(payload: dict[str, Any]) -> dict[str, Any] | None:
         "upgrades":payload.get("upgrades"),"skin":payload.get("skin"),
         "cosmicOwned":payload.get("cosmicOwned"),"heroVersion1":payload.get("heroVersion1"),
         "adminRevision":payload.get("adminRevision"),"revision":payload.get("revision"),
-        "dataVersion":payload.get("dataVersion",PROFILE_DATA_VERSION),"data":payload.get("data"),
+        "dataVersion":payload.get("dataVersion",PROFILE_DATA_VERSION),"data":strip_pass_protected_data(payload.get("data")),
     })
     old = profile_full_row(profiles.get(player_id, {"id":player_id,"name":"Gracz"}))
     known = clean_number(payload.get("adminRevision"))
@@ -1785,6 +1871,12 @@ def json_upsert_profile(payload: dict[str, Any]) -> dict[str, Any] | None:
         entry["upgrades"] = {k:max(old["upgrades"][k],incoming["upgrades"][k]) for k in ("move","fire","hp")}
         entry["cosmicOwned"] = old["cosmicOwned"] or incoming["cosmicOwned"]
         entry["heroVersion1"] = old["heroVersion1"] or incoming["heroVersion1"]
+        arena_owned = bool(old.get("data", {}).get("arenaVipPlusSkinOwned", False))
+        requested_skin = incoming.get("skin", "classic")
+        if requested_skin == "classic" or (requested_skin == "cosmic" and entry["cosmicOwned"]) or (requested_skin == "arena_vip_plus" and arena_owned):
+            entry["skin"] = requested_skin
+        else:
+            entry["skin"] = old.get("skin", "classic")
         entry["adminRevision"] = old["adminRevision"]
         entry["data"] = {**old.get("data",{}), **incoming.get("data",{})}
         entry["dataVersion"] = max(old.get("dataVersion",1), incoming.get("dataVersion",1))
@@ -1823,17 +1915,168 @@ def leaderboard_payload(player_id: str = "") -> dict[str, Any]:
 
 
 
+
+def arena_pass_effective_tier(account_id: str, data: dict[str, Any]) -> str:
+    if clean_id(account_id) == clean_id(ADMIN_PLAYER_ID):
+        return "vip_plus"
+    return clean_pass_tier(data.get("arenaPassTier"))
+
+
+def arena_pass_status(account_id: str) -> dict[str, Any]:
+    account_id = clean_id(account_id)
+    profile = db_get_profile(account_id) if DATABASE_URL else profile_full_row(profiles.get(account_id, {}))
+    if not profile:
+        raise ValueError("Nie znaleziono profilu gracza.")
+    data = clean_profile_data(profile.get("data"))
+    tier = arena_pass_effective_tier(account_id, data)
+    claims = {str(x) for x in data.get("arenaPassClaims", []) if isinstance(x, (str, int))}
+    points = clean_number(profile.get("points"), 2_000_000_000)
+    levels: list[dict[str, Any]] = []
+    for level in range(1, ARENA_PASS_LEVELS + 1):
+        row: dict[str, Any] = {"level": level, "freeThreshold": level * ARENA_PASS_FREE_STEP, "premiumThreshold": level * ARENA_PASS_PREMIUM_STEP}
+        for track in ("free", "vip", "vip_plus"):
+            reward = ARENA_PASS_REWARDS.get(track, {}).get(level)
+            if not reward:
+                row[track] = None
+                continue
+            key = f"s{ARENA_PASS_SEASON}:{track}:{level}"
+            threshold = level * (ARENA_PASS_FREE_STEP if track == "free" else ARENA_PASS_PREMIUM_STEP)
+            access = track == "free" or (track == "vip" and pass_tier_rank(tier) >= 1) or (track == "vip_plus" and pass_tier_rank(tier) >= 2)
+            icon, label = arena_pass_reward_label(reward)
+            row[track] = {
+                "key": key, "icon": icon, "label": label, "claimed": key in claims,
+                "unlocked": points >= threshold, "access": access,
+                "claimable": bool(access and points >= threshold and key not in claims),
+            }
+        levels.append(row)
+    next_free = min(ARENA_PASS_LEVELS * ARENA_PASS_FREE_STEP, (points // ARENA_PASS_FREE_STEP + 1) * ARENA_PASS_FREE_STEP)
+    next_premium = min(ARENA_PASS_LEVELS * ARENA_PASS_PREMIUM_STEP, (points // ARENA_PASS_PREMIUM_STEP + 1) * ARENA_PASS_PREMIUM_STEP)
+    return {
+        "ok": True, "season": ARENA_PASS_SEASON, "tier": tier, "storedTier": clean_pass_tier(data.get("arenaPassTier")),
+        "ownerBenefits": account_id == clean_id(ADMIN_PLAYER_ID), "points": points, "levels": levels,
+        "freeLevel": min(ARENA_PASS_LEVELS, points // ARENA_PASS_FREE_STEP),
+        "premiumLevel": min(ARENA_PASS_LEVELS, points // ARENA_PASS_PREMIUM_STEP),
+        "nextFree": next_free, "nextPremium": next_premium,
+        "prices": {"vip": ARENA_VIP_PRICE_PLN, "vip_plus": ARENA_VIP_PLUS_PRICE_PLN},
+        "paymentUrls": {"vip": ARENA_VIP_PAYMENT_URL, "vip_plus": ARENA_VIP_PLUS_PAYMENT_URL},
+        "arenaSkinOwned": bool(data.get("arenaVipPlusSkinOwned", False)),
+        "claimableCount": sum(1 for row in levels for track in ("free","vip","vip_plus") if row.get(track) and row[track].get("claimable")),
+    }
+
+
+def _apply_arena_pass_reward(state: dict[str, Any], reward: dict[str, Any]) -> None:
+    state["coins"] = clean_number(state.get("coins"), 2_000_000_000) + clean_number(reward.get("coins"), 10_000_000)
+    upgrades = state.setdefault("upgrades", {"move":0,"fire":0,"hp":0})
+    upgrade = str(reward.get("upgrade") or "")
+    if upgrade == "all":
+        for key in ("move","fire","hp"):
+            upgrades[key] = min(5, clamp_int(upgrades.get(key),0,5,0) + 1)
+    elif upgrade in {"move","fire","hp"}:
+        upgrades[upgrade] = min(5, clamp_int(upgrades.get(upgrade),0,5,0) + 1)
+    if reward.get("cosmic"):
+        state["cosmicOwned"] = True
+    if reward.get("heroVersion1"):
+        state["heroVersion1"] = True
+    if reward.get("arenaSkin"):
+        state["data"]["arenaVipPlusSkinOwned"] = True
+        state["skin"] = "arena_vip_plus"
+
+
+def claim_arena_pass(account_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    account_id = clean_id(account_id)
+    claim_all = bool(payload.get("claimAll"))
+    wanted_track = str(payload.get("track") or "")
+    wanted_level = clamp_int(payload.get("level"), 1, ARENA_PASS_LEVELS, 1)
+    if wanted_track and wanted_track not in {"free", "vip", "vip_plus"}:
+        raise ValueError("Nieprawidłowy tor karnetu.")
+    if not DATABASE_URL:
+        raise RuntimeError("Arena Karnet wymaga bazy Neon SQL.")
+    with db_connect() as conn:
+        conn.autocommit = False
+        with conn.cursor() as cur:
+            cur.execute("""SELECT player_id,name,points,trophies,coins,move_level,fire_level,hp_level,skin,cosmic_owned,hero_version1,admin_revision,revision,data_version,profile_data FROM players WHERE player_id=%s FOR UPDATE""", (account_id,))
+            row = cur.fetchone()
+            if not row:
+                raise ValueError("Nie znaleziono profilu gracza.")
+            state = profile_from_db_row(row) or {}
+            data = clean_profile_data(state.get("data"))
+            data["arenaPassSeason"] = ARENA_PASS_SEASON
+            data["arenaPassTier"] = clean_pass_tier(data.get("arenaPassTier"))
+            state["data"] = data
+            tier = arena_pass_effective_tier(account_id, data)
+            claims = {str(x) for x in data.get("arenaPassClaims", []) if isinstance(x, (str, int))}
+            candidates: list[tuple[str,int,dict[str,Any],str]] = []
+            tracks = ("free","vip","vip_plus") if claim_all else (wanted_track,)
+            for track in tracks:
+                if not track:
+                    continue
+                for level, reward in ARENA_PASS_REWARDS.get(track, {}).items():
+                    if not claim_all and level != wanted_level:
+                        continue
+                    access = track == "free" or (track == "vip" and pass_tier_rank(tier) >= 1) or (track == "vip_plus" and pass_tier_rank(tier) >= 2)
+                    threshold = level * (ARENA_PASS_FREE_STEP if track == "free" else ARENA_PASS_PREMIUM_STEP)
+                    key = f"s{ARENA_PASS_SEASON}:{track}:{level}"
+                    if access and state["points"] >= threshold and key not in claims:
+                        candidates.append((track, level, reward, key))
+            if not candidates:
+                if claim_all:
+                    raise ValueError("Nie ma teraz żadnych nagród do odebrania.")
+                reward = ARENA_PASS_REWARDS.get(wanted_track, {}).get(wanted_level)
+                if not reward:
+                    raise ValueError("Na tym poziomie nie ma nagrody.")
+                if wanted_track == "vip" and pass_tier_rank(tier) < 1:
+                    raise ValueError("Ta nagroda wymaga Arena Karnetu VIP lub VIP+.")
+                if wanted_track == "vip_plus" and pass_tier_rank(tier) < 2:
+                    raise ValueError("Ta nagroda wymaga Arena Karnetu VIP+.")
+                threshold = wanted_level * (ARENA_PASS_FREE_STEP if wanted_track == "free" else ARENA_PASS_PREMIUM_STEP)
+                if state["points"] < threshold:
+                    raise ValueError(f"Potrzebujesz {threshold} punktów.")
+                raise ValueError("Ta nagroda została już odebrana.")
+            for _, _, reward, key in candidates:
+                _apply_arena_pass_reward(state, reward)
+                claims.add(key)
+            state["data"]["arenaPassClaims"] = sorted(claims)
+            state["data"]["arenaPassTier"] = clean_pass_tier(state["data"].get("arenaPassTier"))
+            cur.execute("""UPDATE players SET coins=%s,move_level=%s,fire_level=%s,hp_level=%s,skin=%s,cosmic_owned=%s,hero_version1=%s,profile_data=%s::jsonb,revision=revision+1,last_seen=NOW(),updated_at=NOW() WHERE player_id=%s RETURNING revision""",
+                        (state["coins"],state["upgrades"]["move"],state["upgrades"]["fire"],state["upgrades"]["hp"],state["skin"],state["cosmicOwned"],state["heroVersion1"],json.dumps(state["data"],ensure_ascii=False),account_id))
+            cur.execute("INSERT INTO data_audit(account_id,event_type,payload) VALUES (%s,'arena_pass_claim',%s::jsonb)", (account_id,json.dumps({"claims":[key for *_,key in candidates],"season":ARENA_PASS_SEASON},ensure_ascii=False)))
+        conn.commit()
+    profile = db_get_profile(account_id)
+    return {"ok":True,"claimed":len(candidates),"profile":profile,"pass":arena_pass_status(account_id)}
+
+
+def set_arena_pass_tier(player_id: str, tier: Any) -> dict[str, Any]:
+    player_id = clean_id(player_id)
+    tier = clean_pass_tier(tier)
+    if not player_id:
+        raise ValueError("Brak identyfikatora gracza.")
+    with db_connect() as conn:
+        conn.autocommit = False
+        with conn.cursor() as cur:
+            cur.execute("SELECT profile_data FROM players WHERE player_id=%s FOR UPDATE", (player_id,))
+            row = cur.fetchone()
+            if not row:
+                raise ValueError("Nie znaleziono profilu gracza.")
+            data = clean_profile_data(row[0] or {})
+            data["arenaPassTier"] = tier
+            data["arenaPassSeason"] = ARENA_PASS_SEASON
+            data.setdefault("arenaPassClaims", [])
+            cur.execute("UPDATE players SET profile_data=%s::jsonb,admin_revision=admin_revision+1,revision=revision+1,updated_at=NOW() WHERE player_id=%s", (json.dumps(data,ensure_ascii=False),player_id))
+        conn.commit()
+    return arena_pass_status(player_id)
+
+
 def admin_find_players(query: str = "", limit: int = 50) -> list[dict[str, Any]]:
     query = clean_mode_text(query, 80)
     limit = clamp_int(limit, 1, 100, 50)
     if DATABASE_URL:
         with db_connect() as conn, conn.cursor() as cur:
             if query:
-                cur.execute("""SELECT player_id,name,points,trophies,coins,move_level,fire_level,hp_level,skin,cosmic_owned,hero_version1,admin_revision FROM players WHERE player_id ILIKE %s OR name ILIKE %s ORDER BY points DESC LIMIT %s""", (f"%{query}%",f"%{query}%",limit))
+                cur.execute("""SELECT player_id,name,points,trophies,coins,move_level,fire_level,hp_level,skin,cosmic_owned,hero_version1,admin_revision,profile_data FROM players WHERE player_id ILIKE %s OR name ILIKE %s ORDER BY points DESC LIMIT %s""", (f"%{query}%",f"%{query}%",limit))
             else:
-                cur.execute("""SELECT player_id,name,points,trophies,coins,move_level,fire_level,hp_level,skin,cosmic_owned,hero_version1,admin_revision FROM players ORDER BY updated_at DESC LIMIT %s""", (limit,))
+                cur.execute("""SELECT player_id,name,points,trophies,coins,move_level,fire_level,hp_level,skin,cosmic_owned,hero_version1,admin_revision,profile_data FROM players ORDER BY updated_at DESC LIMIT %s""", (limit,))
             rows = cur.fetchall()
-        return [profile_full_row({"id":r[0],"name":r[1],"points":r[2],"trophies":r[3],"coins":r[4],"move_level":r[5],"fire_level":r[6],"hp_level":r[7],"skin":r[8],"cosmic_owned":r[9],"hero_version1":r[10],"admin_revision":r[11]}) for r in rows]
+        return [profile_full_row({"id":r[0],"name":r[1],"points":r[2],"trophies":r[3],"coins":r[4],"move_level":r[5],"fire_level":r[6],"hp_level":r[7],"skin":r[8],"cosmic_owned":r[9],"hero_version1":r[10],"admin_revision":r[11],"profile_data":r[12]}) for r in rows]
     rows = [profile_full_row(v) for v in profiles.values()]
     if query:
         q = query.casefold(); rows = [r for r in rows if q in r["id"].casefold() or q in r["name"].casefold()]
@@ -1853,26 +2096,29 @@ def admin_update_player(payload: dict[str, Any]) -> dict[str, Any]:
         "upgrades":payload.get("upgrades",old["upgrades"]), "skin":payload.get("skin",old["skin"]),
         "cosmicOwned":payload.get("cosmicOwned",old["cosmicOwned"]), "heroVersion1":payload.get("heroVersion1",old["heroVersion1"]),
         "adminRevision":old["adminRevision"]+1,
+        "data": {**old.get("data", {}), "arenaPassTier": clean_pass_tier(payload.get("arenaPassTier", old.get("arenaPassTier", old.get("data", {}).get("arenaPassTier", "free")))), "arenaVipPlusSkinOwned": bool(payload.get("arenaSkinOwned", old.get("arenaSkinOwned", old.get("data", {}).get("arenaVipPlusSkinOwned", False)))), "arenaPassSeason": ARENA_PASS_SEASON},
     })
     if entry["skin"] == "cosmic": entry["cosmicOwned"] = True
+    if entry["skin"] == "arena_vip_plus": entry["data"]["arenaVipPlusSkinOwned"] = True
     if DATABASE_URL:
         with db_connect() as conn, conn.cursor() as cur:
             cur.execute("""
-                INSERT INTO players (player_id,name,points,trophies,coins,move_level,fire_level,hp_level,skin,cosmic_owned,hero_version1,admin_revision,updated_at)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
+                INSERT INTO players (player_id,name,points,trophies,coins,move_level,fire_level,hp_level,skin,cosmic_owned,hero_version1,admin_revision,profile_data,updated_at)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,NOW())
                 ON CONFLICT (player_id) DO UPDATE SET name=EXCLUDED.name,points=EXCLUDED.points,trophies=EXCLUDED.trophies,coins=EXCLUDED.coins,
                     move_level=EXCLUDED.move_level,fire_level=EXCLUDED.fire_level,hp_level=EXCLUDED.hp_level,skin=EXCLUDED.skin,
-                    cosmic_owned=EXCLUDED.cosmic_owned,hero_version1=EXCLUDED.hero_version1,admin_revision=players.admin_revision+1,revision=players.revision+1,last_seen=NOW(),updated_at=NOW()
-                RETURNING player_id,name,points,trophies,coins,move_level,fire_level,hp_level,skin,cosmic_owned,hero_version1,admin_revision
-            """, (player_id,entry["name"],entry["points"],entry["trophies"],entry["coins"],entry["upgrades"]["move"],entry["upgrades"]["fire"],entry["upgrades"]["hp"],entry["skin"],entry["cosmicOwned"],entry["heroVersion1"],entry["adminRevision"]))
+                    cosmic_owned=EXCLUDED.cosmic_owned,hero_version1=EXCLUDED.hero_version1,profile_data=EXCLUDED.profile_data,admin_revision=players.admin_revision+1,revision=players.revision+1,last_seen=NOW(),updated_at=NOW()
+                RETURNING player_id,name,points,trophies,coins,move_level,fire_level,hp_level,skin,cosmic_owned,hero_version1,admin_revision,profile_data
+            """, (player_id,entry["name"],entry["points"],entry["trophies"],entry["coins"],entry["upgrades"]["move"],entry["upgrades"]["fire"],entry["upgrades"]["hp"],entry["skin"],entry["cosmicOwned"],entry["heroVersion1"],entry["adminRevision"],json.dumps(entry.get("data",{}),ensure_ascii=False)))
             r=cur.fetchone()
-        return profile_full_row({"id":r[0],"name":r[1],"points":r[2],"trophies":r[3],"coins":r[4],"move_level":r[5],"fire_level":r[6],"hp_level":r[7],"skin":r[8],"cosmic_owned":r[9],"hero_version1":r[10],"admin_revision":r[11]})
+        return profile_full_row({"id":r[0],"name":r[1],"points":r[2],"trophies":r[3],"coins":r[4],"move_level":r[5],"fire_level":r[6],"hp_level":r[7],"skin":r[8],"cosmic_owned":r[9],"hero_version1":r[10],"admin_revision":r[11],"profile_data":r[12]})
     profiles[player_id]=entry; save_profiles(); return entry
 
 # ----------------------------- pojedynki 1v1 -----------------------------
 
 def clean_skin(value: Any) -> str:
-    return "cosmic" if str(value) == "cosmic" else "classic"
+    text = str(value or "classic")
+    return text if text in {"classic", "cosmic", "arena_vip_plus"} else "classic"
 
 
 def clean_float(value: Any, lower: float, upper: float, default: float = 0.0) -> float:
@@ -2741,6 +2987,14 @@ class Handler(BaseHTTPRequestHandler):
             account_id = clean_id(account.get("account_id"))
             profile = db_get_profile(account_id) if DATABASE_URL else profile_full_row(profiles.get(account_id, {}))
             self.send_json({"ok":True,"authenticated":True,"account":account_public(account),"profile":profile}); return
+        if parsed.path == "/api/pass/status":
+            account = self.require_account()
+            if not account: return
+            try:
+                self.send_json(arena_pass_status(account["account_id"]))
+            except Exception as exc:
+                self.send_json({"error":str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
         if parsed.path == "/api/chat/users":
             account=self.require_account()
             if not account: return
@@ -2922,6 +3176,24 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/api/auth/logout":
             delete_account_session(self.account_token())
             self.send_json({"ok":True},extra_headers={"Set-Cookie":"arena_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0"}); return
+        if parsed.path == "/api/pass/claim":
+            account = self.require_account()
+            if not account: return
+            try:
+                self.send_json(claim_arena_pass(account["account_id"], payload))
+            except ValueError as exc:
+                self.send_json({"error":str(exc)}, HTTPStatus.BAD_REQUEST)
+            except Exception as exc:
+                print(f"Błąd Arena Karnetu: {exc}")
+                self.send_json({"error":"Nie udało się odebrać nagrody."}, HTTPStatus.SERVICE_UNAVAILABLE)
+            return
+        if parsed.path == "/api/admin/pass":
+            if not self.require_admin(): return
+            try:
+                self.send_json({"ok":True,"pass":set_arena_pass_tier(payload.get("playerId"), payload.get("tier"))})
+            except Exception as exc:
+                self.send_json({"error":str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
         if parsed.path == "/api/chat/send":
             account=self.require_account()
             if not account: return

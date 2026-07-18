@@ -52,7 +52,7 @@
     body.duel-mode #shop{display:none}body.duel-mode #controls .soloOnly{display:none}#duelOpponentHud{display:none;position:absolute;left:50%;top:16px;transform:translateX(-50%);min-width:280px;text-align:center}body.duel-mode #duelOpponentHud{display:block}.duelHudName{font-size:14px;font-weight:1000;color:#ffb6e6}.duelHudHp{font-size:12px;color:#d8e2f5;margin-top:4px}
     .saveNote{display:none}
 
-    #gameOverView{display:none;position:absolute;inset:0;place-items:center;background:radial-gradient(circle at 50% 28%,rgba(104,54,180,.45),rgba(4,8,17,.96) 70%)}#gameOverCard{width:min(680px,94vw);padding:34px 26px;border-radius:28px;background:rgba(8,14,28,.94);border:1px solid rgba(255,255,255,.18);box-shadow:0 30px 80px rgba(0,0,0,.58);text-align:center}#gameOverView h2{font-size:clamp(36px,7vw,64px);line-height:.95;margin:0 0 14px;font-weight:1000;letter-spacing:-.04em;background:linear-gradient(180deg,#fff,#ffcc68 58%,#ff7b49);-webkit-background-clip:text;color:transparent}.badge{display:inline-block;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.13);font-size:12px;color:#b9c7e4;margin-bottom:18px}.endStats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:20px auto;max-width:520px}.endStat{padding:13px;border-radius:15px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.11);font-weight:800;color:#c9d6ee}.endStat span{display:block;margin-top:4px;font-size:24px;color:#ffe36d}#gameOverActions{display:flex;justify-content:center;gap:13px;flex-wrap:wrap;margin-top:22px}.endButton{border:0;border-radius:15px;padding:14px 26px;font-size:18px;font-weight:900;color:#11152a;background:linear-gradient(180deg,#ffe95c,#ffb52e);box-shadow:0 8px 0 #b76513;cursor:pointer}.secondaryBtn{color:#eef5ff;background:linear-gradient(180deg,#385174,#253653);box-shadow:0 8px 0 #142139}
+    #gameOverView{display:none;position:absolute;inset:0;place-items:center;background:radial-gradient(circle at 50% 28%,rgba(104,54,180,.45),rgba(4,8,17,.96) 70%);overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:max(16px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(34px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));touch-action:pan-y}#gameOverCard{width:min(680px,94vw);padding:34px 26px;border-radius:28px;background:rgba(8,14,28,.94);border:1px solid rgba(255,255,255,.18);box-shadow:0 30px 80px rgba(0,0,0,.58);text-align:center;margin:auto}#gameOverView h2{font-size:clamp(36px,7vw,64px);line-height:.95;margin:0 0 14px;font-weight:1000;letter-spacing:-.04em;background:linear-gradient(180deg,#fff,#ffcc68 58%,#ff7b49);-webkit-background-clip:text;color:transparent}.badge{display:inline-block;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.13);font-size:12px;color:#b9c7e4;margin-bottom:18px}.endStats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:20px auto;max-width:520px}.endStat{padding:13px;border-radius:15px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.11);font-weight:800;color:#c9d6ee}.endStat span{display:block;margin-top:4px;font-size:24px;color:#ffe36d}#gameOverActions{display:flex;justify-content:center;gap:13px;flex-wrap:wrap;margin-top:22px}.endButton{border:0;border-radius:15px;padding:14px 26px;font-size:18px;font-weight:900;color:#11152a;background:linear-gradient(180deg,#ffe95c,#ffb52e);box-shadow:0 8px 0 #b76513;cursor:pointer}.secondaryBtn{color:#eef5ff;background:linear-gradient(180deg,#385174,#253653);box-shadow:0 8px 0 #142139}
     #error{display:none;position:fixed;inset:20px;z-index:20;background:#27121a;color:#fff;border:2px solid #ff5578;border-radius:18px;padding:24px;overflow:auto}
     @media(max-width:800px){#controls{display:none}#ammoWrap{right:9px;bottom:9px;width:min(260px,48vw);padding:8px 10px}#healthWrap{left:9px;bottom:9px;transform:none;width:min(420px,47vw)}.top{left:9px;right:9px;top:9px}.top .card:last-child{display:none}#shop{left:9px;top:137px;width:225px}.upgradeBtn{padding:7px 9px;margin:5px 0}#healthWrap{bottom:15px;width:84vw}.lobbyLogo{top:8%;font-size:41px}#accountBox{right:10px;top:10px;gap:5px}.accountStat{min-width:78px;padding:7px;font-size:8px}.accountStat strong{font-size:14px}#lobbyTrophies{left:10px;top:10px;padding:7px 9px}.trophyIcon{font-size:20px}.trophyText strong{font-size:18px}#skinDock{left:10px;top:24%;width:190px;padding:9px}.skinCard{grid-template-columns:40px 1fr}.skinPreview{height:40px}.skinDesc{display:none}#versionDock{left:10px;right:auto;top:auto;bottom:92px;width:190px;padding:9px}#rankingDock{right:8px;top:22%;bottom:94px;width:205px;padding:8px}.rankingColumns,.rankingRow{grid-template-columns:34px 1fr 66px}.rankingRow{font-size:8px;min-height:25px}.rankingTitle{font-size:9px}.rankingMe{font-size:8px}.rankingFoot{display:none}.versionCard{padding:8px}.versionBonuses{font-size:9px}.versionBuyBtn{padding:8px;font-size:11px}#heroStage{width:72vw;top:53%}.heroBody{width:42%}@keyframes orbit{from{transform:rotate(0deg) translateX(105px) rotate(0deg)}to{transform:rotate(360deg) translateX(105px) rotate(-360deg)}}#savedUpgrades{bottom:15px;left:10px;transform:none;flex-direction:column;gap:4px;padding:6px}.savedUpgrade{min-width:135px;padding:5px 8px;text-align:left}.savedUpgrade strong{display:inline;margin-left:6px;font-size:12px}#playBtn{right:14px;bottom:15px;min-width:154px;padding:16px 20px;font-size:22px}#modeBtn{right:178px;bottom:15px;min-width:126px;padding:15px 12px;font-size:14px}#modeMenu{right:14px;bottom:93px;width:280px}.saveNote{display:none}}
 
@@ -466,7 +466,8 @@
     body.mobile-device.arena-playing #overlay,
     body.mobile-device.arena-playing #authOverlay,
     body.mobile-device.arena-playing #adminOverlay,
-    body.mobile-device.arena-playing #chatOverlay{
+    body.mobile-device.arena-playing #chatOverlay,
+    body.mobile-device.arena-playing #passOverlay{
       display:none!important;
     }
     body.mobile-device.arena-playing #game{
@@ -483,6 +484,14 @@
     body.mobile-device.arena-playing #hud{display:block!important}
 
 
+
+    body.mobile-device.result-mode{position:fixed!important;inset:0!important;width:100vw!important;height:var(--arena-visual-height,100dvh)!important;overflow:hidden!important}
+    body.mobile-device.result-mode #overlay{height:var(--arena-visual-height,100dvh)!important;overflow:hidden!important}
+    body.mobile-device.result-mode #gameOverView{height:var(--arena-visual-height,100dvh)!important;min-height:0!important;display:grid!important;align-items:start!important}
+    body.mobile-device.result-mode #gameOverCard{margin:auto;max-width:94vw}
+    body.mobile-device #passOverlay{height:var(--arena-visual-height,100dvh);overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+    .skinCard[data-skin=arena_vip_plus] .skinPreview{background:radial-gradient(circle at 35% 28%,#fff36a,#ff5d4a 32%,#9c42ff 62%,#11183d 82%);box-shadow:inset 0 0 18px rgba(255,255,255,.28),0 0 18px rgba(255,79,173,.25)}
+
     .databaseGuardMessage{
       margin:0 0 12px;
       padding:12px 13px;
@@ -496,6 +505,35 @@
       white-space:pre-line;
     }
     .databaseGuardMessage[hidden]{display:none!important}
+
+
+    /* Arena Karnet: bezpłatny, VIP i VIP+ */
+    #passOpenBtn{position:absolute;z-index:7;left:360px;bottom:22px;padding:13px 18px;border:0;border-radius:15px;background:linear-gradient(180deg,#ffe96b,#ff8b2d);color:#21120a;font-size:14px;font-weight:1000;cursor:pointer;box-shadow:0 6px 0 #a64a14,0 12px 28px rgba(255,139,45,.28)}#lobbyFullscreenBtn{display:none;position:absolute;z-index:8;right:18px;top:74px;border:1px solid rgba(255,255,255,.22);border-radius:13px;padding:10px 13px;background:linear-gradient(180deg,#65efff,#3d88ff);color:#07162d;font-size:11px;font-weight:1000;box-shadow:0 5px 0 #174a9f;cursor:pointer}
+    #passOpenBtn:hover{transform:translateY(-2px)}#passOpenBtn:active{transform:translateY(4px);box-shadow:0 2px 0 #a64a14}
+    #passOverlay{display:none;position:fixed;inset:0;z-index:76;background:radial-gradient(circle at 50% 0,rgba(95,66,210,.36),transparent 48%),rgba(2,6,18,.92);backdrop-filter:blur(14px);color:#f4f7ff;overflow:auto;padding:18px}
+    #passOverlay.open{display:block}
+    .passPanel{width:min(1480px,96vw);min-height:min(850px,94vh);margin:auto;border:1px solid rgba(255,255,255,.2);border-radius:24px;background:linear-gradient(145deg,rgba(14,23,55,.98),rgba(8,12,32,.98));box-shadow:0 30px 90px rgba(0,0,0,.55);overflow:hidden}
+    .passHeader{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding:22px 24px;background:linear-gradient(110deg,rgba(77,44,180,.72),rgba(10,119,176,.45),rgba(255,127,47,.32));border-bottom:1px solid rgba(255,255,255,.16)}
+    .passHeader h2{margin:0;font-size:30px;letter-spacing:.04em}.passHeader p{margin:7px 0 0;color:#cbd7f7;font-weight:700;font-size:13px}
+    .passClose{border:0;border-radius:12px;background:#ff5275;color:white;width:42px;height:42px;font-size:20px;font-weight:1000;cursor:pointer}
+    .passSummary{display:grid;grid-template-columns:1.2fr 1fr;gap:14px;padding:16px 22px}
+    .passProgressCard,.passBuyCard{border:1px solid rgba(255,255,255,.14);border-radius:18px;background:rgba(9,17,42,.76);padding:15px}
+    .passProgressTop{display:flex;justify-content:space-between;gap:12px;font-size:13px;font-weight:1000}.passProgressBar{height:14px;border-radius:99px;background:#151d3a;overflow:hidden;margin:11px 0 7px;border:1px solid rgba(255,255,255,.12)}.passProgressFill{height:100%;width:0;background:linear-gradient(90deg,#56e5ff,#8b7cff,#ffbb45);transition:width .25s}
+    .passTierBadge{display:inline-flex;align-items:center;gap:7px;padding:7px 11px;border-radius:99px;background:rgba(255,255,255,.1);font-size:11px;font-weight:1000}.passTierBadge.vip{background:linear-gradient(90deg,#ffcf4b,#ff8b2d);color:#271307}.passTierBadge.vip_plus{background:linear-gradient(90deg,#84f5ff,#a16cff,#ff5ebc);color:#120a27}
+    .passBuyRow{display:flex;flex-wrap:wrap;gap:9px;margin-top:10px}.passBuyBtn,.passClaimAll{border:0;border-radius:12px;padding:11px 14px;font-size:12px;font-weight:1000;cursor:pointer}.passBuyBtn.vip{background:linear-gradient(180deg,#ffe76d,#f7a52d);color:#2d1803}.passBuyBtn.vipPlus{background:linear-gradient(180deg,#8df7ff,#986cff 52%,#ff63bb);color:#100a26}.passBuyBtn:disabled{opacity:.55;cursor:default;filter:grayscale(.4)}.passClaimAll{background:linear-gradient(180deg,#68f2bd,#27aa79);color:#061d16}
+    #passMessage{min-height:18px;padding:0 22px 12px;color:#ffdf83;font-size:12px;font-weight:900}
+    .passScroller{overflow-x:auto;overflow-y:hidden;padding:0 18px 24px;scrollbar-color:#635dd5 #101735}
+    .passGrid{display:grid;grid-template-columns:repeat(20,156px);gap:10px;min-width:max-content;align-items:stretch}
+    .passLevelColumn{display:grid;grid-template-rows:56px 132px 132px 132px;gap:8px}
+    .passLevelHead{display:grid;place-items:center;text-align:center;border-radius:14px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);font-size:11px;font-weight:900;color:#cbd8ff}.passLevelHead strong{font-size:20px;color:#fff}.passLevelHead small{display:block;font-size:9px;color:#8fa3d2}
+    .passReward{position:relative;border-radius:16px;border:1px solid rgba(255,255,255,.13);background:rgba(17,25,55,.86);padding:11px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:5px;overflow:hidden}.passReward.free{box-shadow:inset 0 0 0 1px rgba(102,216,255,.06)}.passReward.vip{background:linear-gradient(155deg,rgba(92,58,11,.9),rgba(37,27,21,.92));border-color:rgba(255,213,94,.32)}.passReward.vip_plus{background:linear-gradient(155deg,rgba(60,24,104,.92),rgba(16,32,74,.94));border-color:rgba(151,123,255,.42)}
+    .passReward.empty{opacity:.42;background:rgba(13,18,37,.55)}.passReward.locked{filter:saturate(.65)}.passReward.claimed{opacity:.68;border-color:rgba(92,255,176,.48)}.passReward.claimable{animation:passPulse 1.55s infinite;box-shadow:0 0 24px rgba(96,232,255,.25)}
+    @keyframes passPulse{50%{transform:translateY(-2px);box-shadow:0 0 30px rgba(255,207,72,.36)}}
+    .passRewardIcon{font-size:28px}.passRewardName{font-size:10px;line-height:1.25;font-weight:1000}.passRewardState{font-size:9px;color:#aebde1;font-weight:900}.passReward button{border:0;border-radius:9px;padding:7px 9px;background:#64e9c0;color:#06251c;font-size:9px;font-weight:1000;cursor:pointer}.passReward button:disabled{display:none}
+    .passTrackLabels{display:grid;grid-template-rows:56px 132px 132px 132px;gap:8px;position:sticky;left:0;z-index:2;width:96px;float:left;margin-right:10px}.passTrackLabel{display:grid;place-items:center;text-align:center;border-radius:14px;font-size:10px;font-weight:1000;letter-spacing:.04em;background:#172042;border:1px solid rgba(255,255,255,.14)}.passTrackLabel.vip{background:linear-gradient(160deg,#5c3a0b,#291b12);color:#ffe074}.passTrackLabel.vip_plus{background:linear-gradient(160deg,#4a1f80,#10254f);color:#dcbcff}.passTrackLabel.spacer{background:transparent;border:0}
+    .passTracksWrap{display:flex;align-items:flex-start;min-width:max-content}
+    .passLegend{padding:0 22px 14px;color:#aebde1;font-size:11px;font-weight:700}.passLegend b{color:#fff}
+    @media(max-width:760px){body.mobile-device.lobby-mode #lobbyFullscreenBtn{display:block}#passOpenBtn{left:auto;right:10px;top:170px;bottom:auto;padding:10px 12px;font-size:11px}.passHeader{padding:15px}.passHeader h2{font-size:23px}.passSummary{grid-template-columns:1fr;padding:12px}.passPanel{width:98vw}.passLevelColumn{grid-template-rows:50px 118px 118px 118px}.passGrid{grid-template-columns:repeat(20,140px)}.passTrackLabels{grid-template-rows:50px 118px 118px 118px;width:78px}.passScroller{padding-left:8px}}
 
   </style>
 </head>
@@ -535,8 +573,8 @@
   <div id="mobileFullscreenGate" role="dialog" aria-modal="true" aria-label="Uruchom pełny ekran">
     <div class="mobileFullscreenGateCard">
       <span class="mobileFullscreenGateIcon">⛶</span>
-      <h2>Pełny ekran gry</h2>
-      <p>Dotknij przycisku, aby ukryć pasek przeglądarki i uruchomić arenę na całym ekranie.</p>
+      <h2 id="mobileFullscreenTitle">Pełny ekran gry</h2>
+      <p id="mobileFullscreenText">Dotknij przycisku, aby ukryć pasek przeglądarki i uruchomić arenę na całym ekranie.</p>
       <button id="mobileFullscreenStartBtn" type="button">URUCHOM GRĘ NA PEŁNYM EKRANIE</button>
     </div>
   </div>
@@ -551,6 +589,7 @@
         <div class="skinList">
           <div class="skinCard" data-skin="classic" role="button" tabindex="0"><div class="skinPreview">💧</div><div><div class="skinName">Błękitny Bohater</div><div class="skinDesc">Klasyczny wygląd wojownika.</div><span class="skinState">WYBIERZ</span></div></div>
           <div class="skinCard" data-skin="cosmic" role="button" tabindex="0"><div class="skinPreview">🪐</div><div><div class="skinName">Kosmiczny Strażnik</div><div class="skinDesc">Pancerz, wizjer i orbitujące gwiazdy. <span class="skinPrice">Cena: 1250 monet</span></div><span class="skinState">🔒 1250 🪙</span></div></div>
+          <div class="skinCard" data-skin="arena_vip_plus" role="button" tabindex="0"><div class="skinPreview">🔥</div><div><div class="skinName">Neonowy Władca Areny</div><div class="skinDesc">Ekskluzywna ognisto-neonowa skórka z 20. poziomu Arena Karnetu VIP+.</div><span class="skinState">🔒 VIP+ POZIOM 20</span></div></div>
         </div>
         <div id="skinNotice" aria-live="polite"></div>
       </aside>
@@ -585,7 +624,7 @@
       </div>
       <div class="saveNote">Postęp zapisuje się w przeglądarce. Wybierz Przetrwanie z botami albo Pojedynki 1v1.</div>
       <div id="modeMenu" aria-label="Wybór trybu gry"><div class="modeMenuTitle">WYBIERZ TRYB</div><button id="soloModeOption" class="modeOption"><span class="modeIcon">🤖</span><span><span class="modeName">Przetrwanie z botami</span><span class="modeDesc">Klasyczny tryb z falami robotów, monetami, pucharkami i ulepszeniami.</span></span></button><button id="duelModeOption" class="modeOption"><span class="modeIcon">⚔️</span><span><span class="modeName">Pojedynki 1v1</span><span class="modeDesc">Szybka arena z 2 ścianami i 4 polami krzaków. Czekaj do 30 sekund na gracza albo walcz z botem.</span></span></button></div>
-      <button id="chatOpenBtn">💬 CZAT <span id="chatBadge" class="chatBadge" style="display:none">0</span></button><button id="adminOpenBtn" hidden style="display:none">⚙ PANEL ADMINISTRACYJNY</button>
+      <button id="chatOpenBtn">💬 CZAT <span id="chatBadge" class="chatBadge" style="display:none">0</span></button><button id="passOpenBtn">🎟️ ARENA KARNET</button><button id="lobbyFullscreenBtn" type="button">⛶ PEŁNY EKRAN</button><button id="adminOpenBtn" hidden style="display:none">⚙ PANEL ADMINISTRACYJNY</button>
       <button id="modeBtn">TRYBY ▾</button>
       <button id="playBtn">GRAJ ▶</button>
     </div>
@@ -646,6 +685,19 @@
       <div id="authMsg" class="authMsg" aria-live="polite"></div>
     </section>
     <section id="banCard" class="authCard banCard" style="display:none"><div class="banIcon">⛔</div><h2>Konto zablokowane</h2><strong id="banReason"></strong><div id="banUntil"></div><small>Po wygaśnięciu blokady odśwież stronę.</small></section>
+  </div>
+
+  <div id="passOverlay" aria-hidden="true">
+    <section class="passPanel" role="dialog" aria-modal="true" aria-label="Arena Karnet">
+      <header class="passHeader"><div><h2>🎟️ ARENA KARNET</h2><p>Poziomy odblokowują się automatycznie za posiadane punkty. Zakup VIP lub VIP+ odblokowuje tylko dodatkowe tory nagród.</p></div><button id="passCloseBtn" class="passClose" type="button">✕</button></header>
+      <div class="passSummary">
+        <div class="passProgressCard"><div class="passProgressTop"><span id="passPointsText">0 punktów</span><span id="passTierBadge" class="passTierBadge">BEZPŁATNY</span></div><div class="passProgressBar"><div id="passProgressFill" class="passProgressFill"></div></div><div id="passNextText" class="passRewardState">Ładowanie postępu…</div></div>
+        <div class="passBuyCard"><b>ODBLOCKUJ DODATKOWE NAGRODY</b><div class="passBuyRow"><button id="passBuyVipBtn" class="passBuyBtn vip" type="button">ARENA KARNET VIP • 13 ZŁ</button><button id="passBuyVipPlusBtn" class="passBuyBtn vipPlus" type="button">ARENA KARNET VIP+ • 21 ZŁ</button><button id="passClaimAllBtn" class="passClaimAll" type="button">ODBIERZ WSZYSTKIE</button></div></div>
+      </div>
+      <div id="passMessage" aria-live="polite"></div>
+      <div class="passLegend"><b>Bezpłatny:</b> nagroda co 2000 punktów. <b>VIP i VIP+:</b> poziom co 3000 punktów. VIP daje lepszą nagrodę co 4 poziomy, a VIP+ daje nagrodę na każdym z 20 poziomów i automatycznie obejmuje również nagrody VIP.</div>
+      <div class="passScroller"><div class="passTracksWrap"><div class="passTrackLabels"><div class="passTrackLabel spacer"></div><div class="passTrackLabel">BEZPŁATNY<br>CO 2000 ⭐</div><div class="passTrackLabel vip">VIP<br>13 ZŁ</div><div class="passTrackLabel vip_plus">VIP+<br>21 ZŁ</div></div><div id="passGrid" class="passGrid"></div></div></div>
+    </section>
   </div>
 
   <div id="chatOverlay">
@@ -720,7 +772,7 @@
 
       <div class="adminPane" data-admin-pane="players">
         <div class="adminGrid"><div class="adminSection"><h3>Znajdź gracza</h3><div class="adminField"><label>NICK LUB ID</label><input id="adminPlayerSearch" placeholder="Wpisz nazwę albo ID"></div><button id="adminSearchBtn" class="adminPrimary">SZUKAJ</button><div id="adminPlayerList" class="adminPlayerList"></div></div>
-        <div class="adminSection"><h3>Edytuj profil</h3><div class="adminField"><label>ID GRACZA</label><input id="editPlayerId" readonly></div><div class="adminField"><label>NICK</label><input id="editPlayerName"></div><div class="adminGrid"><div class="adminField"><label>PUNKTY</label><input id="editPoints" type="number" min="0"></div><div class="adminField"><label>PUCHARKI</label><input id="editTrophies" type="number" min="0"></div><div class="adminField"><label>MONETY</label><input id="editCoins" type="number" min="0"></div><div class="adminField"><label>SKÓRKA</label><select id="editSkin"><option value="classic">Klasyczna</option><option value="cosmic">Kosmiczny Strażnik</option></select></div><div class="adminField"><label>POZIOM RUCHU</label><input id="editMove" type="number" min="0" max="5"></div><div class="adminField"><label>POZIOM STRZAŁU</label><input id="editFire" type="number" min="0" max="5"></div><div class="adminField"><label>POZIOM ŻYCIA</label><input id="editHp" type="number" min="0" max="5"></div></div><label class="adminCheck"><input id="editCosmic" type="checkbox"> Kosmiczny Strażnik odblokowany</label><label class="adminCheck"><input id="editVersion" type="checkbox"> Lepsza wersja I odblokowana</label><button id="adminSavePlayer" class="adminPrimary">ZAPISZ PROFIL</button><div id="adminPlayerMsg" class="adminMsg"></div></div></div>
+        <div class="adminSection"><h3>Edytuj profil</h3><div class="adminField"><label>ID GRACZA</label><input id="editPlayerId" readonly></div><div class="adminField"><label>NICK</label><input id="editPlayerName"></div><div class="adminGrid"><div class="adminField"><label>PUNKTY</label><input id="editPoints" type="number" min="0"></div><div class="adminField"><label>PUCHARKI</label><input id="editTrophies" type="number" min="0"></div><div class="adminField"><label>MONETY</label><input id="editCoins" type="number" min="0"></div><div class="adminField"><label>SKÓRKA</label><select id="editSkin"><option value="classic">Klasyczna</option><option value="cosmic">Kosmiczny Strażnik</option><option value="arena_vip_plus">Neonowy Władca Areny</option></select></div><div class="adminField"><label>ARENA KARNET</label><select id="editPassTier"><option value="free">Bezpłatny</option><option value="vip">VIP — 13 zł</option><option value="vip_plus">VIP+ — 21 zł</option></select></div><div class="adminField"><label>POZIOM RUCHU</label><input id="editMove" type="number" min="0" max="5"></div><div class="adminField"><label>POZIOM STRZAŁU</label><input id="editFire" type="number" min="0" max="5"></div><div class="adminField"><label>POZIOM ŻYCIA</label><input id="editHp" type="number" min="0" max="5"></div></div><label class="adminCheck"><input id="editCosmic" type="checkbox"> Kosmiczny Strażnik odblokowany</label><label class="adminCheck"><input id="editArenaSkin" type="checkbox"> Neonowy Władca Areny odblokowany</label><label class="adminCheck"><input id="editVersion" type="checkbox"> Lepsza wersja I odblokowana</label><button id="adminSavePlayer" class="adminPrimary">ZAPISZ PROFIL</button><div id="adminPlayerMsg" class="adminMsg"></div></div></div>
       </div>
 
 
@@ -991,6 +1043,6 @@
 </script>
 
 
-<script src="game.js?v=persistent-neon-sql-v11"></script>
+<script src="game.js?v=arena-karnet-vip-mobile-v13"></script>
 </body>
 </html>
