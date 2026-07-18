@@ -305,6 +305,18 @@
       #mobileSuperBtn{right:max(116px,calc(env(safe-area-inset-right) + 108px))}
     }
 
+    /* Naprawa klikalności okna logowania */
+    #authOverlay{pointer-events:auto!important}
+    #authOverlay .authCard{position:relative;z-index:1001;pointer-events:auto!important}
+    #authOverlay .authTabs,
+    #authOverlay .authTab,
+    #authOverlay .authPane,
+    #authOverlay .authField,
+    #authOverlay input,
+    #authOverlay button{pointer-events:auto!important}
+    #authOverlay .authTab,
+    #authOverlay .authPrimary{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+
   </style>
 </head>
 <body class="lobby-mode">
@@ -408,9 +420,9 @@
   <div id="authOverlay">
     <section id="authCard" class="authCard">
       <h2>Konto Arena Stars</h2><p class="authLead">Przy pierwszym wejściu utwórz konto. Nazwa jest unikatowa, a postęp zostaje zapisany na serwerze.</p>
-      <div class="authTabs"><button class="authTab active" data-auth-tab="register">UTWÓRZ KONTO</button><button class="authTab" data-auth-tab="login">ZALOGUJ SIĘ</button></div>
-      <div class="authPane active" data-auth-pane="register"><div class="authField"><label>UNIKATOWA NAZWA KONTA</label><input id="registerUsername" maxlength="20" autocomplete="username"></div><div class="authField"><label>HASŁO — MINIMUM 6 ZNAKÓW</label><input id="registerPassword" type="password" autocomplete="new-password"></div><button id="registerBtn" class="authPrimary">UTWÓRZ KONTO</button></div>
-      <div class="authPane" data-auth-pane="login"><div class="authField"><label>NAZWA KONTA</label><input id="loginUsername" maxlength="20" autocomplete="username"></div><div class="authField"><label>HASŁO</label><input id="loginPassword" type="password" autocomplete="current-password"></div><button id="loginBtn" class="authPrimary">ZALOGUJ SIĘ</button></div>
+      <div class="authTabs"><button type="button" class="authTab active" data-auth-tab="register">UTWÓRZ KONTO</button><button type="button" class="authTab" data-auth-tab="login">ZALOGUJ SIĘ</button></div>
+      <div class="authPane active" data-auth-pane="register"><div class="authField"><label>UNIKATOWA NAZWA KONTA</label><input id="registerUsername" maxlength="20" autocomplete="username"></div><div class="authField"><label>HASŁO — MINIMUM 6 ZNAKÓW</label><input id="registerPassword" type="password" autocomplete="new-password"></div><button type="button" id="registerBtn" class="authPrimary">UTWÓRZ KONTO</button></div>
+      <div class="authPane" data-auth-pane="login"><div class="authField"><label>NAZWA KONTA</label><input id="loginUsername" maxlength="20" autocomplete="username"></div><div class="authField"><label>HASŁO</label><input id="loginPassword" type="password" autocomplete="current-password"></div><button type="button" id="loginBtn" class="authPrimary">ZALOGUJ SIĘ</button></div>
       <div id="authMsg" class="authMsg"></div>
     </section>
     <section id="banCard" class="authCard banCard" style="display:none"><div class="banIcon">⛔</div><h2>Konto zablokowane</h2><strong id="banReason"></strong><div id="banUntil"></div><small>Po wygaśnięciu blokady odśwież stronę.</small></section>
@@ -506,6 +518,101 @@
   </div>
 
   <div id="error"></div>
-  <script src="game.js?v=mobile-landscape-dual-stick-v1"></script>
+  <script id="authClickFallback">
+  (() => {
+    const $ = id => document.getElementById(id);
+    const message = (text, bad = false) => {
+      const box = $('authMsg');
+      if (!box) return;
+      box.textContent = text || '';
+      box.style.color = bad ? '#ff7890' : '#ffdd75';
+    };
+
+    const switchPane = name => {
+      document.querySelectorAll('[data-auth-tab]').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.authTab === name);
+      });
+      document.querySelectorAll('[data-auth-pane]').forEach(pane => {
+        pane.classList.toggle('active', pane.dataset.authPane === name);
+      });
+      message('');
+      setTimeout(() => {
+        const input = name === 'login' ? $('loginUsername') : $('registerUsername');
+        input?.focus();
+      }, 0);
+    };
+
+    const getPlayerId = () => {
+      const key = 'arenaStars3D_online_player_id_v1';
+      let id = '';
+      try { id = localStorage.getItem(key) || ''; } catch (_) {}
+      if (!id) {
+        id = globalThis.crypto?.randomUUID?.() ||
+          `player-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        try { localStorage.setItem(key, id); } catch (_) {}
+      }
+      return id;
+    };
+
+    const submit = async kind => {
+      const register = kind === 'register';
+      const username = $(register ? 'registerUsername' : 'loginUsername')?.value?.trim() || '';
+      const password = $(register ? 'registerPassword' : 'loginPassword')?.value || '';
+      if (!username || !password) {
+        message('Wpisz nazwę konta i hasło.', true);
+        return;
+      }
+      message('Łączenie z serwerem…');
+      const button = $(register ? 'registerBtn' : 'loginBtn');
+      if (button) button.disabled = true;
+      try {
+        const response = await fetch(register ? '/api/auth/register' : '/api/auth/login', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({username, password, playerId: getPlayerId()})
+        });
+        let data = {};
+        try { data = await response.json(); } catch (_) {}
+        if (!response.ok) throw new Error(data.error || `Błąd serwera: ${response.status}`);
+        message('Zalogowano. Wczytywanie gry…');
+        location.reload();
+      } catch (error) {
+        message(error?.message || 'Nie udało się zalogować.', true);
+        if (button) button.disabled = false;
+      }
+    };
+
+    document.querySelectorAll('[data-auth-tab]').forEach(btn => {
+      btn.addEventListener('click', event => {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        switchPane(btn.dataset.authTab);
+      }, true);
+    });
+
+    $('registerBtn')?.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      submit('register');
+    }, true);
+
+    $('loginBtn')?.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      submit('login');
+    }, true);
+
+    ['registerPassword', 'loginPassword'].forEach(id => {
+      $(id)?.addEventListener('keydown', event => {
+        if (event.key !== 'Enter') return;
+        event.preventDefault();
+        submit(id.startsWith('register') ? 'register' : 'login');
+      }, true);
+    });
+  })();
+  </script>
+
+  <script src="game.js?v=mobile-login-click-fix-v2"></script>
 </body>
 </html>
