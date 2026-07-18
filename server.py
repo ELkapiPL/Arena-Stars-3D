@@ -10,6 +10,7 @@ from __future__ import annotations
 import base64
 import hmac
 import hashlib
+import html as html_lib
 import json
 import io
 import math
@@ -31,7 +32,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, urlparse, unquote
+from urllib.parse import parse_qs, urlparse, unquote, quote
 
 ROOT = Path(__file__).resolve().parent
 DATA_FILE = ROOT / "players.json"
@@ -47,10 +48,16 @@ MAX_BODY = 256 * 1024
 ADMIN_UPLOAD_MAX_BODY = 24 * 1024 * 1024
 ADMIN_UPLOAD_MAX_RAW = 40 * 1024 * 1024
 AUTH_SESSION_TTL = 30 * 24 * 60 * 60
+PASSWORD_RESET_TTL = 30 * 60
+PASSWORD_RESET_RATE_WINDOW = 15 * 60
+PASSWORD_RESET_RATE_MAX = 3
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "").strip()
+PASSWORD_RESET_FROM = os.environ.get("PASSWORD_RESET_FROM", "").strip()
+APP_PUBLIC_URL = os.environ.get("APP_PUBLIC_URL", "").strip().rstrip("/")
 CHAT_MAX_MESSAGE = 300
 CHAT_MAX_RECIPIENTS = 20
 CHAT_HISTORY_LIMIT = 160
-DB_SCHEMA_VERSION = 6
+DB_SCHEMA_VERSION = 7
 PROFILE_DATA_VERSION = 1
 DUEL_PLAYER_TIMEOUT = 12.0
 DUEL_WAIT_TIMEOUT = 45.0
@@ -101,6 +108,8 @@ admin_sessions: dict[str, dict[str, Any]] = {}
 admin_login_attempts: dict[str, dict[str, float | int]] = {}
 local_accounts: dict[str, dict[str, Any]] = {}
 local_auth_sessions: dict[str, dict[str, Any]] = {}
+local_password_reset_tokens: dict[str, dict[str, Any]] = {}
+password_reset_attempts: dict[str, list[float]] = {}
 local_chat_messages: list[dict[str, Any]] = []
 local_chat_seq = 0
 
@@ -618,6 +627,94 @@ def validate_password(value: Any) -> str:
     return password
 
 
+EMAIL_RE = re.compile(r"^[^@\s]{1,64}@[^@\s]{1,189}\.[^@\s]{2,63}$")
+
+
+def normalize_email(value: Any) -> tuple[str, str]:
+    email = str(value or "").strip()
+    if len(email) > 254 or not EMAIL_RE.fullmatch(email):
+        raise ValueError("Wpisz prawidłowy adres e-mail.")
+    return email, email.casefold()
+
+
+def mask_email(value: Any) -> str:
+    email = str(value or "").strip()
+    if "@" not in email:
+        return ""
+    local, domain = email.split("@", 1)
+    visible = local[:1]
+    return f"{visible}{'*' * max(2, min(6, len(local)-1))}@{domain}"
+
+
+def reset_rate_allowed(key: str) -> bool:
+    current = now()
+    cutoff = current - PASSWORD_RESET_RATE_WINDOW
+    attempts = [stamp for stamp in password_reset_attempts.get(key, []) if stamp >= cutoff]
+    if len(attempts) >= PASSWORD_RESET_RATE_MAX:
+        password_reset_attempts[key] = attempts
+        return False
+    attempts.append(current)
+    password_reset_attempts[key] = attempts
+    return True
+
+
+def build_public_url(request_host: str = "", forwarded_proto: str = "") -> str:
+    if APP_PUBLIC_URL:
+        return APP_PUBLIC_URL
+    render_host = os.environ.get("RENDER_EXTERNAL_HOSTNAME", "").strip()
+    if render_host:
+        return f"https://{render_host}"
+    host = request_host.strip() or f"127.0.0.1:{PORT}"
+    proto = forwarded_proto.strip() or ("https" if os.environ.get("RENDER") else "http")
+    return f"{proto}://{host}"
+
+
+def send_password_reset_email(email: str, username: str, reset_url: str) -> None:
+    if not RESEND_API_KEY or not PASSWORD_RESET_FROM:
+        raise RuntimeError("Wysyłanie e-maili nie jest skonfigurowane.")
+    safe_user = html_lib.escape(username)
+    safe_url = html_lib.escape(reset_url, quote=True)
+    payload = {
+        "from": PASSWORD_RESET_FROM,
+        "to": [email],
+        "subject": "Arena Stars 3D — reset hasła",
+        "html": (
+            f"<div style='font-family:Arial,sans-serif;line-height:1.55;color:#111'>"
+            f"<h2>Reset hasła Arena Stars 3D</h2>"
+            f"<p>Cześć <b>{safe_user}</b>.</p>"
+            f"<p>Kliknij poniższy przycisk, aby ustawić nowe hasło. Link jest ważny przez 30 minut i działa tylko raz.</p>"
+            f"<p><a href='{safe_url}' style='display:inline-block;padding:12px 18px;background:#397dff;color:#fff;text-decoration:none;border-radius:8px;font-weight:bold'>USTAW NOWE HASŁO</a></p>"
+            f"<p>Jeśli to nie Ty prosiłeś o zmianę hasła, zignoruj tę wiadomość.</p>"
+            f"</div>"
+        ),
+        "text": (
+            f"Cześć {username}. Ustaw nowe hasło do Arena Stars 3D: {reset_url}\n"
+            "Link jest ważny przez 30 minut i działa tylko raz."
+        ),
+    }
+    request = urllib.request.Request(
+        "https://api.resend.com/emails",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {RESEND_API_KEY}",
+            "Content-Type": "application/json",
+            "User-Agent": "Arena-Stars-3D/1.0",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=15) as response:
+            if not 200 <= int(response.status) < 300:
+                raise RuntimeError(f"Usługa e-mail zwróciła kod {response.status}.")
+    except urllib.error.HTTPError as exc:
+        detail = exc.read(800).decode("utf-8", "replace")
+        print(f"Błąd Resend: HTTP {exc.code}: {detail}")
+        raise RuntimeError("Nie udało się wysłać e-maila resetującego.") from exc
+    except Exception as exc:
+        print(f"Błąd wysyłania e-maila: {type(exc).__name__}: {exc}")
+        raise RuntimeError("Nie udało się wysłać e-maila resetującego.") from exc
+
+
 def make_password_hash(password: str, salt_b64: str | None = None) -> tuple[str, str]:
     salt = base64.b64decode(salt_b64) if salt_b64 else secrets.token_bytes(16)
     digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 240_000)
@@ -646,6 +743,8 @@ def account_public(row: dict[str, Any]) -> dict[str, Any]:
         "id": account_id,
         "playerId": account_id,
         "username": str(row.get("username") or ""),
+        "emailRequired": not bool(str(row.get("email") or "").strip()),
+        "emailMasked": mask_email(row.get("email")),
         # Flaga jest wyliczana wyłącznie na serwerze. Tylko konto właściciela
         # otrzymuje ceny 0 w sklepie klienta.
         "ownerBenefits": bool(account_id and account_id == clean_id(ADMIN_PLAYER_ID)),
@@ -681,9 +780,9 @@ def save_account_storage() -> None:
 def account_get_by_username(username_key: str) -> dict[str, Any] | None:
     if DATABASE_URL:
         with db_connect() as conn, conn.cursor() as cur:
-            cur.execute("SELECT account_id, username, password_hash, password_salt, EXTRACT(EPOCH FROM banned_until), ban_reason, ban_count FROM accounts WHERE username_key=%s", (username_key,))
+            cur.execute("SELECT account_id, username, password_hash, password_salt, EXTRACT(EPOCH FROM banned_until), ban_reason, ban_count, email, email_key FROM accounts WHERE username_key=%s", (username_key,))
             row = cur.fetchone()
-        return ({"account_id":row[0],"username":row[1],"password_hash":row[2],"password_salt":row[3],"banned_until_ts":float(row[4] or 0),"ban_reason":row[5] or "","ban_count":clean_number(row[6])} if row else None)
+        return ({"account_id":row[0],"username":row[1],"password_hash":row[2],"password_salt":row[3],"banned_until_ts":float(row[4] or 0),"ban_reason":row[5] or "","ban_count":clean_number(row[6]),"email":row[7] or "","email_key":row[8] or ""} if row else None)
     for row in local_accounts.values():
         if str(row.get("username_key")) == username_key:
             return dict(row)
@@ -696,11 +795,125 @@ def account_get(account_id: str) -> dict[str, Any] | None:
         return None
     if DATABASE_URL:
         with db_connect() as conn, conn.cursor() as cur:
-            cur.execute("SELECT account_id, username, password_hash, password_salt, EXTRACT(EPOCH FROM banned_until), ban_reason, ban_count FROM accounts WHERE account_id=%s", (account_id,))
+            cur.execute("SELECT account_id, username, password_hash, password_salt, EXTRACT(EPOCH FROM banned_until), ban_reason, ban_count, email, email_key FROM accounts WHERE account_id=%s", (account_id,))
             row = cur.fetchone()
-        return ({"account_id":row[0],"username":row[1],"password_hash":row[2],"password_salt":row[3],"banned_until_ts":float(row[4] or 0),"ban_reason":row[5] or "","ban_count":clean_number(row[6])} if row else None)
+        return ({"account_id":row[0],"username":row[1],"password_hash":row[2],"password_salt":row[3],"banned_until_ts":float(row[4] or 0),"ban_reason":row[5] or "","ban_count":clean_number(row[6]),"email":row[7] or "","email_key":row[8] or ""} if row else None)
     row = local_accounts.get(account_id)
     return dict(row) if row else None
+
+
+
+def account_get_by_email(email_key: str) -> dict[str, Any] | None:
+    if DATABASE_URL:
+        with db_connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT account_id, username, password_hash, password_salt, EXTRACT(EPOCH FROM banned_until), ban_reason, ban_count, email, email_key FROM accounts WHERE email_key=%s",
+                (email_key,),
+            )
+            row = cur.fetchone()
+        return ({"account_id":row[0],"username":row[1],"password_hash":row[2],"password_salt":row[3],"banned_until_ts":float(row[4] or 0),"ban_reason":row[5] or "","ban_count":clean_number(row[6]),"email":row[7] or "","email_key":row[8] or ""} if row else None)
+    for row in local_accounts.values():
+        if str(row.get("email_key") or "") == email_key:
+            return dict(row)
+    return None
+
+
+def account_set_email(account_id: str, email_value: Any) -> dict[str, Any]:
+    email, email_key = normalize_email(email_value)
+    current = account_get(account_id)
+    if not current:
+        raise ValueError("Nie znaleziono konta.")
+    if str(current.get("email") or "").strip():
+        raise ValueError("Adres e-mail jest już przypisany do tego konta.")
+    other = account_get_by_email(email_key)
+    if other and clean_id(other.get("account_id")) != clean_id(account_id):
+        raise ValueError("Ten adres e-mail jest już używany przez inne konto.")
+    if DATABASE_URL:
+        try:
+            with db_connect() as conn, conn.cursor() as cur:
+                cur.execute("UPDATE accounts SET email=%s,email_key=%s WHERE account_id=%s", (email,email_key,account_id))
+        except Exception as exc:
+            if "unique" in str(exc).lower():
+                raise ValueError("Ten adres e-mail jest już używany przez inne konto.") from exc
+            raise
+    else:
+        local_accounts[account_id]["email"] = email
+        local_accounts[account_id]["email_key"] = email_key
+        save_account_storage()
+    return account_get(account_id) or current
+
+
+def create_password_reset(email_value: Any, base_url: str, request_key: str) -> None:
+    email, email_key = normalize_email(email_value)
+    if not reset_rate_allowed(f"ip:{request_key}") or not reset_rate_allowed(f"email:{email_key}"):
+        raise RuntimeError("Za dużo prób resetowania. Spróbuj ponownie za około 15 minut.")
+    account = account_get_by_email(email_key)
+    if not account:
+        return
+    if not RESEND_API_KEY or not PASSWORD_RESET_FROM:
+        raise RuntimeError("Reset hasła przez e-mail nie jest jeszcze skonfigurowany.")
+    token = secrets.token_urlsafe(40)
+    digest = token_hash(token)
+    expiry = now() + PASSWORD_RESET_TTL
+    account_id = clean_id(account.get("account_id"))
+    if DATABASE_URL:
+        with db_connect() as conn, conn.cursor() as cur:
+            cur.execute("DELETE FROM password_reset_tokens WHERE expires_at<NOW() OR used_at IS NOT NULL")
+            cur.execute("DELETE FROM password_reset_tokens WHERE account_id=%s", (account_id,))
+            cur.execute(
+                "INSERT INTO password_reset_tokens (token_hash,account_id,expires_at) VALUES (%s,%s,TO_TIMESTAMP(%s))",
+                (digest,account_id,expiry),
+            )
+    else:
+        for key, row in list(local_password_reset_tokens.items()):
+            if row.get("account_id") == account_id or float(row.get("expires",0)) <= now():
+                local_password_reset_tokens.pop(key, None)
+        local_password_reset_tokens[digest] = {"account_id":account_id,"expires":expiry,"used":False}
+    reset_url = f"{base_url.rstrip('/')}/?reset_token={quote(token)}"
+    send_password_reset_email(str(account.get("email") or email), str(account.get("username") or "Gracz"), reset_url)
+
+
+def reset_account_password(token_value: Any, password_value: Any, repeat_value: Any) -> dict[str, Any]:
+    token = str(token_value or "").strip()
+    if len(token) < 20:
+        raise ValueError("Link resetujący jest nieprawidłowy.")
+    password = validate_password(password_value)
+    if password != str(repeat_value or ""):
+        raise ValueError("Podane hasła nie są takie same.")
+    digest = token_hash(token)
+    account_id = ""
+    if DATABASE_URL:
+        with db_connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT account_id FROM password_reset_tokens WHERE token_hash=%s AND used_at IS NULL AND expires_at>NOW()",
+                (digest,),
+            )
+            row = cur.fetchone()
+            if not row:
+                raise ValueError("Link resetujący wygasł albo został już użyty.")
+            account_id = clean_id(row[0])
+            password_hash, password_salt = make_password_hash(password)
+            cur.execute("UPDATE accounts SET password_hash=%s,password_salt=%s WHERE account_id=%s", (password_hash,password_salt,account_id))
+            cur.execute("UPDATE password_reset_tokens SET used_at=NOW() WHERE token_hash=%s", (digest,))
+            cur.execute("DELETE FROM account_sessions WHERE account_id=%s", (account_id,))
+    else:
+        row = local_password_reset_tokens.get(digest)
+        if not row or row.get("used") or float(row.get("expires",0)) <= now():
+            raise ValueError("Link resetujący wygasł albo został już użyty.")
+        account_id = clean_id(row.get("account_id"))
+        password_hash, password_salt = make_password_hash(password)
+        local_accounts[account_id]["password_hash"] = password_hash
+        local_accounts[account_id]["password_salt"] = password_salt
+        row["used"] = True
+        for key, session in list(local_auth_sessions.items()):
+            if clean_id(session.get("account_id")) == account_id:
+                local_auth_sessions.pop(key, None)
+        save_account_storage()
+    for key, session in list(admin_sessions.items()):
+        if clean_id(session.get("playerId")) == account_id:
+            admin_sessions.pop(key, None)
+    return account_get(account_id) or {"account_id":account_id}
+
 
 
 def ensure_account_profile(account_id: str, username: str) -> None:
@@ -718,11 +931,14 @@ def ensure_account_profile(account_id: str, username: str) -> None:
         save_profiles()
 
 
-def account_create(username_value: Any, password_value: Any, requested_id: Any) -> dict[str, Any]:
+def account_create(username_value: Any, email_value: Any, password_value: Any, requested_id: Any) -> dict[str, Any]:
     username, username_key = normalize_username(username_value)
+    email, email_key = normalize_email(email_value)
     password = validate_password(password_value)
     if account_get_by_username(username_key):
         raise ValueError("Ta nazwa konta jest już zajęta.")
+    if account_get_by_email(email_key):
+        raise ValueError("Ten adres e-mail jest już używany przez inne konto.")
     account_id = clean_id(requested_id) or str(uuid.uuid4())
     if account_get(account_id):
         account_id = str(uuid.uuid4())
@@ -730,13 +946,13 @@ def account_create(username_value: Any, password_value: Any, requested_id: Any) 
     if DATABASE_URL:
         try:
             with db_connect() as conn, conn.cursor() as cur:
-                cur.execute("INSERT INTO accounts (account_id,username,username_key,password_hash,password_salt,last_login) VALUES (%s,%s,%s,%s,%s,NOW())", (account_id,username,username_key,password_hash,password_salt))
+                cur.execute("INSERT INTO accounts (account_id,username,username_key,email,email_key,password_hash,password_salt,last_login) VALUES (%s,%s,%s,%s,%s,%s,%s,NOW())", (account_id,username,username_key,email,email_key,password_hash,password_salt))
         except Exception as exc:
             if "unique" in str(exc).lower():
                 raise ValueError("Ta nazwa konta jest już zajęta.") from exc
             raise
     else:
-        local_accounts[account_id] = {"account_id":account_id,"username":username,"username_key":username_key,"password_hash":password_hash,"password_salt":password_salt,"banned_until_ts":0,"ban_reason":"","ban_count":0,"created_at":now(),"last_login":now()}
+        local_accounts[account_id] = {"account_id":account_id,"username":username,"username_key":username_key,"email":email,"email_key":email_key,"password_hash":password_hash,"password_salt":password_salt,"banned_until_ts":0,"ban_reason":"","ban_count":0,"created_at":now(),"last_login":now()}
         save_account_storage()
     ensure_account_profile(account_id, username)
     return account_get(account_id) or {"account_id":account_id,"username":username}
@@ -1095,6 +1311,9 @@ def init_database() -> None:
             )"""
         )
         cur.execute("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS ban_count INTEGER NOT NULL DEFAULT 0")
+        cur.execute("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS email VARCHAR(254)")
+        cur.execute("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS email_key VARCHAR(254)")
+        cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS accounts_email_key_unique ON accounts (email_key) WHERE email_key IS NOT NULL")
         cur.execute(
             """CREATE TABLE IF NOT EXISTS account_sessions (
                 token_hash CHAR(64) PRIMARY KEY,
@@ -1103,6 +1322,16 @@ def init_database() -> None:
                 expires_at TIMESTAMPTZ NOT NULL
             )"""
         )
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                token_hash CHAR(64) PRIMARY KEY,
+                account_id VARCHAR(80) NOT NULL REFERENCES accounts(account_id) ON DELETE CASCADE,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                expires_at TIMESTAMPTZ NOT NULL,
+                used_at TIMESTAMPTZ
+            )"""
+        )
+        cur.execute("CREATE INDEX IF NOT EXISTS password_reset_expiry_idx ON password_reset_tokens (expires_at)")
         cur.execute(
             """CREATE TABLE IF NOT EXISTS chat_messages (
                 id BIGSERIAL PRIMARY KEY,
@@ -1149,7 +1378,7 @@ def init_database() -> None:
         cur.execute("CREATE INDEX IF NOT EXISTS data_audit_account_idx ON data_audit (account_id, created_at DESC)")
         cur.execute(
             "INSERT INTO schema_migrations(version,description) VALUES (%s,%s) ON CONFLICT(version) DO NOTHING",
-            (DB_SCHEMA_VERSION, "Naprawione sesje kont, pula połączeń SQL i bezpośrednie aktualizacje ZIP"),
+            (DB_SCHEMA_VERSION, "Adresy e-mail kont i jednorazowe resetowanie hasła przez e-mail"),
         )
         cur.execute(
             """INSERT INTO server_state(key,value,revision,updated_at)
@@ -2250,6 +2479,11 @@ class Handler(BaseHTTPRequestHandler):
         touch(clean_id(account.get("account_id")))
         return account
 
+    def public_base_url(self) -> str:
+        host = self.headers.get("X-Forwarded-Host") or self.headers.get("Host") or ""
+        proto = self.headers.get("X-Forwarded-Proto") or ""
+        return build_public_url(host, proto)
+
     def send_account_login(self, account: dict[str, Any]) -> None:
         account_id = clean_id(account.get("account_id"))
         token = secrets.token_urlsafe(36)
@@ -2402,7 +2636,7 @@ class Handler(BaseHTTPRequestHandler):
                     with db_connect() as conn, conn.cursor() as cur:
                         cur.execute("SELECT 1")
                         cur.fetchone()
-                self.send_json({"ok": True, "storage": "postgres" if DATABASE_URL else "json", "build": "lobby-controls-runtime-fix-v7", "schemaVersion": DB_SCHEMA_VERSION if DATABASE_URL else 0})
+                self.send_json({"ok": True, "storage": "postgres" if DATABASE_URL else "json", "build": "email-password-reset-v1", "schemaVersion": DB_SCHEMA_VERSION if DATABASE_URL else 0})
             except Exception as exc:
                 self.send_json({"ok": False, "error": str(exc)}, HTTPStatus.SERVICE_UNAVAILABLE)
             return
@@ -2433,10 +2667,47 @@ class Handler(BaseHTTPRequestHandler):
         if payload is None:
             self.send_json({"error": "Nieprawidłowe dane."}, HTTPStatus.BAD_REQUEST)
             return
+        if parsed.path == "/api/auth/password-reset/request":
+            try:
+                create_password_reset(payload.get("email"), self.public_base_url(), self.client_ip())
+                self.send_json({"ok":True,"message":"Jeśli konto z takim adresem istnieje, wysłaliśmy link do zmiany hasła."})
+            except ValueError as exc:
+                self.send_json({"error":str(exc)}, HTTPStatus.BAD_REQUEST)
+            except RuntimeError as exc:
+                status = HTTPStatus.TOO_MANY_REQUESTS if "Za dużo prób" in str(exc) else HTTPStatus.SERVICE_UNAVAILABLE
+                self.send_json({"error":str(exc)}, status)
+            except Exception as exc:
+                print(f"Błąd prośby o reset hasła: {type(exc).__name__}: {exc}")
+                self.send_json({"error":"Reset hasła jest chwilowo niedostępny."}, HTTPStatus.SERVICE_UNAVAILABLE)
+            return
+        if parsed.path == "/api/auth/password-reset/confirm":
+            try:
+                reset_account_password(payload.get("token"),payload.get("password"),payload.get("repeatPassword"))
+                self.send_json({"ok":True})
+            except ValueError as exc:
+                self.send_json({"error":str(exc)}, HTTPStatus.BAD_REQUEST)
+            except Exception as exc:
+                print(f"Błąd zmiany hasła: {type(exc).__name__}: {exc}")
+                self.send_json({"error":"Nie udało się zmienić hasła."}, HTTPStatus.SERVICE_UNAVAILABLE)
+            return
+        if parsed.path == "/api/auth/set-email":
+            account = self.require_account(allow_banned=True)
+            if not account: return
+            try:
+                updated = account_set_email(clean_id(account.get("account_id")), payload.get("email"))
+                account_id = clean_id(updated.get("account_id"))
+                profile = db_get_profile(account_id) if DATABASE_URL else profile_full_row(profiles.get(account_id, {}))
+                self.send_json({"ok":True,"account":account_public(updated),"profile":profile})
+            except ValueError as exc:
+                self.send_json({"error":str(exc)}, HTTPStatus.CONFLICT)
+            except Exception as exc:
+                print(f"Błąd zapisu e-maila: {type(exc).__name__}: {exc}")
+                self.send_json({"error":"Nie udało się zapisać adresu e-mail."}, HTTPStatus.SERVICE_UNAVAILABLE)
+            return
         if parsed.path == "/api/auth/register":
             try:
                 with lock:
-                    account = account_create(payload.get("username"),payload.get("password"),payload.get("playerId"))
+                    account = account_create(payload.get("username"),payload.get("email"),payload.get("password"),payload.get("playerId"))
                 self.send_account_login(account)
             except ValueError as exc:
                 self.send_json({"error":str(exc)}, HTTPStatus.CONFLICT)

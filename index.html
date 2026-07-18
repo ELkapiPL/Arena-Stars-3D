@@ -349,6 +349,14 @@
     body.mobile-device:not(.lobby-mode) canvas{position:absolute;inset:0;width:100%!important;height:100%!important}
     body.mobile-device.mobile-fullscreen:not(.lobby-mode){background:#08101f}
 
+
+    .authSecondary{width:100%;margin-top:9px;padding:11px;border:1px solid rgba(255,255,255,.18);border-radius:12px;background:rgba(255,255,255,.06);color:#d9e9ff;font-weight:1000;cursor:pointer}
+    .authSecondary:hover{background:rgba(255,255,255,.11)}
+    .authPaneTitle{margin:4px 0 6px;font-size:20px}
+    .authPaneHelp{margin:0 0 12px;color:#b9c9e8;font-size:12px;line-height:1.45}
+    .authPane[data-auth-pane="resetConfirm"] .authSecondary,
+    .authPane[data-auth-pane="emailRequired"] .authSecondary{display:none}
+
   </style>
 </head>
 <body class="lobby-mode">
@@ -451,10 +459,40 @@
 
   <div id="authOverlay">
     <section id="authCard" class="authCard">
-      <h2>Konto Arena Stars</h2><p class="authLead">Przy pierwszym wejściu utwórz konto. Nazwa jest unikatowa, a postęp zostaje zapisany na serwerze.</p>
-      <div class="authTabs"><button type="button" class="authTab active" data-auth-tab="register" onclick="return ArenaAccountUI.switchPane('register', event)">UTWÓRZ KONTO</button><button type="button" class="authTab" data-auth-tab="login" onclick="return ArenaAccountUI.switchPane('login', event)">ZALOGUJ SIĘ</button></div>
-      <form class="authPane active" data-auth-pane="register" onsubmit="return ArenaAccountUI.submit('register', event)"><div class="authField"><label>UNIKATOWA NAZWA KONTA</label><input id="registerUsername" maxlength="20" autocomplete="username"></div><div class="authField"><label>HASŁO — MINIMUM 6 ZNAKÓW</label><input id="registerPassword" type="password" autocomplete="new-password"></div><button type="submit" id="registerBtn" class="authPrimary" onclick="return ArenaAccountUI.submit('register', event)">UTWÓRZ KONTO</button></form>
-      <form class="authPane" data-auth-pane="login" onsubmit="return ArenaAccountUI.submit('login', event)"><div class="authField"><label>NAZWA KONTA</label><input id="loginUsername" maxlength="20" autocomplete="username"></div><div class="authField"><label>HASŁO</label><input id="loginPassword" type="password" autocomplete="current-password"></div><button type="submit" id="loginBtn" class="authPrimary" onclick="return ArenaAccountUI.submit('login', event)">ZALOGUJ SIĘ</button></form>
+      <h2>Konto Arena Stars</h2><p class="authLead">Przy pierwszym wejściu utwórz konto. Nazwa i adres e-mail są unikatowe, a postęp zostaje zapisany na serwerze.</p>
+      <div id="authTabs" class="authTabs"><button type="button" class="authTab active" data-auth-tab="register" onclick="return ArenaAccountUI.switchPane('register', event)">UTWÓRZ KONTO</button><button type="button" class="authTab" data-auth-tab="login" onclick="return ArenaAccountUI.switchPane('login', event)">ZALOGUJ SIĘ</button></div>
+      <form class="authPane active" data-auth-pane="register" onsubmit="return ArenaAccountUI.submit('register', event)">
+        <div class="authField"><label>UNIKATOWA NAZWA KONTA</label><input id="registerUsername" maxlength="20" autocomplete="username"></div>
+        <div class="authField"><label>ADRES E-MAIL</label><input id="registerEmail" type="email" maxlength="254" autocomplete="email" inputmode="email"></div>
+        <div class="authField"><label>HASŁO — MINIMUM 6 ZNAKÓW</label><input id="registerPassword" type="password" autocomplete="new-password"></div>
+        <button type="submit" id="registerBtn" class="authPrimary" onclick="return ArenaAccountUI.submit('register', event)">UTWÓRZ KONTO</button>
+      </form>
+      <form class="authPane" data-auth-pane="login" onsubmit="return ArenaAccountUI.submit('login', event)">
+        <div class="authField"><label>NAZWA KONTA</label><input id="loginUsername" maxlength="20" autocomplete="username"></div>
+        <div class="authField"><label>HASŁO</label><input id="loginPassword" type="password" autocomplete="current-password"></div>
+        <button type="submit" id="loginBtn" class="authPrimary" onclick="return ArenaAccountUI.submit('login', event)">ZALOGUJ SIĘ</button>
+        <button type="button" id="forgotPasswordBtn" class="authSecondary" onclick="return ArenaAccountUI.switchPane('resetRequest', event)">ZRESETUJ HASŁO</button>
+      </form>
+      <form class="authPane" data-auth-pane="resetRequest" onsubmit="return ArenaAccountUI.requestReset(event)">
+        <h3 class="authPaneTitle">Reset hasła</h3>
+        <p class="authPaneHelp">Wpisz adres e-mail podany podczas rejestracji. Wyślemy jednorazowy link ważny przez 30 minut.</p>
+        <div class="authField"><label>ADRES E-MAIL</label><input id="resetEmail" type="email" maxlength="254" autocomplete="email" inputmode="email"></div>
+        <button type="submit" id="resetRequestBtn" class="authPrimary">WYŚLIJ LINK</button>
+        <button type="button" class="authSecondary" onclick="return ArenaAccountUI.switchPane('login', event)">WRÓĆ DO LOGOWANIA</button>
+      </form>
+      <form class="authPane" data-auth-pane="resetConfirm" onsubmit="return ArenaAccountUI.confirmReset(event)">
+        <h3 class="authPaneTitle">Ustaw nowe hasło</h3>
+        <p class="authPaneHelp">Wpisz nowe hasło dwa razy.</p>
+        <div class="authField"><label>NOWE HASŁO</label><input id="resetNewPassword" type="password" autocomplete="new-password"></div>
+        <div class="authField"><label>POWTÓRZ NOWE HASŁO</label><input id="resetRepeatPassword" type="password" autocomplete="new-password"></div>
+        <button type="submit" id="resetConfirmBtn" class="authPrimary">ZAPISZ NOWE HASŁO</button>
+      </form>
+      <form class="authPane" data-auth-pane="emailRequired" onsubmit="return ArenaAccountUI.saveRequiredEmail(event)">
+        <h3 class="authPaneTitle">Dodaj adres e-mail</h3>
+        <p class="authPaneHelp">To konto powstało przed dodaniem odzyskiwania hasła. Uzupełnij e-mail, aby kontynuować.</p>
+        <div class="authField"><label>ADRES E-MAIL</label><input id="requiredEmail" type="email" maxlength="254" autocomplete="email" inputmode="email"></div>
+        <button type="submit" id="requiredEmailBtn" class="authPrimary">ZAPISZ E-MAIL I WEJDŹ DO GRY</button>
+      </form>
       <div id="authMsg" class="authMsg" aria-live="polite"></div>
     </section>
     <section id="banCard" class="authCard banCard" style="display:none"><div class="banIcon">⛔</div><h2>Konto zablokowane</h2><strong id="banReason"></strong><div id="banUntil"></div><small>Po wygaśnięciu blokady odśwież stronę.</small></section>
@@ -556,6 +594,7 @@
   'use strict';
   const PLAYER_KEY = 'arenaStars3D_online_player_id_v1';
   let busy = false;
+  let resetToken = new URLSearchParams(location.search).get('reset_token') || '';
 
   const byId = id => document.getElementById(id);
   const message = (text, bad = false) => {
@@ -579,9 +618,12 @@
     }
     return id;
   };
+  const validEmail = value => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
+
   const switchPane = (name, event) => {
     stop(event);
-    const wanted = name === 'login' ? 'login' : 'register';
+    const allowed = new Set(['register','login','resetRequest','resetConfirm','emailRequired']);
+    const wanted = allowed.has(name) ? name : 'login';
     document.querySelectorAll('[data-auth-tab]').forEach(el => {
       el.classList.toggle('active', el.dataset.authTab === wanted);
       el.setAttribute('aria-selected', el.dataset.authTab === wanted ? 'true' : 'false');
@@ -589,90 +631,192 @@
     document.querySelectorAll('[data-auth-pane]').forEach(el => {
       el.classList.toggle('active', el.dataset.authPane === wanted);
     });
+    const tabs = byId('authTabs');
+    if (tabs) tabs.style.display = ['register','login'].includes(wanted) ? '' : 'none';
     message('');
-    requestAnimationFrame(() => byId(wanted === 'login' ? 'loginUsername' : 'registerUsername')?.focus());
+    const focusMap = {
+      login:'loginUsername', register:'registerUsername', resetRequest:'resetEmail',
+      resetConfirm:'resetNewPassword', emailRequired:'requiredEmail'
+    };
+    requestAnimationFrame(() => byId(focusMap[wanted])?.focus());
     return false;
   };
-  const setBusy = (kind, active) => {
-    const button = byId(kind === 'register' ? 'registerBtn' : 'loginBtn');
+
+  const setBusy = (buttonId, active, activeLabel, normalLabel) => {
+    const button = byId(buttonId);
     if (!button) return;
     button.disabled = active;
-    button.textContent = active ? (kind === 'register' ? 'TWORZENIE…' : 'LOGOWANIE…') : (kind === 'register' ? 'UTWÓRZ KONTO' : 'ZALOGUJ SIĘ');
+    button.textContent = active ? activeLabel : normalLabel;
   };
-  const submit = async (kind, event) => {
-    stop(event);
-    if (busy) return false;
-    const register = kind === 'register';
-    const username = (byId(register ? 'registerUsername' : 'loginUsername')?.value || '').trim();
-    const password = byId(register ? 'registerPassword' : 'loginPassword')?.value || '';
-    if (!username) { message('Wpisz nazwę konta.', true); return false; }
-    if (!password) { message('Wpisz hasło.', true); return false; }
-    if (register && password.length < 6) { message('Hasło musi mieć minimum 6 znaków.', true); return false; }
 
-    busy = true;
-    setBusy(kind, true);
-    message(register ? 'Tworzenie konta…' : 'Logowanie…');
+  const requestJson = async (url, body, timeout = 40000) => {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 40000);
+    const timer = setTimeout(() => controller.abort(), timeout);
     try {
-      const response = await fetch(register ? '/api/auth/register' : '/api/auth/login', {
-        method: 'POST',
-        credentials: 'same-origin',
-        cache: 'no-store',
-        headers: {'Content-Type': 'application/json'},
-        signal: controller.signal,
-        body: JSON.stringify({username, password, playerId: playerId()})
+      const response = await fetch(url, {
+        method:'POST', credentials:'same-origin', cache:'no-store',
+        headers:{'Content-Type':'application/json'}, signal:controller.signal,
+        body:JSON.stringify(body || {})
       });
-      let data = {};
-      try { data = await response.json(); } catch (_) {}
+      const data = await response.json().catch(() => ({}));
       if (!response.ok) {
         const error = new Error(data.error || `Błąd serwera ${response.status}`);
         error.status = response.status;
         error.data = data;
         throw error;
       }
-      const verifyResponse = await fetch('/api/auth/status', {
-        method: 'GET', credentials: 'same-origin', cache: 'no-store', signal: controller.signal
+      return data;
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
+  const finishLogin = async data => {
+    const verifyResponse = await fetch('/api/auth/status', {
+      method:'GET', credentials:'same-origin', cache:'no-store'
+    });
+    const verified = await verifyResponse.json().catch(() => ({}));
+    if (!verifyResponse.ok || !verified.authenticated) {
+      throw new Error('Serwer utworzył sesję, ale przeglądarka jej nie zapisała. Włącz pliki cookie dla tej strony i spróbuj ponownie.');
+    }
+    const result = {...data, account:verified.account || data.account, profile:verified.profile || data.profile};
+    const id = result?.account?.playerId || result?.account?.id;
+    if (id) try { localStorage.setItem(PLAYER_KEY, id); } catch (_) {}
+    window.__arenaPendingAuth = result;
+    if (result?.account?.emailRequired) {
+      message('Dodaj adres e-mail, aby zabezpieczyć konto.');
+      switchPane('emailRequired');
+      return false;
+    }
+    byId('authOverlay')?.classList.add('hidden');
+    window.dispatchEvent(new CustomEvent('arena-auth-success', {detail:result}));
+    return true;
+  };
+
+  const submit = async (kind, event) => {
+    stop(event);
+    if (busy) return false;
+    const register = kind === 'register';
+    const username = (byId(register ? 'registerUsername' : 'loginUsername')?.value || '').trim();
+    const password = byId(register ? 'registerPassword' : 'loginPassword')?.value || '';
+    const email = (byId('registerEmail')?.value || '').trim();
+    if (!username) { message('Wpisz nazwę konta.', true); return false; }
+    if (register && !validEmail(email)) { message('Wpisz prawidłowy adres e-mail.', true); return false; }
+    if (!password) { message('Wpisz hasło.', true); return false; }
+    if (register && password.length < 6) { message('Hasło musi mieć minimum 6 znaków.', true); return false; }
+
+    busy = true;
+    const buttonId = register ? 'registerBtn' : 'loginBtn';
+    setBusy(buttonId, true, register ? 'TWORZENIE…' : 'LOGOWANIE…', register ? 'UTWÓRZ KONTO' : 'ZALOGUJ SIĘ');
+    message(register ? 'Tworzenie konta…' : 'Logowanie…');
+    try {
+      const data = await requestJson(register ? '/api/auth/register' : '/api/auth/login', {
+        username, password, email:register ? email : undefined, playerId:playerId()
       });
-      const verified = await verifyResponse.json().catch(() => ({}));
-      if (!verifyResponse.ok || !verified.authenticated) {
-        throw new Error('Serwer utworzył sesję, ale przeglądarka jej nie zapisała. Włącz pliki cookie dla tej strony i spróbuj ponownie.');
-      }
-      const id = verified?.account?.playerId || verified?.account?.id || data?.account?.playerId || data?.account?.id;
-      if (id) try { localStorage.setItem(PLAYER_KEY, id); } catch (_) {}
-      const result = {...data, account: verified.account || data.account, profile: data.profile};
-      window.__arenaPendingAuth = result;
-      byId('authOverlay')?.classList.add('hidden');
-      message('Zalogowano. Wczytywanie gry…');
-      window.dispatchEvent(new CustomEvent('arena-auth-success', {detail: result}));
+      message('Zalogowano. Wczytywanie profilu…');
+      await finishLogin(data);
     } catch (error) {
       let text = error?.message || 'Nie udało się połączyć z serwerem kont.';
       if (error?.name === 'AbortError') text = 'Serwer odpowiada zbyt długo. Poczekaj chwilę i spróbuj ponownie.';
       else if (error?.status === 404) text = 'Takie konto nie istnieje. Użyj opcji UTWÓRZ KONTO.';
       else if (error?.status === 401) text = 'Nieprawidłowe hasło do konta.';
-      else if (error?.status === 409) text = error?.message || 'Ta nazwa konta jest już zajęta.';
+      else if (error?.status === 409) text = error?.message || 'Nazwa konta albo e-mail są już zajęte.';
       else if (error?.status === 423) text = error?.data?.banReason ? `Konto zablokowane: ${error.data.banReason}` : 'Konto jest zablokowane.';
       message(text, true);
     } finally {
-      clearTimeout(timer);
       busy = false;
-      setBusy(kind, false);
+      setBusy(buttonId, false, '', register ? 'UTWÓRZ KONTO' : 'ZALOGUJ SIĘ');
     }
     return false;
   };
 
-  window.ArenaAccountUI = {switchPane, submit};
+  const requestReset = async event => {
+    stop(event);
+    if (busy) return false;
+    const email = (byId('resetEmail')?.value || '').trim();
+    if (!validEmail(email)) { message('Wpisz prawidłowy adres e-mail.', true); return false; }
+    busy = true;
+    setBusy('resetRequestBtn', true, 'WYSYŁANIE…', 'WYŚLIJ LINK');
+    try {
+      const data = await requestJson('/api/auth/password-reset/request', {email});
+      message(data.message || 'Jeśli konto istnieje, link został wysłany.');
+    } catch (error) {
+      message(error?.message || 'Nie udało się wysłać wiadomości.', true);
+    } finally {
+      busy = false;
+      setBusy('resetRequestBtn', false, '', 'WYŚLIJ LINK');
+    }
+    return false;
+  };
 
-  // Capturing fallback for browsers/extensions that suppress inline button handlers.
+  const confirmReset = async event => {
+    stop(event);
+    if (busy) return false;
+    const password = byId('resetNewPassword')?.value || '';
+    const repeat = byId('resetRepeatPassword')?.value || '';
+    if (!resetToken) { message('Link resetujący jest nieprawidłowy.', true); return false; }
+    if (password.length < 6) { message('Hasło musi mieć minimum 6 znaków.', true); return false; }
+    if (password !== repeat) { message('Podane hasła nie są takie same.', true); return false; }
+    busy = true;
+    setBusy('resetConfirmBtn', true, 'ZAPISYWANIE…', 'ZAPISZ NOWE HASŁO');
+    try {
+      await requestJson('/api/auth/password-reset/confirm', {token:resetToken, password, repeatPassword:repeat});
+      resetToken = '';
+      const cleanUrl = `${location.pathname}${location.hash || ''}`;
+      history.replaceState({}, '', cleanUrl);
+      switchPane('login');
+      message('Hasło zostało zmienione. Zaloguj się nowym hasłem.');
+    } catch (error) {
+      message(error?.message || 'Nie udało się zmienić hasła.', true);
+    } finally {
+      busy = false;
+      setBusy('resetConfirmBtn', false, '', 'ZAPISZ NOWE HASŁO');
+    }
+    return false;
+  };
+
+  const saveRequiredEmail = async event => {
+    stop(event);
+    if (busy) return false;
+    const email = (byId('requiredEmail')?.value || '').trim();
+    if (!validEmail(email)) { message('Wpisz prawidłowy adres e-mail.', true); return false; }
+    busy = true;
+    setBusy('requiredEmailBtn', true, 'ZAPISYWANIE…', 'ZAPISZ E-MAIL I WEJDŹ DO GRY');
+    try {
+      const data = await requestJson('/api/auth/set-email', {email});
+      message('Adres e-mail został zapisany.');
+      await finishLogin(data);
+    } catch (error) {
+      message(error?.message || 'Nie udało się zapisać adresu e-mail.', true);
+    } finally {
+      busy = false;
+      setBusy('requiredEmailBtn', false, '', 'ZAPISZ E-MAIL I WEJDŹ DO GRY');
+    }
+    return false;
+  };
+
+  const requireEmail = account => {
+    byId('authOverlay')?.classList.remove('hidden');
+    message(account?.emailMasked ? `Uzupełnij e-mail. Obecny: ${account.emailMasked}` : 'Dodaj adres e-mail, aby kontynuować.');
+    switchPane('emailRequired');
+  };
+
+  window.ArenaAccountUI = {switchPane, submit, requestReset, confirmReset, saveRequiredEmail, requireEmail};
+
   document.addEventListener('click', event => {
     const tab = event.target.closest?.('[data-auth-tab]');
     if (tab) return switchPane(tab.dataset.authTab, event);
     if (event.target.closest?.('#registerBtn')) return submit('register', event);
     if (event.target.closest?.('#loginBtn')) return submit('login', event);
   }, true);
+
+  if (resetToken) {
+    document.addEventListener('DOMContentLoaded', () => switchPane('resetConfirm'), {once:true});
+    if (document.readyState !== 'loading') switchPane('resetConfirm');
+  }
 })();
 </script>
 
-<script src="game.js?v=mobile-fullscreen-charge-fix-v9"></script>
+<script src="game.js?v=email-password-reset-v1"></script>
 </body>
 </html>

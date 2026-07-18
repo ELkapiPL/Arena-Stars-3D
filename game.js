@@ -1084,7 +1084,7 @@ for(const card of ui.skinCards){card.addEventListener('click',()=>selectSkin(car
 
 
 // ---------- Konta użytkowników, sesje i czat ----------
-const authUI={overlay:$('authOverlay'),card:$('authCard'),banCard:$('banCard'),msg:$('authMsg'),registerUser:$('registerUsername'),registerPassword:$('registerPassword'),registerBtn:$('registerBtn'),loginUser:$('loginUsername'),loginPassword:$('loginPassword'),loginBtn:$('loginBtn'),banReason:$('banReason'),banUntil:$('banUntil'),accountUsername:$('accountUsername'),logout:$('accountLogoutBtn')};
+const authUI={overlay:$('authOverlay'),card:$('authCard'),banCard:$('banCard'),msg:$('authMsg'),registerUser:$('registerUsername'),registerEmail:$('registerEmail'),registerPassword:$('registerPassword'),registerBtn:$('registerBtn'),loginUser:$('loginUsername'),loginPassword:$('loginPassword'),loginBtn:$('loginBtn'),banReason:$('banReason'),banUntil:$('banUntil'),accountUsername:$('accountUsername'),logout:$('accountLogoutBtn')};
 const chatUI={overlay:$('chatOverlay'),open:$('chatOpenBtn'),close:$('chatCloseBtn'),users:$('chatUsers'),search:$('chatSearch'),header:$('chatHeader'),messages:$('chatMessages'),input:$('chatInput'),send:$('chatSendBtn'),status:$('chatStatus'),badge:$('chatBadge'),modeAll:$('chatModeAll'),modePrivate:$('chatModePrivate'),publicInfo:$('chatPublicInfo'),privatePicker:$('chatPrivatePicker')};
 let currentAccount=null,authFinished=false,chatMode='broadcast',chatRecipientId='',chatRecipientName='',chatPollTimer=0,chatKnownLast=0,chatUnread=0;
 function authMessage(text,bad=false){if(authUI.msg){authUI.msg.textContent=text||'';authUI.msg.style.color=bad?'#ff9aac':'#ffe08a';authUI.msg.classList.toggle('authError',bad);}}
@@ -1109,6 +1109,14 @@ async function completeAccountLogin(data){
   if(ui.nicknameInput){ui.nicknameInput.value=profile.name;ui.nicknameInput.disabled=true;}
   if(ui.saveNameBtn){ui.saveNameBtn.disabled=true;ui.saveNameBtn.textContent='NAZWA KONTA';}
   if(authUI.accountUsername)authUI.accountUsername.textContent=currentAccount.username;
+  if(currentAccount.emailRequired){
+    authFinished=false;
+    authUI.overlay.classList.remove('hidden');
+    authUI.card.style.display='block';
+    authUI.banCard.style.display='none';
+    window.ArenaAccountUI?.requireEmail?.(currentAccount);
+    return;
+  }
   authUI.overlay.classList.add('hidden');
   authUI.card.style.display='block';
   authUI.banCard.style.display='none';
@@ -1149,7 +1157,7 @@ async function authSubmit(kind){
   try{
     const data=await api(register?'/api/auth/register':'/api/auth/login',{
       method:'POST',
-      body:JSON.stringify({username,password,playerId}),
+      body:JSON.stringify({username,password,email:register?(authUI.registerEmail?.value||'').trim():undefined,playerId}),
       timeoutMs:35000
     });
     authMessage('Zalogowano. Wczytywanie profilu…');
