@@ -221,7 +221,9 @@ def persistent_storage_public_status() -> dict[str, Any]:
         "databaseConfigured": bool(DATABASE_URL),
         "sqlRequired": bool(REQUIRE_SQL),
         "schemaVersion": DB_SCHEMA_VERSION if DB_READY else 0,
-        "build": "chat-render-fixed-v17",
+        "emailResetConfigured": bool(RESEND_API_KEY and PASSWORD_RESET_FROM),
+        "passwordResetTtlMinutes": PASSWORD_RESET_TTL // 60,
+        "build": "email-password-reset-v18",
     }
     if DB_READY:
         payload["connectedAt"] = DB_CONNECTED_AT
@@ -585,7 +587,9 @@ def db_schema_status() -> dict[str, Any]:
         "matches": matches_count,
         "activeSessions": sessions_count,
         "connectedAt": DB_CONNECTED_AT,
-        "build": "chat-render-fixed-v17",
+        "emailResetConfigured": bool(RESEND_API_KEY and PASSWORD_RESET_FROM),
+        "passwordResetTtlMinutes": PASSWORD_RESET_TTL // 60,
+        "build": "email-password-reset-v18",
     }
 
 
@@ -1037,11 +1041,13 @@ def create_password_reset(email_value: Any, base_url: str, request_key: str) -> 
     email, email_key = normalize_email(email_value)
     if not reset_rate_allowed(f"ip:{request_key}") or not reset_rate_allowed(f"email:{email_key}"):
         raise RuntimeError("Za dużo prób resetowania. Spróbuj ponownie za około 15 minut.")
+    # Sprawdzamy konfigurację przed wyszukaniem konta, aby odpowiedź nie zdradzała,
+    # czy dany adres e-mail jest zarejestrowany.
+    if not RESEND_API_KEY or not PASSWORD_RESET_FROM:
+        raise RuntimeError("Reset hasła przez e-mail nie jest jeszcze skonfigurowany.")
     account = account_get_by_email(email_key)
     if not account:
         return
-    if not RESEND_API_KEY or not PASSWORD_RESET_FROM:
-        raise RuntimeError("Reset hasła przez e-mail nie jest jeszcze skonfigurowany.")
     token = secrets.token_urlsafe(40)
     digest = token_hash(token)
     expiry = now() + PASSWORD_RESET_TTL
