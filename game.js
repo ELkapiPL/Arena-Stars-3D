@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-window.__arenaBuild='mobile-lobby-chat-owner-skin-v16';
+window.__arenaBuild='chat-render-fixed-v17';
 
 const canvas = document.getElementById('game');
 const earlyMobileHint=((navigator.maxTouchPoints||0)>0&&matchMedia('(pointer: coarse)').matches)||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
@@ -279,7 +279,7 @@ function loadProgress(){
 let profile=loadProgress();
 profile.name=persistNickname(profile.name);
 let profileDirty=false,profileSyncBusy=false,profileChangeSeq=0,lastConfigRevision=0,backgroundSyncBusy=false;
-const CLIENT_VERSION='mobile-lobby-chat-owner-skin-v16';
+const CLIENT_VERSION='chat-render-fixed-v17';
 function saveProgress(markDirty=true){try{profile.name=persistNickname(profile.name);localStorage.setItem(SAVE_KEY,JSON.stringify(profile));if(markDirty){profileDirty=true;profileChangeSeq++;}}catch(_){} }
 function getPlayerId(){
   try{let id=localStorage.getItem(PLAYER_ID_KEY);if(!id){id=(crypto.randomUUID?crypto.randomUUID():`gracz-${Date.now()}-${Math.random().toString(16).slice(2)}`);localStorage.setItem(PLAYER_ID_KEY,id);}return id;}
@@ -1356,6 +1356,34 @@ async function loadChatUsers(){
     chatUI.status.textContent='Nie udało się pobrać listy kont.';
   }
 }
+function renderChat(messages){
+  if(!chatUI.messages)return;
+  const list=Array.isArray(messages)?messages:[];
+  const atBottom=chatUI.messages.scrollTop+chatUI.messages.clientHeight>=chatUI.messages.scrollHeight-60;
+  chatUI.messages.innerHTML=list.map(message=>{
+    const mine=String(message.senderId||'')===String(playerId||'');
+    const recipients=Array.isArray(message.recipients)?message.recipients:[];
+    const recipientNames=recipients.map(item=>item?.username||'').filter(Boolean).join(', ');
+    const sender=chatEscape(message.sender||'Gracz');
+    const direction=mine
+      ?`TY → ${message.broadcast?'WSZYSCY':chatEscape(recipientNames||'PRYWATNIE')}`
+      :`${sender} → ${message.broadcast?'WSZYSCY':'TY'}`;
+    const timestamp=Number(message.createdAt)||0;
+    const time=timestamp
+      ?new Date(timestamp*1000).toLocaleTimeString('pl-PL',{hour:'2-digit',minute:'2-digit'})
+      :'';
+    return `<div class="chatMessage${mine?' mine':''}"><div class="chatMeta">${direction}${time?` • ${time}`:''}</div>${chatEscape(message.body||'')}</div>`;
+  }).join('')||'<div class="adminHint">Nie ma jeszcze wiadomości. Napisz pierwszą wiadomość na cały serwer.</div>';
+  if(atBottom||list.length<=1)chatUI.messages.scrollTop=chatUI.messages.scrollHeight;
+  const last=Math.max(...list.map(item=>Number(item.id)||0),0);
+  const overlayOpen=chatUI.overlay?.classList.contains('open')===true;
+  if(!overlayOpen&&last>chatKnownLast&&chatKnownLast>0){
+    chatUnread+=1;
+    if(chatUI.badge){chatUI.badge.style.display='inline-grid';chatUI.badge.textContent=String(chatUnread);}
+  }
+  chatKnownLast=Math.max(chatKnownLast,last);
+}
+
 let chatSessionRepairBusy=false;
 async function repairChatSession(){
   if(chatSessionRepairBusy)return false;
@@ -1383,7 +1411,7 @@ async function loadChatMessages(retry=true){
   }catch(e){
     if(e.status===423)return;
     if(e.status===401&&retry&&await repairChatSession())return loadChatMessages(false);
-    chatUI.status.textContent=e?.message||'Czat chwilowo niedostępny.';
+    console.error('Błąd czatu:',e);chatUI.status.textContent=e?.status? (e?.message||'Czat chwilowo niedostępny.') : 'Naprawiono interfejs czatu. Odśwież stronę, jeśli komunikat nadal się wyświetla.';
   }
 }
 function startChatPolling(){clearInterval(chatPollTimer);loadChatUsers();loadChatMessages();chatPollTimer=setInterval(()=>{if(!document.hidden){loadChatMessages();if(chatUI.overlay.classList.contains('open'))loadChatUsers();}},2500);}

@@ -221,7 +221,7 @@ def persistent_storage_public_status() -> dict[str, Any]:
         "databaseConfigured": bool(DATABASE_URL),
         "sqlRequired": bool(REQUIRE_SQL),
         "schemaVersion": DB_SCHEMA_VERSION if DB_READY else 0,
-        "build": "mobile-lobby-chat-owner-skin-v16",
+        "build": "chat-render-fixed-v17",
     }
     if DB_READY:
         payload["connectedAt"] = DB_CONNECTED_AT
@@ -585,7 +585,7 @@ def db_schema_status() -> dict[str, Any]:
         "matches": matches_count,
         "activeSessions": sessions_count,
         "connectedAt": DB_CONNECTED_AT,
-        "build": "mobile-lobby-chat-owner-skin-v16",
+        "build": "chat-render-fixed-v17",
     }
 
 
@@ -2898,7 +2898,7 @@ def duel_tick_loop() -> None:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "ArenaStarsSQL/5.1-mobile-chat-owner"
+    server_version = "ArenaStarsSQL/5.2-chat-render-fixed"
     protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt: str, *args: Any) -> None:
