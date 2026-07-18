@@ -11,6 +11,7 @@ import base64
 import hmac
 import hashlib
 import json
+import io
 import math
 import random
 import re
@@ -22,6 +23,8 @@ import secrets
 import socket
 import threading
 import time
+import zipfile
+import stat
 import urllib.error
 import urllib.request
 from http import HTTPStatus
@@ -41,12 +44,12 @@ PORT = int(os.environ.get("PORT", "8765"))
 VISIBLE_RANKING_SIZE = 200
 ACTIVE_TIMEOUT = 20.0
 MAX_BODY = 256 * 1024
-ADMIN_UPLOAD_MAX_BODY = 8 * 1024 * 1024
+ADMIN_UPLOAD_MAX_BODY = 24 * 1024 * 1024
 AUTH_SESSION_TTL = 30 * 24 * 60 * 60
 CHAT_MAX_MESSAGE = 300
 CHAT_MAX_RECIPIENTS = 20
 CHAT_HISTORY_LIMIT = 160
-DB_SCHEMA_VERSION = 4
+DB_SCHEMA_VERSION = 5
 PROFILE_DATA_VERSION = 1
 DUEL_PLAYER_TIMEOUT = 12.0
 DUEL_WAIT_TIMEOUT = 45.0
@@ -92,7 +95,7 @@ GITHUB_REPO = os.environ.get("GITHUB_REPO", os.environ.get("RENDER_GIT_REPO_SLUG
 GITHUB_BRANCH = os.environ.get("GITHUB_BRANCH", os.environ.get("RENDER_GIT_BRANCH", "main")).strip() or "main"
 RENDER_DEPLOY_HOOK = os.environ.get("RENDER_DEPLOY_HOOK", "").strip()
 ADMIN_SESSION_TTL = 8 * 60 * 60
-ADMIN_ALLOWED_FILES = {"index.html", "game.js", "server.py", "requirements.txt", "Dockerfile", "render.yaml", ".python-version"}
+ADMIN_ALLOWED_FILES = {"index.html", "game.js", "server.py", "requirements.txt", "Dockerfile", "render.yaml", ".python-version", "DATABASE_SCHEMA.sql"}
 admin_sessions: dict[str, dict[str, Any]] = {}
 admin_login_attempts: dict[str, dict[str, float | int]] = {}
 local_accounts: dict[str, dict[str, Any]] = {}
@@ -116,7 +119,9 @@ DEFAULT_GAME_CONFIG: dict[str, Any] = {
     "soloEnabled": True,
     "duelEnabled": True,
     "announcement": "",
-    "profanityBanHours": 2,
+    "profanityBanMinutes": 120,
+    "banEscalationMultiplier": 1.5,
+    "sqlSyncSeconds": 2.5,
     "customModes": [],
 }
 game_config: dict[str, Any] = dict(DEFAULT_GAME_CONFIG)
@@ -234,7 +239,15 @@ def sanitize_game_config(value: Any) -> dict[str, Any]:
     result["soloEnabled"] = bool(source.get("soloEnabled", True))
     result["duelEnabled"] = bool(source.get("duelEnabled", True))
     result["announcement"] = clean_mode_text(source.get("announcement"), 180)
-    result["profanityBanHours"] = round(clean_float(source.get("profanityBanHours"), 0.25, 168.0, 2.0), 2)
+    if "profanityBanMinutes" in source:
+        profanity_minutes = source.get("profanityBanMinutes")
+    elif "profanityBanHours" in source:
+        profanity_minutes = clean_float(source.get("profanityBanHours"), 0.0167, 168.0, 2.0) * 60.0
+    else:
+        profanity_minutes = 120.0
+    result["profanityBanMinutes"] = round(clean_float(profanity_minutes, 1.0, 10080.0, 120.0), 1)
+    result["banEscalationMultiplier"] = 1.5
+    result["sqlSyncSeconds"] = round(clean_float(source.get("sqlSyncSeconds"), 1.0, 60.0, 2.5), 2)
     modes: list[dict[str, Any]] = []
     raw_modes = source.get("customModes")
     if isinstance(raw_modes, list):
@@ -255,7 +268,10 @@ def sanitize_game_config(value: Any) -> dict[str, Any]:
 
 
 def public_game_config() -> dict[str, Any]:
-    return sanitize_game_config(game_config)
+    config = sanitize_game_config(game_config)
+    # Alias zachowuje zgodność ze starszymi klientami podczas wdrożenia.
+    config["profanityBanHours"] = round(float(config["profanityBanMinutes"]) / 60.0, 4)
+    return config
 
 
 def load_game_config() -> None:
@@ -445,12 +461,12 @@ def github_api(method: str, path: str, payload: dict[str, Any] | None = None) ->
         raise RuntimeError(f"GitHub API HTTP {exc.code}: {detail}") from exc
 
 
-def deploy_files_to_github(files: Any, message: str) -> dict[str, Any]:
+def decode_admin_files(files: Any) -> list[tuple[str, bytes]]:
     if not isinstance(files, list) or not files:
         raise ValueError("Nie wybrano plików.")
     decoded: list[tuple[str, bytes]] = []
     total = 0
-    for item in files[:10]:
+    for item in files[:12]:
         if not isinstance(item, dict):
             continue
         name = Path(str(item.get("name") or "")).name
@@ -460,14 +476,73 @@ def deploy_files_to_github(files: Any, message: str) -> dict[str, Any]:
             content = base64.b64decode(str(item.get("content") or ""), validate=True)
         except Exception as exc:
             raise ValueError(f"Nieprawidłowa zawartość pliku {name}.") from exc
-        if len(content) > 2 * 1024 * 1024:
-            raise ValueError(f"Plik {name} jest większy niż 2 MB.")
+        if len(content) > 4 * 1024 * 1024:
+            raise ValueError(f"Plik {name} jest większy niż 4 MB.")
         total += len(content)
-        if total > 6 * 1024 * 1024:
-            raise ValueError("Łączny rozmiar plików przekracza 6 MB.")
+        if total > 16 * 1024 * 1024:
+            raise ValueError("Łączny rozmiar plików przekracza 16 MB.")
         decoded.append((name, content))
     if not decoded:
         raise ValueError("Nie znaleziono dozwolonych plików.")
+    return decoded
+
+
+def decode_admin_zip(archive: Any) -> list[tuple[str, bytes]]:
+    if not isinstance(archive, dict):
+        raise ValueError("Nie wybrano archiwum ZIP.")
+    name = Path(str(archive.get("name") or "aktualizacja.zip")).name
+    if not name.lower().endswith(".zip"):
+        raise ValueError("Wybrany plik nie jest archiwum ZIP.")
+    try:
+        raw = base64.b64decode(str(archive.get("content") or ""), validate=True)
+    except Exception as exc:
+        raise ValueError("Nieprawidłowa zawartość ZIP-a.") from exc
+    if len(raw) > 14 * 1024 * 1024:
+        raise ValueError("ZIP jest większy niż 14 MB.")
+    selected: dict[str, bytes] = {}
+    total_unpacked = 0
+    try:
+        with zipfile.ZipFile(io.BytesIO(raw)) as bundle:
+            infos = bundle.infolist()
+            if len(infos) > 250:
+                raise ValueError("ZIP zawiera zbyt wiele plików.")
+            for info in infos:
+                if info.is_dir():
+                    continue
+                normalized = info.filename.replace("\\", "/")
+                parts = [part for part in normalized.split("/") if part not in {"", "."}]
+                if normalized.startswith("/") or any(part == ".." for part in parts):
+                    raise ValueError("ZIP zawiera niebezpieczną ścieżkę.")
+                if info.flag_bits & 0x1:
+                    raise ValueError("Zaszyfrowane ZIP-y nie są obsługiwane.")
+                unix_mode = (info.external_attr >> 16) & 0xFFFF
+                if unix_mode and stat.S_ISLNK(unix_mode):
+                    raise ValueError("ZIP nie może zawierać dowiązań symbolicznych.")
+                basename = parts[-1] if parts else ""
+                if basename not in ADMIN_ALLOWED_FILES:
+                    continue
+                if basename in selected:
+                    raise ValueError(f"ZIP zawiera więcej niż jeden plik {basename}.")
+                if info.file_size > 4 * 1024 * 1024:
+                    raise ValueError(f"Plik {basename} w ZIP-ie jest większy niż 4 MB.")
+                total_unpacked += info.file_size
+                if total_unpacked > 16 * 1024 * 1024:
+                    raise ValueError("Rozpakowane pliki przekraczają 16 MB.")
+                selected[basename] = bundle.read(info)
+    except zipfile.BadZipFile as exc:
+        raise ValueError("Archiwum ZIP jest uszkodzone.") from exc
+    if not selected:
+        raise ValueError("ZIP nie zawiera dozwolonych plików gry.")
+    return list(selected.items())
+
+
+def deploy_files_to_github(files: Any, archive: Any, message: str) -> dict[str, Any]:
+    if archive:
+        decoded = decode_admin_zip(archive)
+        source_type = "zip"
+    else:
+        decoded = decode_admin_files(files)
+        source_type = "files"
 
     repo = GITHUB_REPO.strip("/")
     branch = GITHUB_BRANCH
@@ -489,7 +564,7 @@ def deploy_files_to_github(files: Any, message: str) -> dict[str, Any]:
             urllib.request.urlopen(urllib.request.Request(RENDER_DEPLOY_HOOK, data=b"", method="POST"), timeout=10).read()
         except Exception as exc:
             print(f"Commit zapisany, ale deploy hook nie odpowiedział: {exc}")
-    return {"ok": True, "commit": commit.get("sha"), "files": [name for name, _ in decoded], "repo": repo, "branch": branch}
+    return {"ok": True, "commit": commit.get("sha"), "files": [name for name, _ in decoded], "repo": repo, "branch": branch, "source": source_type}
 
 
 # ----------------------------- konta, sesje, bany i czat -----------------------------
@@ -543,6 +618,7 @@ def account_public(row: dict[str, Any]) -> dict[str, Any]:
         # Flaga jest wyliczana wyłącznie na serwerze. Tylko konto właściciela
         # otrzymuje ceny 0 w sklepie klienta.
         "ownerBenefits": bool(account_id and account_id == clean_id(ADMIN_PLAYER_ID)),
+        "banCount": clean_number(row.get("ban_count", row.get("banCount", 0))),
         **ban,
     }
 
@@ -574,9 +650,9 @@ def save_account_storage() -> None:
 def account_get_by_username(username_key: str) -> dict[str, Any] | None:
     if DATABASE_URL:
         with db_connect() as conn, conn.cursor() as cur:
-            cur.execute("SELECT account_id, username, password_hash, password_salt, EXTRACT(EPOCH FROM banned_until), ban_reason FROM accounts WHERE username_key=%s", (username_key,))
+            cur.execute("SELECT account_id, username, password_hash, password_salt, EXTRACT(EPOCH FROM banned_until), ban_reason, ban_count FROM accounts WHERE username_key=%s", (username_key,))
             row = cur.fetchone()
-        return ({"account_id":row[0],"username":row[1],"password_hash":row[2],"password_salt":row[3],"banned_until_ts":float(row[4] or 0),"ban_reason":row[5] or ""} if row else None)
+        return ({"account_id":row[0],"username":row[1],"password_hash":row[2],"password_salt":row[3],"banned_until_ts":float(row[4] or 0),"ban_reason":row[5] or "","ban_count":clean_number(row[6])} if row else None)
     for row in local_accounts.values():
         if str(row.get("username_key")) == username_key:
             return dict(row)
@@ -589,9 +665,9 @@ def account_get(account_id: str) -> dict[str, Any] | None:
         return None
     if DATABASE_URL:
         with db_connect() as conn, conn.cursor() as cur:
-            cur.execute("SELECT account_id, username, password_hash, password_salt, EXTRACT(EPOCH FROM banned_until), ban_reason FROM accounts WHERE account_id=%s", (account_id,))
+            cur.execute("SELECT account_id, username, password_hash, password_salt, EXTRACT(EPOCH FROM banned_until), ban_reason, ban_count FROM accounts WHERE account_id=%s", (account_id,))
             row = cur.fetchone()
-        return ({"account_id":row[0],"username":row[1],"password_hash":row[2],"password_salt":row[3],"banned_until_ts":float(row[4] or 0),"ban_reason":row[5] or ""} if row else None)
+        return ({"account_id":row[0],"username":row[1],"password_hash":row[2],"password_salt":row[3],"banned_until_ts":float(row[4] or 0),"ban_reason":row[5] or "","ban_count":clean_number(row[6])} if row else None)
     row = local_accounts.get(account_id)
     return dict(row) if row else None
 
@@ -629,7 +705,7 @@ def account_create(username_value: Any, password_value: Any, requested_id: Any) 
                 raise ValueError("Ta nazwa konta jest już zajęta.") from exc
             raise
     else:
-        local_accounts[account_id] = {"account_id":account_id,"username":username,"username_key":username_key,"password_hash":password_hash,"password_salt":password_salt,"banned_until_ts":0,"ban_reason":"","created_at":now(),"last_login":now()}
+        local_accounts[account_id] = {"account_id":account_id,"username":username,"username_key":username_key,"password_hash":password_hash,"password_salt":password_salt,"banned_until_ts":0,"ban_reason":"","ban_count":0,"created_at":now(),"last_login":now()}
         save_account_storage()
     ensure_account_profile(account_id, username)
     return account_get(account_id) or {"account_id":account_id,"username":username}
@@ -681,14 +757,33 @@ def delete_account_session(token: str) -> None:
 
 
 def set_account_ban(account_id: str, seconds: float, reason: str) -> dict[str, Any]:
-    until = now() + max(1.0, seconds)
+    account_id = clean_id(account_id)
+    current = account_get(account_id)
+    if not current:
+        return account_public({"account_id": account_id, "username": ""})
+    previous_count = clean_number(current.get("ban_count", 0), 1000)
+    requested_multiplier = 1.5 ** previous_count
+    base_seconds = max(60.0, float(seconds))
+    effective_seconds = min(10 * 365 * 24 * 3600.0, base_seconds * requested_multiplier)
+    multiplier = effective_seconds / base_seconds
+    until = now() + effective_seconds
     reason = clean_mode_text(reason, 240) or "Ban administratora"
     if DATABASE_URL:
         with db_connect() as conn, conn.cursor() as cur:
-            cur.execute("UPDATE accounts SET banned_until=TO_TIMESTAMP(%s), ban_reason=%s WHERE account_id=%s", (until,reason,account_id))
+            cur.execute(
+                "UPDATE accounts SET banned_until=TO_TIMESTAMP(%s), ban_reason=%s, ban_count=ban_count+1 WHERE account_id=%s",
+                (until, reason, account_id),
+            )
     elif account_id in local_accounts:
-        local_accounts[account_id]["banned_until_ts"] = until; local_accounts[account_id]["ban_reason"] = reason; save_account_storage()
-    return account_public(account_get(account_id) or {"account_id":account_id,"username":""})
+        local_accounts[account_id]["banned_until_ts"] = until
+        local_accounts[account_id]["ban_reason"] = reason
+        local_accounts[account_id]["ban_count"] = previous_count + 1
+        save_account_storage()
+    result = account_public(account_get(account_id) or {"account_id": account_id, "username": ""})
+    result["baseBanSeconds"] = base_seconds
+    result["effectiveBanSeconds"] = effective_seconds
+    result["banMultiplier"] = multiplier
+    return result
 
 
 def clear_account_ban(account_id: str) -> dict[str, Any]:
@@ -736,8 +831,8 @@ def chat_send(sender: dict[str, Any], recipients_value: Any, body_value: Any, br
     if not body:
         raise ValueError("Wiadomość jest pusta.")
     if contains_profanity(body):
-        hours = float(game_config.get("profanityBanHours", 2.0))
-        banned = set_account_ban(sender["account_id"], hours * 3600, "Automatyczny ban: przeklinanie na czacie")
+        minutes = float(game_config.get("profanityBanMinutes", 120.0))
+        banned = set_account_ban(sender["account_id"], minutes * 60.0, "Automatyczny ban: przeklinanie na czacie")
         return {"banned": True, **banned}
 
     broadcast = broadcast_value is True or str(broadcast_value).strip().casefold() in {"1", "true", "yes", "tak"}
@@ -855,7 +950,7 @@ def admin_accounts(query: str = "") -> list[dict[str, Any]]:
     rows=[]
     if DATABASE_URL:
         with db_connect() as conn, conn.cursor() as cur:
-            cur.execute("""SELECT a.account_id,a.username,EXTRACT(EPOCH FROM a.banned_until),a.ban_reason,p.points,p.trophies,p.coins
+            cur.execute("""SELECT a.account_id,a.username,EXTRACT(EPOCH FROM a.banned_until),a.ban_reason,p.points,p.trophies,p.coins,a.ban_count
                            FROM accounts a LEFT JOIN players p ON p.player_id=a.account_id
                            WHERE (%s='' OR a.username_key LIKE %s OR a.account_id LIKE %s)
                            ORDER BY a.username_key LIMIT 100""", (query_key,f"%{query_key}%",f"%{query_key}%"))
@@ -864,8 +959,8 @@ def admin_accounts(query: str = "") -> list[dict[str, Any]]:
         for aid,a in local_accounts.items():
             if query_key and query_key not in str(a.get("username_key","")) and query_key not in aid.casefold(): continue
             p=profiles.get(aid,{})
-            rows.append((aid,a.get("username"),a.get("banned_until_ts",0),a.get("ban_reason",""),p.get("points",0),p.get("trophies",0),p.get("coins",0)))
-    return [{**account_public({"account_id":r[0],"username":r[1],"banned_until_ts":float(r[2] or 0),"ban_reason":r[3] or ""}),"points":clean_number(r[4]),"trophies":clean_number(r[5]),"coins":clean_number(r[6])} for r in rows]
+            rows.append((aid,a.get("username"),a.get("banned_until_ts",0),a.get("ban_reason",""),p.get("points",0),p.get("trophies",0),p.get("coins",0),a.get("ban_count",0)))
+    return [{**account_public({"account_id":r[0],"username":r[1],"banned_until_ts":float(r[2] or 0),"ban_reason":r[3] or "","ban_count":clean_number(r[7])}),"points":clean_number(r[4]),"trophies":clean_number(r[5]),"coins":clean_number(r[6])} for r in rows]
 
 
 # ----------------------------- Neon Postgres -----------------------------
@@ -936,9 +1031,11 @@ def init_database() -> None:
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                 last_login TIMESTAMPTZ,
                 banned_until TIMESTAMPTZ,
-                ban_reason VARCHAR(240) NOT NULL DEFAULT ''
+                ban_reason VARCHAR(240) NOT NULL DEFAULT '',
+                ban_count INTEGER NOT NULL DEFAULT 0
             )"""
         )
+        cur.execute("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS ban_count INTEGER NOT NULL DEFAULT 0")
         cur.execute(
             """CREATE TABLE IF NOT EXISTS account_sessions (
                 token_hash CHAR(64) PRIMARY KEY,
@@ -993,7 +1090,7 @@ def init_database() -> None:
         cur.execute("CREATE INDEX IF NOT EXISTS data_audit_account_idx ON data_audit (account_id, created_at DESC)")
         cur.execute(
             "INSERT INTO schema_migrations(version,description) VALUES (%s,%s) ON CONFLICT(version) DO NOTHING",
-            (DB_SCHEMA_VERSION, "Centralny zapis kont, profili, czatu, wyników i ustawień z rewizjami"),
+            (DB_SCHEMA_VERSION, "Bany narastające, regulowana synchronizacja SQL i bezpieczne aktualizacje ZIP"),
         )
         cur.execute(
             """INSERT INTO server_state(key,value,revision,updated_at)
@@ -2110,8 +2207,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def require_admin(self) -> dict[str, Any] | None:
         session = self.admin_session()
-        if not session:
-            self.send_json({"error": "Brak ważnej sesji administratora."}, HTTPStatus.UNAUTHORIZED)
+        account = self.account_session()
+        account_id = clean_id(account.get("account_id")) if account else ""
+        if not session or not account or not admin_account_allowed(account_id) or clean_id(session.get("playerId")) != account_id:
+            self.send_json({"error": "Panel jest dostępny tylko na koncie właściciela."}, HTTPStatus.FORBIDDEN)
+            return None
         return session
 
     def send_admin_login(self, player_id: str) -> None:
@@ -2163,15 +2263,17 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"ok": True, "config": public_game_config(), "configRevision": db_config_revision() if DATABASE_URL else 0})
             return
         if parsed.path == "/api/admin/status":
-            query = parse_qs(parsed.query)
-            player_id = clean_id((query.get("playerId") or [""])[0])
+            account = self.account_session()
+            account_id = clean_id(account.get("account_id")) if account else ""
             session = self.admin_session()
+            matches = bool(account_id and admin_account_allowed(account_id))
+            authorized = bool(session and matches and clean_id(session.get("playerId")) == account_id)
             self.send_json({
                 "ok": True, "configured": bool(ADMIN_PASSWORD and ADMIN_RECOVERY_CODE),
-                "authorized": bool(session), "accountMatches": admin_account_allowed(player_id),
-                "playerIdRequired": bool(clean_id(ADMIN_PLAYER_ID)),
+                "authorized": authorized, "accountMatches": matches,
+                "playerIdRequired": True,
                 "deploymentConfigured": bool(GITHUB_TOKEN and GITHUB_REPO),
-                "repo": GITHUB_REPO if session else "", "branch": GITHUB_BRANCH if session else "",
+                "repo": GITHUB_REPO if authorized else "", "branch": GITHUB_BRANCH if authorized else "",
             })
             return
         if parsed.path == "/api/admin/config":
@@ -2214,7 +2316,7 @@ class Handler(BaseHTTPRequestHandler):
                     with db_connect() as conn, conn.cursor() as cur:
                         cur.execute("SELECT 1")
                         cur.fetchone()
-                self.send_json({"ok": True, "storage": "postgres" if DATABASE_URL else "json", "build": "central-sql-live-sync-v4", "schemaVersion": DB_SCHEMA_VERSION if DATABASE_URL else 0})
+                self.send_json({"ok": True, "storage": "postgres" if DATABASE_URL else "json", "build": "admin-ban-sync-zip-v5", "schemaVersion": DB_SCHEMA_VERSION if DATABASE_URL else 0})
             except Exception as exc:
                 self.send_json({"ok": False, "error": str(exc)}, HTTPStatus.SERVICE_UNAVAILABLE)
             return
@@ -2269,11 +2371,13 @@ class Handler(BaseHTTPRequestHandler):
             wait = admin_login_locked(ip)
             if wait > 0:
                 self.send_json({"error": f"Za dużo prób. Spróbuj ponownie za {int(wait)+1} s."}, HTTPStatus.TOO_MANY_REQUESTS); return
-            player_id = clean_id(payload.get("playerId"))
+            account = self.require_account()
+            if not account: return
+            player_id = clean_id(account.get("account_id"))
             if not ADMIN_PASSWORD or not ADMIN_RECOVERY_CODE:
                 self.send_json({"error": "Panel administratora nie jest skonfigurowany w Renderze."}, HTTPStatus.SERVICE_UNAVAILABLE); return
             if not admin_account_allowed(player_id):
-                record_admin_login_failure(ip); self.send_json({"error": "To konto nie ma dostępu do panelu."}, HTTPStatus.FORBIDDEN); return
+                record_admin_login_failure(ip); self.send_json({"error": "Panel jest dostępny tylko na koncie właściciela."}, HTTPStatus.FORBIDDEN); return
             expected = ADMIN_PASSWORD if parsed.path.endswith("login") else ADMIN_RECOVERY_CODE
             provided = payload.get("password") if parsed.path.endswith("login") else payload.get("code")
             if not admin_secret_equal(provided, expected):
@@ -2301,7 +2405,7 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/api/admin/deploy":
             if not self.require_admin(): return
             try:
-                result = deploy_files_to_github(payload.get("files"), str(payload.get("message") or ""))
+                result = deploy_files_to_github(payload.get("files"), payload.get("archive"), str(payload.get("message") or ""))
                 self.send_json(result)
             except Exception as exc:
                 self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)

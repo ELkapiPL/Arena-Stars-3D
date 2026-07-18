@@ -312,7 +312,7 @@
       </div>
       <div class="saveNote">Postęp zapisuje się w przeglądarce. Wybierz Przetrwanie z botami albo Pojedynki 1v1.</div>
       <div id="modeMenu" aria-label="Wybór trybu gry"><div class="modeMenuTitle">WYBIERZ TRYB</div><button id="soloModeOption" class="modeOption"><span class="modeIcon">🤖</span><span><span class="modeName">Przetrwanie z botami</span><span class="modeDesc">Klasyczny tryb z falami robotów, monetami, pucharkami i ulepszeniami.</span></span></button><button id="duelModeOption" class="modeOption"><span class="modeIcon">⚔️</span><span><span class="modeName">Pojedynki 1v1</span><span class="modeDesc">Szybka arena z 2 ścianami i 4 polami krzaków. Czekaj do 30 sekund na gracza albo walcz z botem.</span></span></button></div>
-      <button id="chatOpenBtn">💬 CZAT <span id="chatBadge" class="chatBadge" style="display:none">0</span></button><button id="adminOpenBtn">⚙ PANEL ADMINISTRACYJNY</button>
+      <button id="chatOpenBtn">💬 CZAT <span id="chatBadge" class="chatBadge" style="display:none">0</span></button><button id="adminOpenBtn" hidden style="display:none">⚙ PANEL ADMINISTRACYJNY</button>
       <button id="modeBtn">TRYBY ▾</button>
       <button id="playBtn">GRAJ ▶</button>
     </div>
@@ -405,7 +405,10 @@
           <div class="adminSection"><h3>Nagrody i dostępność</h3>
             <div class="adminGrid"><div class="adminField"><label>MONETY ZA WYGRANĄ</label><input id="cfgWinCoins" type="number" min="0"></div><div class="adminField"><label>PUCHARKI ZA WYGRANĄ</label><input id="cfgWinTrophies" type="number" min="0"></div><div class="adminField"><label>PUNKTY ZA WYGRANĄ</label><input id="cfgWinPoints" type="number" min="0" value="2000"></div><div class="adminField"><label>MONETY ZA REMIS</label><input id="cfgDrawCoins" type="number" min="0"></div><div class="adminField"><label>PUCHARKI ZA REMIS</label><input id="cfgDrawTrophies" type="number" min="0"></div><div class="adminField"><label>PUNKTY ZA REMIS</label><input id="cfgDrawPoints" type="number" min="0" value="500"></div></div>
             <label class="adminCheck"><input id="cfgSoloEnabled" type="checkbox"> Przetrwanie dostępne</label><label class="adminCheck"><input id="cfgDuelEnabled" type="checkbox"> Pojedynki dostępne</label>
-            <div class="adminField"><label>AUTOMATYCZNY BAN ZA PRZEKLINANIE (GODZINY)</label><input id="cfgProfanityBanHours" type="number" min="0.25" max="168" step="0.25"></div><div class="adminField"><label>WIADOMOŚĆ W LOBBY</label><textarea id="cfgAnnouncement" maxlength="180"></textarea></div>
+            <div class="adminField"><label>AUTOMATYCZNY BAN ZA PRZEKLINANIE (MINUTY)</label><input id="cfgProfanityBanMinutes" type="number" min="1" max="10080" step="1"></div>
+            <div class="adminField"><label>ODŚWIEŻANIE BAZY SQL (SEKUNDY)</label><input id="cfgSqlSyncSeconds" type="number" min="1" max="60" step="0.1"></div>
+            <p class="adminHint">Każdy kolejny ban tego samego konta trwa ×1,5 dłużej. Synchronizacja zwalnia automatycznie podczas laga lub meczu.</p>
+            <div class="adminField"><label>WIADOMOŚĆ W LOBBY</label><textarea id="cfgAnnouncement" maxlength="180"></textarea></div>
           </div>
         </div>
         <div class="adminActions"><button id="adminSaveSettings" class="adminPrimary">ZAPISZ USTAWIENIA DLA WSZYSTKICH</button></div><div id="adminSettingsMsg" class="adminMsg"></div>
@@ -417,19 +420,20 @@
       </div>
 
 
-      <div class="adminPane" data-admin-pane="accounts"><div class="adminGrid"><div class="adminSection"><h3>Konta użytkowników</h3><div class="adminField"><label>NAZWA LUB ID KONTA</label><input id="adminAccountSearch"></div><button id="adminAccountSearchBtn" class="adminPrimary">SZUKAJ</button><div id="adminAccountList" class="adminPlayerList"></div></div><div class="adminSection"><h3>Banowanie konta</h3><div class="adminField"><label>ID KONTA</label><input id="banAccountId" readonly></div><div class="adminField"><label>NAZWA</label><input id="banAccountName" readonly></div><div id="banAccountStatus" class="adminHint">Wybierz konto z listy.</div><div class="adminGrid"><div class="adminField"><label>CZAS</label><input id="banDuration" type="number" min="1" value="2"></div><div class="adminField"><label>JEDNOSTKA</label><select id="banUnit"><option value="3600">godziny</option><option value="60">minuty</option><option value="86400">dni</option></select></div></div><div class="adminField"><label>POWÓD</label><input id="banReasonInput" value="Naruszenie zasad gry"></div><div class="adminActions"><button id="adminBanBtn" class="adminDanger">ZBANUJ</button><button id="adminUnbanBtn" class="adminSecondary">ODBLOKUJ</button></div><div id="adminBanMsg" class="adminMsg"></div></div></div></div>
+      <div class="adminPane" data-admin-pane="accounts"><div class="adminGrid"><div class="adminSection"><h3>Konta użytkowników</h3><div class="adminField"><label>NAZWA LUB ID KONTA</label><input id="adminAccountSearch"></div><button id="adminAccountSearchBtn" class="adminPrimary">SZUKAJ</button><div id="adminAccountList" class="adminPlayerList"></div></div><div class="adminSection"><h3>Banowanie konta</h3><div class="adminField"><label>ID KONTA</label><input id="banAccountId" readonly></div><div class="adminField"><label>NAZWA</label><input id="banAccountName" readonly></div><div id="banAccountStatus" class="adminHint">Wybierz konto z listy.</div><div class="adminField"><label>CZAS PODSTAWOWY BANA (MINUTY)</label><input id="banDuration" type="number" min="1" max="525600" value="120"></div>
+          <p class="adminHint">Pierwszy ban: podany czas. Drugi: ×1,5. Trzeci: ×2,25 itd. Odblokowanie konta nie zeruje licznika kolejnych banów.</p><div class="adminField"><label>POWÓD</label><input id="banReasonInput" value="Naruszenie zasad gry"></div><div class="adminActions"><button id="adminBanBtn" class="adminDanger">ZBANUJ</button><button id="adminUnbanBtn" class="adminSecondary">ODBLOKUJ</button></div><div id="adminBanMsg" class="adminMsg"></div></div></div></div>
 
       <div class="adminPane" data-admin-pane="modes">
         <div class="adminSection"><h3>Tryby tworzone z istniejących silników</h3><p class="adminHint">Możesz dodać nową pozycję w menu, opartą na Przetrwaniu albo Pojedynkach. Całkiem nowa mechanika nadal wymaga zmiany kodu.</p><div id="adminModesList"></div><div class="adminActions"><button id="adminAddMode" class="adminSecondary">+ DODAJ TRYB</button><button id="adminSaveModes" class="adminPrimary">ZAPISZ TRYBY</button></div><div id="adminModesMsg" class="adminMsg"></div></div>
       </div>
 
       <div class="adminPane" data-admin-pane="deploy">
-        <div class="adminSection"><h3>Aktualizacja gry z dysku</h3><p class="adminHint">Panel wysyła wybrane pliki do repozytorium GitHub. Render wdroży nowy commit automatycznie. Dozwolone są wyłącznie pliki gry z bezpiecznej listy.</p><div class="adminUploadBox"><input id="adminFiles" type="file" multiple accept=".html,.js,.py,.txt,.yaml,.yml"><div id="adminFileList" class="adminFileList">Nie wybrano plików.</div></div><div class="adminField"><label>OPIS AKTUALIZACJI</label><input id="adminCommitMessage" value="Aktualizacja gry z panelu administratora"></div><div class="adminActions"><button id="adminDeployBtn" class="adminPrimary">AKTUALIZUJ GRĘ NA SERWERZE</button></div><div id="adminDeployMsg" class="adminMsg"></div></div>
+        <div class="adminSection"><h3>Aktualizacja gry z ZIP-a lub plików</h3><p class="adminHint">Najłatwiej wybierz jeden ZIP zawierający folder gry. Panel sam odnajdzie dozwolone pliki, bezpiecznie je sprawdzi, wyśle do GitHuba i uruchomi wdrożenie Rendera. Możesz też wybrać pojedyncze pliki.</p><div class="adminUploadBox"><input id="adminFiles" type="file" multiple accept=".zip,.html,.js,.py,.txt,.yaml,.yml,.sql"><div id="adminFileList" class="adminFileList">Nie wybrano plików ani ZIP-a.</div></div><div class="adminField"><label>OPIS AKTUALIZACJI</label><input id="adminCommitMessage" value="Aktualizacja gry z panelu administratora"></div><div class="adminActions"><button id="adminDeployBtn" class="adminPrimary">AKTUALIZUJ GRĘ NA SERWERZE</button></div><div id="adminDeployMsg" class="adminMsg"></div></div>
       </div>
     </section>
   </div>
 
   <div id="error"></div>
-  <script src="game.js?v=duel-points-owner-free-v5"></script>
+  <script src="game.js?v=admin-ban-sync-zip-v5"></script>
 </body>
 </html>
