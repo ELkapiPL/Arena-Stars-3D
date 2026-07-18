@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-window.__arenaBuild='arena-karnet-40-pucharkow-v14';
+window.__arenaBuild='arena-karnet-40-pucharkow-mniej-monet-v15';
 
 const canvas = document.getElementById('game');
 const earlyMobileHint=((navigator.maxTouchPoints||0)>0&&matchMedia('(pointer: coarse)').matches)||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
@@ -279,7 +279,7 @@ function loadProgress(){
 let profile=loadProgress();
 profile.name=persistNickname(profile.name);
 let profileDirty=false,profileSyncBusy=false,profileChangeSeq=0,lastConfigRevision=0,backgroundSyncBusy=false;
-const CLIENT_VERSION='arena-karnet-40-pucharkow-v14';
+const CLIENT_VERSION='arena-karnet-40-pucharkow-mniej-monet-v15';
 function saveProgress(markDirty=true){try{profile.name=persistNickname(profile.name);localStorage.setItem(SAVE_KEY,JSON.stringify(profile));if(markDirty){profileDirty=true;profileChangeSeq++;}}catch(_){} }
 function getPlayerId(){
   try{let id=localStorage.getItem(PLAYER_ID_KEY);if(!id){id=(crypto.randomUUID?crypto.randomUUID():`gracz-${Date.now()}-${Math.random().toString(16).slice(2)}`);localStorage.setItem(PLAYER_ID_KEY,id);}return id;}

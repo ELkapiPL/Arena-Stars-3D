@@ -170,11 +170,11 @@ game_config: dict[str, Any] = dict(DEFAULT_GAME_CONFIG)
 # Nagrody są wyliczane i przyznawane wyłącznie przez serwer.
 ARENA_PASS_REWARDS: dict[str, dict[int, dict[str, Any]]] = {
     "free": {
-        1:{"coins":150}, 2:{"coins":200}, 3:{"coins":250}, 4:{"coins":300,"upgrade":"move"},
-        5:{"coins":350}, 6:{"coins":400}, 7:{"coins":450}, 8:{"coins":500,"upgrade":"fire"},
-        9:{"coins":550}, 10:{"coins":650}, 11:{"coins":750}, 12:{"coins":850,"upgrade":"hp"},
-        13:{"coins":950}, 14:{"coins":1100}, 15:{"coins":1250}, 16:{"coins":1400,"upgrade":"move"},
-        17:{"coins":1600}, 18:{"coins":1800}, 19:{"coins":2100}, 20:{"coins":3000},
+        1:{"coins":75}, 2:{"coins":100}, 3:{"coins":125}, 4:{"coins":150,"upgrade":"move"},
+        5:{"coins":175}, 6:{"coins":200}, 7:{"coins":225}, 8:{"coins":250,"upgrade":"fire"},
+        9:{"coins":275}, 10:{"coins":325}, 11:{"coins":375}, 12:{"coins":425,"upgrade":"hp"},
+        13:{"coins":475}, 14:{"coins":550}, 15:{"coins":625}, 16:{"coins":700,"upgrade":"move"},
+        17:{"coins":800}, 18:{"coins":900}, 19:{"coins":1050}, 20:{"coins":1500},
     },
     "vip": {
         4:{"coins":1000},
@@ -221,7 +221,7 @@ def persistent_storage_public_status() -> dict[str, Any]:
         "databaseConfigured": bool(DATABASE_URL),
         "sqlRequired": bool(REQUIRE_SQL),
         "schemaVersion": DB_SCHEMA_VERSION if DB_READY else 0,
-        "build": "arena-karnet-40-pucharkow-v14",
+        "build": "arena-karnet-40-pucharkow-mniej-monet-v15",
     }
     if DB_READY:
         payload["connectedAt"] = DB_CONNECTED_AT
@@ -556,7 +556,7 @@ def db_schema_status() -> dict[str, Any]:
         "matches": matches_count,
         "activeSessions": sessions_count,
         "connectedAt": DB_CONNECTED_AT,
-        "build": "arena-karnet-40-pucharkow-v14",
+        "build": "arena-karnet-40-pucharkow-mniej-monet-v15",
     }
 
 
