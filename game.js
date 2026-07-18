@@ -158,23 +158,38 @@ async function continueFromMobileFullscreenGate(event){
   event?.stopPropagation?.();
   if(fullscreenGateBusy)return;
   fullscreenGateBusy=true;
+  const callback=pendingMobileGameStart;
+  pendingMobileGameStart=null;
   if(ui.mobileFullscreenStartBtn){
     ui.mobileFullscreenStartBtn.disabled=true;
     ui.mobileFullscreenStartBtn.textContent='URUCHAMIANIE…';
   }
-  try{
-    await requestLandscapeOrientation(true);
-    hideMobileFullscreenGate();
-    const callback=pendingMobileGameStart;
-    pendingMobileGameStart=null;
-    callback?.();
-  }finally{
+
+  // Najważniejsze: bramka znika natychmiast po dotknięciu. Nie czekamy,
+  // aż Android/Chrome zakończy animację pełnego ekranu, bo część telefonów
+  // nie rozwiązuje tej obietnicy i ekran wygląda wtedy jak zawieszony.
+  hideMobileFullscreenGate();
+  document.body.classList.add('lobby-mode');
+  try{ui.overlay.style.display='grid';ui.lobbyView.style.display='block';}catch(_){}
+  callback?.();
+  requestAnimationFrame(()=>{updateMobileOrientation();try{resize();}catch(_){}});
+
+  // Pełny ekran i blokada pozioma są próbą dodatkową, już poza krytyczną
+  // ścieżką wejścia do lobby. Nawet gdy przeglądarka odmówi, lobby działa.
+  Promise.race([
+    requestLandscapeOrientation(true),
+    new Promise(resolve=>setTimeout(()=>resolve(false),900))
+  ]).catch(()=>false).finally(()=>{
+    setTimeout(()=>{updateMobileOrientation();try{resize();}catch(_){}},80);
+  });
+
+  setTimeout(()=>{
     fullscreenGateBusy=false;
     if(ui.mobileFullscreenStartBtn){
       ui.mobileFullscreenStartBtn.disabled=false;
-      ui.mobileFullscreenStartBtn.textContent=pendingMobileGameStart?'URUCHOM GRĘ NA PEŁNYM EKRANIE':'WEJDŹ DO LOBBY NA PEŁNYM EKRANIE';
+      ui.mobileFullscreenStartBtn.textContent='WEJDŹ DO LOBBY NA PEŁNYM EKRANIE';
     }
-  }
+  },180);
 }
 function setStickPosition(stick,knob,clientX,clientY){
   const r=stick.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2,max=r.width*.34;

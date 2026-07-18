@@ -729,7 +729,32 @@
     @media(max-width:850px){.coinGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.storeSkinList{grid-template-columns:1fr}.storePanel{max-height:96vh}.storeHeader h2{font-size:23px}}
     @media(pointer:coarse) and (orientation:landscape){body.mobile-device.lobby-mode #skinDock{left:max(7px,env(safe-area-inset-left))!important;top:max(61px,calc(env(safe-area-inset-top) + 54px))!important;bottom:auto!important;width:146px!important;height:auto!important;padding:0!important;overflow:visible!important}body.mobile-device.lobby-mode #storeOpenBtn{min-height:54px!important;grid-template-columns:35px 1fr 12px;gap:5px;padding:6px;border-radius:11px}body.mobile-device.lobby-mode .storeDockIcon{width:34px;height:34px;border-radius:9px;font-size:18px}body.mobile-device.lobby-mode .storeDockText b{font-size:11px}body.mobile-device.lobby-mode .storeDockText small{font-size:6px;margin-top:2px}body.mobile-device.lobby-mode .storeDockArrow{font-size:18px}body.mobile-device #storeOverlay{height:var(--arena-visual-height,100dvh);padding:6px;overscroll-behavior:contain}body.mobile-device .storePanel{width:calc(100vw - 12px);max-height:calc(var(--arena-visual-height,100dvh) - 12px);border-radius:14px}body.mobile-device .storeHeader{padding:9px 11px}body.mobile-device .storeHeader h2{font-size:16px}body.mobile-device .storeHeader p{font-size:8px;margin-top:2px}body.mobile-device .storeClose{width:32px;height:32px;font-size:15px}body.mobile-device .storeTabs{padding:7px 8px 0}body.mobile-device .storeTab{min-width:100px;padding:7px;font-size:8px}body.mobile-device .storeBody{padding:8px}body.mobile-device .coinShopIntro,body.mobile-device .storeSectionTitle{margin-bottom:7px;padding:6px;font-size:7px}body.mobile-device .coinShopIntro b,body.mobile-device .storeSectionTitle b{font-size:8px}body.mobile-device .coinGrid{grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}body.mobile-device .coinCard{min-height:190px;padding:29px 6px 7px;border-radius:11px}body.mobile-device .coinSaving{padding:5px 2px;font-size:6px}body.mobile-device .coinBestBadge{display:none}body.mobile-device .coinIcon{font-size:27px}body.mobile-device .coinAmount{font-size:18px;margin-top:3px}body.mobile-device .coinLabel{font-size:6px}body.mobile-device .coinPrice{font-size:15px;margin-top:7px}body.mobile-device .coinCompare{font-size:6px;min-height:26px}body.mobile-device .coinBuyBtn{padding:7px 3px;font-size:7px;border-radius:7px;box-shadow:0 3px 0 #a85b13}body.mobile-device .storeMessage{font-size:7px;margin-top:5px;min-height:12px}body.mobile-device .storePaymentNote{font-size:6px}body.mobile-device .storeSkinList{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}body.mobile-device .storeSkinList .skinCard{grid-template-columns:37px 1fr;min-height:58px;padding:6px}body.mobile-device .storeSkinList .skinPreview{height:37px;font-size:19px}body.mobile-device .storeSkinList .skinName{font-size:8px}body.mobile-device .storeSkinList .skinDesc{font-size:6px;display:block}body.mobile-device .storeSkinList .skinState{font-size:6px}}
 
-  </style>
+  
+
+    /* ===== MOBILNE LOBBY 2.1: poprawka wyjścia poza prawą krawędź ===== */
+    @media (pointer:coarse) and (orientation:landscape){
+      body.mobile-device.lobby-mode #accountBox{
+        max-width:calc(100vw - max(14px,env(safe-area-inset-left)) - max(14px,env(safe-area-inset-right)) - 120px);
+        display:flex;justify-content:flex-end;overflow:hidden;
+      }
+      body.mobile-device.lobby-mode #accountBox .accountStat{
+        min-width:54px!important;max-width:70px;padding:4px 5px!important;font-size:6px!important;line-height:1.05;
+      }
+      body.mobile-device.lobby-mode #accountBox .accountStat strong{font-size:10px!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      body.mobile-device.lobby-mode #ownerFreeBadge{max-width:76px!important}
+      body.mobile-device.lobby-mode #ownerFreeBadge strong{font-size:7px!important;white-space:normal!important;line-height:1.05}
+      body.mobile-device.lobby-mode #accountUser{max-width:150px!important}
+      body.mobile-device.lobby-mode #rankingDock{right:max(5px,env(safe-area-inset-right))!important;width:min(178px,24vw)!important}
+    }
+    @media (pointer:coarse) and (orientation:landscape) and (max-width:780px){
+      body.mobile-device.lobby-mode #accountBox .accountStat{min-width:48px!important;max-width:59px!important}
+      body.mobile-device.lobby-mode #ownerFreeBadge{display:none!important}
+      body.mobile-device.lobby-mode #accountUser{top:max(38px,calc(env(safe-area-inset-top) + 34px))!important;max-width:128px!important}
+      body.mobile-device.lobby-mode #rankingDock{top:max(53px,calc(env(safe-area-inset-top) + 47px))!important;width:154px!important}
+      body.mobile-device.lobby-mode .lobbyLogo{font-size:clamp(23px,6.6vh,34px)!important}
+    }
+
+</style>
 </head>
 <body class="lobby-mode">
   <canvas id="game"></canvas>
