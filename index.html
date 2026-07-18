@@ -1539,17 +1539,28 @@
     document.documentElement.style.setProperty('--arena-visual-left', `${left}px`);
     document.documentElement.style.setProperty('--arena-visual-top', `${top}px`);
   };
-  setHeight();
-  window.addEventListener('resize', setHeight, {passive:true});
-  window.addEventListener('orientationchange', () => setTimeout(setHeight, 120), {passive:true});
-  window.visualViewport?.addEventListener('resize', () => {
+  const burst = () => {
     setHeight();
+    [0, 40, 120, 260, 520, 900].forEach(ms => setTimeout(setHeight, ms));
+    requestAnimationFrame(() => setHeight());
+    requestAnimationFrame(() => requestAnimationFrame(() => setHeight()));
+  };
+  burst();
+  window.addEventListener('resize', burst, {passive:true});
+  window.addEventListener('orientationchange', () => setTimeout(burst, 120), {passive:true});
+  window.addEventListener('pageshow', burst, {passive:true});
+  window.addEventListener('focus', burst, {passive:true});
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) burst();
+  });
+  window.visualViewport?.addEventListener('resize', () => {
+    burst();
     const active = document.activeElement;
     if (active && document.getElementById('authOverlay')?.contains(active)) {
       setTimeout(() => active.scrollIntoView({block:'center', inline:'nearest', behavior:'smooth'}), 80);
     }
   }, {passive:true});
-  window.visualViewport?.addEventListener('scroll', setHeight, {passive:true});
+  window.visualViewport?.addEventListener('scroll', burst, {passive:true});
   document.addEventListener('focusin', event => {
     if (!document.getElementById('authOverlay')?.contains(event.target)) return;
     setTimeout(() => event.target.scrollIntoView({block:'center', inline:'nearest', behavior:'smooth'}), 220);
@@ -1558,6 +1569,6 @@
 </script>
 
 
-<script src="game.js?v=arena-mobile-fullscreen-layout-v20"></script>
+<script src="game.js?v=arena-mobile-fullscreen-layout-v22"></script>
 </body>
 </html>

@@ -97,13 +97,38 @@ let fullscreenGateBusy=false;
 let pendingMobileGateMode='game';
 const settleWithin=(value,ms,fallback=false)=>Promise.race([Promise.resolve(value).catch(()=>fallback),new Promise(resolve=>setTimeout(()=>resolve(fallback),ms))]);
 function resetMobileInput(){mobileInput.moveX=0;mobileInput.moveZ=0;mobileInput.movePointer=null;mobileInput.attackPointer=null;mouse.down=false;ui.mobileMoveKnob?.style.setProperty('transform','translate(-50%,-50%)');ui.mobileAttackKnob?.style.setProperty('transform','translate(-50%,-50%)');ui.mobileAttackStick?.classList.remove('firing');}
-function updateMobileOrientation(){
+function setArenaVisualViewportVars(){
+  const viewport=window.visualViewport;
+  const height=Math.max(240,Math.round(viewport?.height||window.innerHeight||document.documentElement.clientHeight||0));
+  const width=Math.max(320,Math.round(viewport?.width||window.innerWidth||document.documentElement.clientWidth||0));
+  const left=Math.max(0,Math.round(viewport?.offsetLeft||0));
+  const top=Math.max(0,Math.round(viewport?.offsetTop||0));
+  document.documentElement.style.setProperty('--arena-visual-height',`${height}px`);
+  document.documentElement.style.setProperty('--arena-visual-width',`${width}px`);
+  document.documentElement.style.setProperty('--arena-visual-left',`${left}px`);
+  document.documentElement.style.setProperty('--arena-visual-top',`${top}px`);
+  return {width,height,left,top};
+}
+function refreshMobileViewportLayout(){
   if(!isMobileDevice)return;
-  const portrait=innerHeight>innerWidth;
+  setArenaVisualViewportVars();
+  try{window.scrollTo(0,1);}catch(_){try{window.scrollTo({top:1,left:0,behavior:'instant'});}catch(__){}}
+  const portrait=(window.visualViewport?.height||innerHeight)>(window.visualViewport?.width||innerWidth);
   mobilePortraitBlocked=portrait;
   document.body.classList.add('mobile-device');
   document.body.classList.toggle('mobile-portrait',portrait);
   if(portrait)resetMobileInput();
+  try{resize();}catch(_){}}
+function scheduleMobileViewportRefresh(){
+  if(!isMobileDevice)return;
+  const burst=[0,40,120,260,520,900];
+  burst.forEach(ms=>setTimeout(()=>refreshMobileViewportLayout(),ms));
+  requestAnimationFrame(()=>refreshMobileViewportLayout());
+  requestAnimationFrame(()=>requestAnimationFrame(()=>refreshMobileViewportLayout()));
+}
+function updateMobileOrientation(){
+  if(!isMobileDevice)return;
+  refreshMobileViewportLayout();
 }
 function mobileFullscreenActive(){return !!(document.fullscreenElement||document.webkitFullscreenElement);}
 function fullscreenSupported(){
@@ -125,7 +150,7 @@ async function requestMobileFullscreen(){
   const active=mobileFullscreenActive();
   document.body.classList.toggle('mobile-fullscreen',active);
   try{window.scrollTo({top:1,left:0,behavior:'instant'});}catch(_){try{window.scrollTo(0,1);}catch(__){}}
-  setTimeout(()=>{updateMobileOrientation();try{resize();}catch(_){}},80);
+  scheduleMobileViewportRefresh();
   return active;
 }
 async function requestLandscapeOrientation(fullscreen=false){
@@ -175,12 +200,12 @@ async function continueFromMobileFullscreenGate(event){
     callback?.();
     requestAnimationFrame(()=>{
       hideMobileFullscreenGate();
-      updateMobileOrientation();
-      try{resize();}catch(_){}
+      scheduleMobileViewportRefresh();
     });
     await settleWithin(orientationTask,1250,false);
   }finally{
     hideMobileFullscreenGate();
+    scheduleMobileViewportRefresh();
     fullscreenGateBusy=false;
     if(ui.mobileFullscreenStartBtn){
       ui.mobileFullscreenStartBtn.disabled=false;
@@ -231,7 +256,7 @@ function setupMobileControls(){
   ui.rotateLockBtn?.addEventListener('click',()=>requestLandscapeOrientation(true));
   ui.lobbyFullscreenBtn?.addEventListener('click',async e=>{e.preventDefault();await requestLandscapeOrientation(true);hideMobileFullscreenGate();});
   ui.mobileFullscreenStartBtn?.addEventListener('click',continueFromMobileFullscreenGate,{passive:false});
-  const fullscreenChanged=()=>{document.body.classList.toggle('mobile-fullscreen',mobileFullscreenActive());setTimeout(()=>{updateMobileOrientation();try{resize();}catch(_){}},60);};
+  const fullscreenChanged=()=>{document.body.classList.toggle('mobile-fullscreen',mobileFullscreenActive());scheduleMobileViewportRefresh();};
   document.addEventListener('fullscreenchange',fullscreenChanged,{passive:true});
   document.addEventListener('webkitfullscreenchange',fullscreenChanged,{passive:true});
   addEventListener('resize',updateMobileOrientation,{passive:true});
@@ -967,7 +992,7 @@ function commitRun(){
   saveProgress();updateLobby();syncProfile().then(fetchRanking);
   recordMatchResult({mode:'solo',result:'finished',pointsDelta,trophiesDelta,coinsDelta,durationSeconds:survivalTime,details:{kills,wave,score}});
 }
-function showLobby(leaveDuel=true){if(leaveDuel&&(duelActive||duelSearching||duelMatchId))stopDuelSession(true);running=false;resetMobileInput();hideMobileFullscreenGate();pendingMobileGameStart=null;document.body.classList.remove('arena-playing','result-mode');rankingCenterOnNextRender=true;document.body.classList.add('lobby-mode');document.body.classList.remove('duel-mode');ui.lobbyView.style.display='block';ui.duelQueueView.style.display='none';ui.gameOverView.style.display='none';ui.overlay.style.display='grid';if(ui.hudModeText)ui.hudModeText.textContent='Online';if(ui.gameOverBadge)ui.gameOverBadge.textContent='KONIEC MECZU • POSTĘP ZAPISANY';if(ui.gameOverTitle)ui.gameOverTitle.innerHTML='ROBOTY CIĘ<br>POKONAŁY';updateLobby();fetchRanking();}
+function showLobby(leaveDuel=true){if(leaveDuel&&(duelActive||duelSearching||duelMatchId))stopDuelSession(true);running=false;resetMobileInput();hideMobileFullscreenGate();pendingMobileGameStart=null;document.body.classList.remove('arena-playing','result-mode');rankingCenterOnNextRender=true;document.body.classList.add('lobby-mode');document.body.classList.remove('duel-mode');ui.lobbyView.style.display='block';ui.duelQueueView.style.display='none';ui.gameOverView.style.display='none';ui.overlay.style.display='grid';if(ui.hudModeText)ui.hudModeText.textContent='Online';if(ui.gameOverBadge)ui.gameOverBadge.textContent='KONIEC MECZU • POSTĘP ZAPISANY';if(ui.gameOverTitle)ui.gameOverTitle.innerHTML='ROBOTY CIĘ<br>POKONAŁY';updateLobby();fetchRanking();if(isMobileDevice)scheduleMobileViewportRefresh();}
 function startSoloGame(){if(running)commitRun();reset();running=true;document.body.classList.add('arena-playing');document.body.classList.remove('lobby-mode','result-mode');document.body.classList.remove('duel-mode');ui.lobbyView.style.display='block';ui.gameOverView.style.display='none';updateUI();ui.overlay.style.display='none';last=performance.now();}
 function startSelectedGameNow(){
   resetMobileInput();
@@ -1280,7 +1305,10 @@ async function completeAccountLogin(data){
   updateLobby();
   syncProfile().then(fetchRanking).catch(()=>{});
   startChatPolling();
-  if(isMobileDevice&&!mobileFullscreenActive())setTimeout(()=>showMobileFullscreenGate(null,'lobby'),220);
+  if(isMobileDevice){
+    scheduleMobileViewportRefresh();
+    if(!mobileFullscreenActive())setTimeout(()=>{scheduleMobileViewportRefresh();showMobileFullscreenGate(null,'lobby');},420);
+  }
 }
 function setDatabaseGuard(text=''){
   const box=$('databaseGuardMessage');
