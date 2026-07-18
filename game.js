@@ -120,13 +120,18 @@ function loadProgress(){
       heroVersion1:data.heroVersion1===true,
       mode:typeof data.mode==='string'&&data.mode?data.mode:'solo',
       adminRevision:Math.max(0,Number(data.adminRevision)||0),
+      revision:Math.max(0,Number(data.revision)||0),
+      dataVersion:Math.max(1,Number(data.dataVersion)||1),
+      data:data.data&&typeof data.data==='object'?data.data:{},
       upgrades:{move:safeUpgradeLevel(saved.move),fire:safeUpgradeLevel(saved.fire),hp:safeUpgradeLevel(saved.hp)}
     };
-  }catch(_){return {name:'Gracz',trophies:0,points:0,coins:0,skin:'classic',ownedSkins:{classic:true,cosmic:false},heroVersion1:false,mode:'solo',adminRevision:0,upgrades:{move:0,fire:0,hp:0}};}
+  }catch(_){return {name:'Gracz',trophies:0,points:0,coins:0,skin:'classic',ownedSkins:{classic:true,cosmic:false},heroVersion1:false,mode:'solo',adminRevision:0,revision:0,dataVersion:1,data:{},upgrades:{move:0,fire:0,hp:0}};}
 }
 let profile=loadProgress();
 profile.name=persistNickname(profile.name);
-function saveProgress(){try{profile.name=persistNickname(profile.name);localStorage.setItem(SAVE_KEY,JSON.stringify(profile));}catch(_){} }
+let profileDirty=false,profileSyncBusy=false,profileChangeSeq=0,lastConfigRevision=0,backgroundSyncBusy=false;
+const CLIENT_VERSION='central-sql-live-sync-v4';
+function saveProgress(markDirty=true){try{profile.name=persistNickname(profile.name);localStorage.setItem(SAVE_KEY,JSON.stringify(profile));if(markDirty){profileDirty=true;profileChangeSeq++;}}catch(_){} }
 function getPlayerId(){
   try{let id=localStorage.getItem(PLAYER_ID_KEY);if(!id){id=(crypto.randomUUID?crypto.randomUUID():`gracz-${Date.now()}-${Math.random().toString(16).slice(2)}`);localStorage.setItem(PLAYER_ID_KEY,id);}return id;}
   catch(_){return `gracz-${Date.now()}-${Math.random().toString(16).slice(2)}`;}
@@ -146,7 +151,7 @@ function renderCustomModes(){
   const def=modeDefinition(selectedMode);if(!def||def.enabled===false){selectedMode=gameConfig.soloEnabled!==false?'solo':'duel';profile.mode=selectedMode;saveProgress();}
 }
 function applyGameConfig(config){gameConfig={...DEFAULT_CLIENT_CONFIG,...(config||{})};gameConfig.customModes=Array.isArray(gameConfig.customModes)?gameConfig.customModes:[];renderCustomModes();updateModeUI();const note=document.querySelector('.saveNote');if(note&&gameConfig.announcement)note.textContent=gameConfig.announcement;}
-async function fetchGameConfig(){try{const data=await api('/api/config');if(data.config)applyGameConfig(data.config);}catch(_){}}
+async function fetchGameConfig(){try{const data=await api('/api/config');if(data.config)applyGameConfig(data.config);if(Number(data.configRevision)>=0)lastConfigRevision=Number(data.configRevision)||lastConfigRevision;}catch(_){}}
 
 let rankingRows=[],rankingCenterOnNextRender=true,onlineConnected=false,onlineCount=0,rankingBusy=false,myRankingPosition=null,totalPlayers=0,rankingFailures=0;
 function isLobbyVisible(){return document.body.classList.contains('lobby-mode')&&ui.lobbyView&&ui.lobbyView.style.display!=='none';}
@@ -192,18 +197,35 @@ function handleRankingFailure(){
   setOnlineStatus('Ranking chwilowo niedostępny — gra działa solo','bad');
 }
 
-async function syncProfile(){
+async function syncProfile(force=true){
+  if(profileSyncBusy||(!force&&!profileDirty))return;
+  profileSyncBusy=true;
+  const sentSeq=profileChangeSeq;
   try{
-    const data=await api('/api/profile',{method:'POST',body:JSON.stringify({playerId,name:profile.name,points:profile.points,trophies:profile.trophies,coins:profile.coins,upgrades:profile.upgrades,skin:profile.skin,cosmicOwned:profile.ownedSkins?.cosmic===true,heroVersion1:profile.heroVersion1===true,adminRevision:profile.adminRevision||0})});
+    const data=await api('/api/profile',{method:'POST',body:JSON.stringify({playerId,name:profile.name,points:profile.points,trophies:profile.trophies,coins:profile.coins,upgrades:profile.upgrades,skin:profile.skin,cosmicOwned:profile.ownedSkins?.cosmic===true,heroVersion1:profile.heroVersion1===true,adminRevision:profile.adminRevision||0,revision:profile.revision||0,dataVersion:profile.dataVersion||1,data:{...(profile.data||{}),mode:profile.mode},clientVersion:CLIENT_VERSION})});
     if(data.profile){
       const remote=data.profile,forced=Number(remote.adminRevision||0)>Number(profile.adminRevision||0);
       profile.name=persistNickname(remote.name||profile.name);
       if(forced){profile.points=Number(remote.points)||0;profile.trophies=Number(remote.trophies)||0;profile.coins=Number(remote.coins)||0;profile.upgrades={move:safeUpgradeLevel(remote.upgrades?.move),fire:safeUpgradeLevel(remote.upgrades?.fire),hp:safeUpgradeLevel(remote.upgrades?.hp)};profile.ownedSkins={classic:true,cosmic:remote.cosmicOwned===true};profile.heroVersion1=remote.heroVersion1===true;profile.skin=remote.skin==='cosmic'&&profile.ownedSkins.cosmic?'cosmic':'classic';}
       else{profile.points=Math.max(profile.points,Number(remote.points)||0);profile.trophies=Math.max(profile.trophies,Number(remote.trophies)||0);profile.coins=Math.max(profile.coins,Number(remote.coins)||0);}
-      profile.adminRevision=Math.max(Number(profile.adminRevision)||0,Number(remote.adminRevision)||0);walletCoins=profile.coins;saveProgress();updateLobby();
+      profile.adminRevision=Math.max(Number(profile.adminRevision)||0,Number(remote.adminRevision)||0);profile.revision=Math.max(Number(profile.revision)||0,Number(remote.revision)||0);profile.dataVersion=Math.max(Number(profile.dataVersion)||1,Number(remote.dataVersion)||1);profile.data={...(profile.data||{}),...(remote.data||{})};if(remote.data?.mode)profile.mode=remote.data.mode;walletCoins=profile.coins;saveProgress(false);updateLobby();
     }
+    if(sentSeq===profileChangeSeq)profileDirty=false;
     rankingRows=Array.isArray(data.players)?data.players:rankingRows;myRankingPosition=Number(data.position)||null;totalPlayers=Math.max(0,Number(data.totalPlayers)||0);rankingFailures=0;onlineConnected=true;onlineCount=Math.max(1,Number(data.online)||1);setOnlineStatus(`Połączono jako ${profile.name}`,'ok');renderRanking();
   }catch(_){handleRankingFailure();}
+  finally{profileSyncBusy=false;}
+}
+async function backgroundDataSync(){
+  if(backgroundSyncBusy||!authFinished||document.hidden)return;
+  backgroundSyncBusy=true;
+  try{
+    if(profileDirty){await syncProfile(false);return;}
+    const data=await api(`/api/sync?profileRevision=${encodeURIComponent(profile.revision||0)}&configRevision=${encodeURIComponent(lastConfigRevision||0)}`,{timeoutMs:8000});
+    if(data.profile&&Number(data.profile.revision||0)>Number(profile.revision||0)){applyServerProfile(data.profile);updateLobby();}
+    if(data.config){applyGameConfig(data.config);lastConfigRevision=Number(data.configRevision)||lastConfigRevision;}
+    if(Number(data.online)>=0){onlineCount=Number(data.online)||0;setOnlineStatus(`Połączono jako ${profile.name}`,'ok');}
+  }catch(_){/* synchronizacja w tle spróbuje ponownie; gra lokalna nie jest blokowana */}
+  finally{backgroundSyncBusy=false;}
 }
 async function fetchRanking(){
   if(rankingBusy)return;rankingBusy=true;
@@ -222,6 +244,9 @@ function saveOnlineName(){
   if(!ui.nicknameInput)return;profile.name=persistNickname(ui.nicknameInput.value);ui.nicknameInput.value=profile.name;saveProgress();rankingCenterOnNextRender=true;syncProfile().then(fetchRanking);
 }
 setInterval(()=>{if(!document.hidden)fetchRanking();},5000);
+setInterval(()=>{backgroundDataSync();},2500);
+addEventListener('online',()=>{backgroundDataSync();syncProfile(false);});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)backgroundDataSync();});
 
 function updateModeUI(){
   if(!ui.modeBtn)return;const def=modeDefinition(selectedMode);const solo=selectedMode==='solo',duel=selectedMode==='duel';ui.modeBtn.textContent=def?`${def.name} ${def.base==='duel'?'⚔':'🤖'}`:'TRYBY ▾';ui.modeBtn.classList.toggle('selected',!!def);ui.soloModeOption?.classList.toggle('selected',solo);ui.duelModeOption?.classList.toggle('selected',duel);ui.modeMenu?.querySelectorAll('[data-custom-mode]').forEach(el=>el.classList.toggle('selected',el.dataset.customMode===selectedMode));
@@ -616,7 +641,7 @@ function finishDuel(data){
   duelYourWins=Math.max(0,Number(data.yourWins??duelYourWins)||0);duelOpponentWins=Math.max(0,Number(data.opponentWins??duelOpponentWins)||0);duelRoundDraws=Math.max(0,Number(data.roundDraws??duelRoundDraws)||0);
   const won=data.winnerId===playerId,lost=!!data.winnerId&&data.winnerId!==playerId,draw=!data.winnerId;
   const rewardCoins=won?Number(gameConfig.duelWinCoins||25):(draw?Number(gameConfig.duelDrawCoins||5):0),rewardTrophies=won?Number(gameConfig.duelWinTrophies||10):(draw?Number(gameConfig.duelDrawTrophies||4):0);
-  if(rewardCoins||rewardTrophies){profile.coins=Math.max(0,Math.floor(profile.coins+rewardCoins));profile.trophies=Math.max(0,Math.floor(profile.trophies+rewardTrophies));walletCoins=profile.coins;saveProgress();updateLobby();syncProfile().catch(()=>{});}
+  if(rewardCoins||rewardTrophies){profile.coins=Math.max(0,Math.floor(profile.coins+rewardCoins));profile.trophies=Math.max(0,Math.floor(profile.trophies+rewardTrophies));walletCoins=profile.coins;saveProgress();updateLobby();syncProfile().catch(()=>{});}recordMatchResult({mode:'duel',result:won?'win':(lost?'loss':'draw'),pointsDelta:0,trophiesDelta:rewardTrophies,coinsDelta:rewardCoins,durationSeconds:0,details:{yourWins:duelYourWins,opponentWins:duelOpponentWins,roundDraws:duelRoundDraws,opponent:duelOpponent?.name||'Przeciwnik'}});
   if(ui.gameOverBadge)ui.gameOverBadge.textContent='KONIEC POJEDYNKU • NAJLEPSZY Z 3 RUND';
   if(ui.gameOverTitle)ui.gameOverTitle.innerHTML=won?'ZWYCIĘSTWO!':(lost?'PRZEGRANA':'REMIS!');
   const opponentName=duelOpponent?.name||'Przeciwnik';
@@ -750,10 +775,13 @@ function reset(){
   player={x:0,z:11,hp:maxHp,maxHp,r:0.75,speed:BASE_SPEED*Math.pow(1.10,upgrades.move)*(versionOwned?VERSION_ONE_SPEED:1),fireCooldown:BASE_FIRE_COOLDOWN/(Math.pow(1.07,upgrades.fire)*(versionOwned?VERSION_ONE_FIRE:1)),angle:Math.PI,fire:0,ammo:MAG_SIZE,reload:0,inv:0,super:0,hyper:0,hyperActive:0,regen:0};
   enemies=[];bullets=[];particles=[];stars=[];pickups=[];coins=[];score=0;wave=1;kills=0;trophies=0;survivalTime=0;waveClock=0;spawnClock=.4;shake=0;updateUI();showMessage('FALA 1');
 }
+function recordMatchResult(payload){if(!currentAccount)return;api('/api/match/result',{method:'POST',body:JSON.stringify({...payload,clientVersion:CLIENT_VERSION})}).catch(()=>{});}
 function commitRun(){
   if(runCommitted)return;runCommitted=true;
-  profile.points+=Math.max(0,Math.floor(score));profile.trophies+=Math.max(0,Math.floor(trophies));profile.coins=Math.max(0,Math.floor(walletCoins));
+  const pointsDelta=Math.max(0,Math.floor(score)),trophiesDelta=Math.max(0,Math.floor(trophies)),coinsDelta=Math.max(0,Math.floor(runCoins));
+  profile.points+=pointsDelta;profile.trophies+=trophiesDelta;profile.coins=Math.max(0,Math.floor(walletCoins));
   saveProgress();updateLobby();syncProfile().then(fetchRanking);
+  recordMatchResult({mode:'solo',result:'finished',pointsDelta,trophiesDelta,coinsDelta,durationSeconds:survivalTime,details:{kills,wave,score}});
 }
 function showLobby(leaveDuel=true){if(leaveDuel&&(duelActive||duelSearching||duelMatchId))stopDuelSession(true);running=false;rankingCenterOnNextRender=true;document.body.classList.add('lobby-mode');document.body.classList.remove('duel-mode');ui.lobbyView.style.display='block';ui.duelQueueView.style.display='none';ui.gameOverView.style.display='none';ui.overlay.style.display='grid';if(ui.hudModeText)ui.hudModeText.textContent='Online';if(ui.gameOverBadge)ui.gameOverBadge.textContent='KONIEC MECZU • POSTĘP ZAPISANY';if(ui.gameOverTitle)ui.gameOverTitle.innerHTML='ROBOTY CIĘ<br>POKONAŁY';updateLobby();fetchRanking();}
 function startSoloGame(){if(running)commitRun();reset();running=true;document.body.classList.remove('lobby-mode');document.body.classList.remove('duel-mode');ui.lobbyView.style.display='block';ui.gameOverView.style.display='none';updateUI();ui.overlay.style.display='none';last=performance.now();}
@@ -945,7 +973,7 @@ let currentAccount=null,authFinished=false,chatMode='broadcast',chatRecipientId=
 function authMessage(text,bad=false){if(authUI.msg){authUI.msg.textContent=text||'';authUI.msg.style.color=bad?'#ff7890':'#ffdd75';}}
 function showAccountBan(data){if(!authUI.overlay)return;authUI.overlay.classList.remove('hidden');authUI.card.style.display='none';authUI.banCard.style.display='block';authUI.banReason.textContent=data.banReason||'Blokada konta';const until=Number(data.bannedUntil)||0;authUI.banUntil.textContent=until?`Koniec blokady: ${new Date(until*1000).toLocaleString('pl-PL')}`:'Blokada aktywna';}
 function setAuthPane(name){document.querySelectorAll('.authTab').forEach(x=>x.classList.toggle('active',x.dataset.authTab===name));document.querySelectorAll('.authPane').forEach(x=>x.classList.toggle('active',x.dataset.authPane===name));authMessage('');}
-function applyServerProfile(serverProfile){if(!serverProfile)return;profile={...profile,...serverProfile,ownedSkins:{classic:true,cosmic:serverProfile.cosmicOwned===true},heroVersion1:serverProfile.heroVersion1===true,upgrades:{...profile.upgrades,...(serverProfile.upgrades||{})}};walletCoins=profile.coins||0;saveProgress();}
+function applyServerProfile(serverProfile){if(!serverProfile)return;profile={...profile,...serverProfile,data:{...(profile.data||{}),...(serverProfile.data||{})},ownedSkins:{classic:true,cosmic:serverProfile.cosmicOwned===true},heroVersion1:serverProfile.heroVersion1===true,upgrades:{...profile.upgrades,...(serverProfile.upgrades||{})}};if(serverProfile.data?.mode)profile.mode=serverProfile.data.mode;walletCoins=profile.coins||0;saveProgress(false);}
 async function completeAccountLogin(data){currentAccount=data.account;if(!currentAccount)return;const accountId=currentAccount.playerId||currentAccount.id;if(accountId&&accountId!==playerId){localStorage.setItem(PLAYER_ID_KEY,accountId);location.reload();return;}profile.name=safePlayerName(currentAccount.username);persistNickname(profile.name);applyServerProfile(data.profile);if(ui.nicknameInput){ui.nicknameInput.value=profile.name;ui.nicknameInput.disabled=true;}if(ui.saveNameBtn){ui.saveNameBtn.disabled=true;ui.saveNameBtn.textContent='NAZWA KONTA';}if(authUI.accountUsername)authUI.accountUsername.textContent=currentAccount.username;authUI.overlay.classList.add('hidden');authUI.card.style.display='block';authUI.banCard.style.display='none';authFinished=true;syncProfile().then(fetchRanking);startChatPolling();}
 async function authBootstrap(){try{const data=await api('/api/auth/status');if(data.authenticated){if(data.account?.banned){showAccountBan(data.account);return;}await completeAccountLogin(data);}else{authUI.overlay.classList.remove('hidden');}}catch(e){authMessage('Serwer kont nie odpowiada. Odśwież stronę za chwilę.',true);}}
 async function authSubmit(kind){authMessage('Łączenie z serwerem…');const register=kind==='register',username=(register?authUI.registerUser:authUI.loginUser).value,password=(register?authUI.registerPassword:authUI.loginPassword).value;try{const data=await api(register?'/api/auth/register':'/api/auth/login',{method:'POST',body:JSON.stringify({username,password,playerId})});await completeAccountLogin(data);}catch(e){authMessage(e.message||'Nie udało się zalogować.',true);}}

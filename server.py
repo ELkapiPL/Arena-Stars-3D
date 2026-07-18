@@ -46,6 +46,8 @@ AUTH_SESSION_TTL = 30 * 24 * 60 * 60
 CHAT_MAX_MESSAGE = 300
 CHAT_MAX_RECIPIENTS = 20
 CHAT_HISTORY_LIMIT = 160
+DB_SCHEMA_VERSION = 4
+PROFILE_DATA_VERSION = 1
 DUEL_PLAYER_TIMEOUT = 12.0
 DUEL_WAIT_TIMEOUT = 45.0
 DUEL_BOT_WAIT = 30.0
@@ -139,6 +141,36 @@ def clean_number(value: Any, upper: int = 2_000_000_000) -> int:
     except (TypeError, ValueError):
         return 0
     return max(0, min(upper, num))
+
+
+def clean_revision(value: Any) -> int:
+    try:
+        return max(0, min(9_000_000_000_000_000_000, int(value)))
+    except (TypeError, ValueError, OverflowError):
+        return 0
+
+
+def clean_profile_data(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    cleaned: dict[str, Any] = {}
+    for key, item in list(value.items())[:80]:
+        safe_key = clean_mode_text(key, 48)
+        if not safe_key:
+            continue
+        if isinstance(item, (str, int, float, bool)) or item is None:
+            cleaned[safe_key] = item
+        elif isinstance(item, list):
+            cleaned[safe_key] = item[:50]
+        elif isinstance(item, dict):
+            cleaned[safe_key] = dict(list(item.items())[:50])
+    try:
+        raw = json.dumps(cleaned, ensure_ascii=False)
+        if len(raw.encode("utf-8")) > 64 * 1024:
+            return {}
+    except (TypeError, ValueError):
+        return {}
+    return cleaned
 
 
 def touch(player_id: str) -> None:
@@ -245,9 +277,9 @@ def save_game_config(value: Any) -> dict[str, Any]:
         with db_connect() as conn, conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO game_settings (key, value, updated_at)
-                VALUES ('global', %s::jsonb, NOW())
-                ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+                INSERT INTO game_settings (key, value, revision, updated_at)
+                VALUES ('global', %s::jsonb, 1, NOW())
+                ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, revision = game_settings.revision + 1, updated_at = NOW()
                 """,
                 (json.dumps(cleaned, ensure_ascii=False),),
             )
@@ -259,6 +291,12 @@ def save_game_config(value: Any) -> dict[str, Any]:
 
 def profile_full_row(row: dict[str, Any]) -> dict[str, Any]:
     upgrades = row.get("upgrades") if isinstance(row.get("upgrades"), dict) else {}
+    data = row.get("data", row.get("profile_data", {}))
+    if isinstance(data, str):
+        try:
+            data = json.loads(data)
+        except Exception:
+            data = {}
     return {
         "id": clean_id(row.get("id") or row.get("player_id")),
         "name": clean_name(row.get("name")),
@@ -274,7 +312,57 @@ def profile_full_row(row: dict[str, Any]) -> dict[str, Any]:
         "cosmicOwned": bool(row.get("cosmic_owned", row.get("cosmicOwned", False))),
         "heroVersion1": bool(row.get("hero_version1", row.get("heroVersion1", False))),
         "adminRevision": clean_number(row.get("admin_revision", row.get("adminRevision", 0))),
+        "revision": clean_revision(row.get("revision", 0)),
+        "dataVersion": clamp_int(row.get("data_version", row.get("dataVersion", PROFILE_DATA_VERSION)), 1, 9999, PROFILE_DATA_VERSION),
+        "data": clean_profile_data(data),
     }
+
+
+def db_get_profile(player_id: str) -> dict[str, Any] | None:
+    player_id = clean_id(player_id)
+    if not player_id:
+        return None
+    if not DATABASE_URL:
+        return profile_full_row(profiles.get(player_id, {})) if player_id in profiles else None
+    with db_connect() as conn:
+        conn.autocommit = False
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT player_id,name,points,trophies,coins,move_level,fire_level,hp_level,skin,cosmic_owned,hero_version1,admin_revision,revision,data_version,profile_data
+               FROM players WHERE player_id=%s""",
+            (player_id,),
+        )
+        row = cur.fetchone()
+    if not row:
+        return None
+    return profile_full_row({
+        "id":row[0],"name":row[1],"points":row[2],"trophies":row[3],"coins":row[4],
+        "move_level":row[5],"fire_level":row[6],"hp_level":row[7],"skin":row[8],
+        "cosmic_owned":row[9],"hero_version1":row[10],"admin_revision":row[11],
+        "revision":row[12],"data_version":row[13],"profile_data":row[14],
+    })
+
+
+def db_config_revision() -> int:
+    if not DATABASE_URL:
+        return 0
+    with db_connect() as conn, conn.cursor() as cur:
+        cur.execute("SELECT revision FROM game_settings WHERE key='global'")
+        row = cur.fetchone()
+    return clean_revision(row[0] if row else 0)
+
+
+def db_schema_status() -> dict[str, Any]:
+    if not DATABASE_URL:
+        return {"schemaVersion": 0, "storage": "json"}
+    with db_connect() as conn, conn.cursor() as cur:
+        cur.execute("SELECT COALESCE(MAX(version),0) FROM schema_migrations")
+        version = int(cur.fetchone()[0])
+        cur.execute("SELECT COUNT(*) FROM players")
+        players_count = int(cur.fetchone()[0])
+        cur.execute("SELECT COUNT(*) FROM accounts")
+        accounts_count = int(cur.fetchone()[0])
+    return {"schemaVersion": version, "storage": "postgres", "players": players_count, "accounts": accounts_count}
 
 
 def admin_secret_equal(provided: Any, expected: str) -> bool:
@@ -789,15 +877,28 @@ def init_database() -> None:
         return
     with db_connect() as conn, conn.cursor() as cur:
         cur.execute(
-            """
-            CREATE TABLE IF NOT EXISTS players (
+            """CREATE TABLE IF NOT EXISTS schema_migrations (
+                   version INTEGER PRIMARY KEY,
+                   description TEXT NOT NULL,
+                   applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+               )"""
+        )
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS server_state (
+                   key TEXT PRIMARY KEY,
+                   value JSONB NOT NULL DEFAULT '{}'::jsonb,
+                   revision BIGINT NOT NULL DEFAULT 1,
+                   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+               )"""
+        )
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS players (
                 player_id VARCHAR(80) PRIMARY KEY,
                 name VARCHAR(18) NOT NULL,
                 points BIGINT NOT NULL DEFAULT 0 CHECK (points >= 0),
                 trophies BIGINT NOT NULL DEFAULT 0 CHECK (trophies >= 0),
                 updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            )
-            """
+            )"""
         )
         for statement in (
             "ALTER TABLE players ADD COLUMN IF NOT EXISTS coins BIGINT NOT NULL DEFAULT 0",
@@ -808,12 +909,17 @@ def init_database() -> None:
             "ALTER TABLE players ADD COLUMN IF NOT EXISTS cosmic_owned BOOLEAN NOT NULL DEFAULT FALSE",
             "ALTER TABLE players ADD COLUMN IF NOT EXISTS hero_version1 BOOLEAN NOT NULL DEFAULT FALSE",
             "ALTER TABLE players ADD COLUMN IF NOT EXISTS admin_revision BIGINT NOT NULL DEFAULT 0",
+            "ALTER TABLE players ADD COLUMN IF NOT EXISTS revision BIGINT NOT NULL DEFAULT 1",
+            "ALTER TABLE players ADD COLUMN IF NOT EXISTS data_version INTEGER NOT NULL DEFAULT 1",
+            "ALTER TABLE players ADD COLUMN IF NOT EXISTS profile_data JSONB NOT NULL DEFAULT '{}'::jsonb",
+            "ALTER TABLE players ADD COLUMN IF NOT EXISTS last_client_version VARCHAR(40) NOT NULL DEFAULT ''",
+            "ALTER TABLE players ADD COLUMN IF NOT EXISTS last_seen TIMESTAMPTZ",
         ):
             cur.execute(statement)
         cur.execute("CREATE TABLE IF NOT EXISTS game_settings (key TEXT PRIMARY KEY, value JSONB NOT NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())")
+        cur.execute("ALTER TABLE game_settings ADD COLUMN IF NOT EXISTS revision BIGINT NOT NULL DEFAULT 1")
         cur.execute(
-            """
-            CREATE TABLE IF NOT EXISTS accounts (
+            """CREATE TABLE IF NOT EXISTS accounts (
                 account_id VARCHAR(80) PRIMARY KEY,
                 username VARCHAR(24) NOT NULL,
                 username_key VARCHAR(24) NOT NULL UNIQUE,
@@ -823,22 +929,18 @@ def init_database() -> None:
                 last_login TIMESTAMPTZ,
                 banned_until TIMESTAMPTZ,
                 ban_reason VARCHAR(240) NOT NULL DEFAULT ''
-            )
-            """
+            )"""
         )
         cur.execute(
-            """
-            CREATE TABLE IF NOT EXISTS account_sessions (
+            """CREATE TABLE IF NOT EXISTS account_sessions (
                 token_hash CHAR(64) PRIMARY KEY,
                 account_id VARCHAR(80) NOT NULL REFERENCES accounts(account_id) ON DELETE CASCADE,
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                 expires_at TIMESTAMPTZ NOT NULL
-            )
-            """
+            )"""
         )
         cur.execute(
-            """
-            CREATE TABLE IF NOT EXISTS chat_messages (
+            """CREATE TABLE IF NOT EXISTS chat_messages (
                 id BIGSERIAL PRIMARY KEY,
                 batch_id VARCHAR(64) NOT NULL,
                 sender_id VARCHAR(80) NOT NULL REFERENCES accounts(account_id) ON DELETE CASCADE,
@@ -846,63 +948,130 @@ def init_database() -> None:
                 body VARCHAR(300) NOT NULL,
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                 is_broadcast BOOLEAN NOT NULL DEFAULT FALSE
-            )
-            """
+            )"""
         )
         cur.execute("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS is_broadcast BOOLEAN NOT NULL DEFAULT FALSE")
         cur.execute("ALTER TABLE chat_messages ALTER COLUMN recipient_id DROP NOT NULL")
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS match_results (
+                id BIGSERIAL PRIMARY KEY,
+                account_id VARCHAR(80) NOT NULL REFERENCES accounts(account_id) ON DELETE CASCADE,
+                mode VARCHAR(32) NOT NULL,
+                result VARCHAR(24) NOT NULL,
+                points_delta BIGINT NOT NULL DEFAULT 0,
+                trophies_delta BIGINT NOT NULL DEFAULT 0,
+                coins_delta BIGINT NOT NULL DEFAULT 0,
+                duration_seconds NUMERIC(12,3) NOT NULL DEFAULT 0,
+                details JSONB NOT NULL DEFAULT '{}'::jsonb,
+                client_version VARCHAR(40) NOT NULL DEFAULT '',
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )"""
+        )
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS data_audit (
+                id BIGSERIAL PRIMARY KEY,
+                account_id VARCHAR(80),
+                event_type VARCHAR(48) NOT NULL,
+                payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )"""
+        )
         cur.execute("CREATE INDEX IF NOT EXISTS players_ranking_idx ON players (points DESC, trophies DESC, player_id ASC)")
+        cur.execute("CREATE INDEX IF NOT EXISTS players_updated_idx ON players (updated_at DESC)")
         cur.execute("CREATE INDEX IF NOT EXISTS account_sessions_expiry_idx ON account_sessions (expires_at)")
         cur.execute("CREATE INDEX IF NOT EXISTS chat_messages_users_idx ON chat_messages (sender_id, recipient_id, id DESC)")
+        cur.execute("CREATE INDEX IF NOT EXISTS chat_messages_created_idx ON chat_messages (created_at DESC)")
+        cur.execute("CREATE INDEX IF NOT EXISTS match_results_account_idx ON match_results (account_id, created_at DESC)")
+        cur.execute("CREATE INDEX IF NOT EXISTS data_audit_account_idx ON data_audit (account_id, created_at DESC)")
+        cur.execute(
+            "INSERT INTO schema_migrations(version,description) VALUES (%s,%s) ON CONFLICT(version) DO NOTHING",
+            (DB_SCHEMA_VERSION, "Centralny zapis kont, profili, czatu, wyników i ustawień z rewizjami"),
+        )
+        cur.execute(
+            """INSERT INTO server_state(key,value,revision,updated_at)
+               VALUES ('database', %s::jsonb, 1, NOW())
+               ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value, revision=server_state.revision+1, updated_at=NOW()""",
+            (json.dumps({"schemaVersion": DB_SCHEMA_VERSION, "profileDataVersion": PROFILE_DATA_VERSION}, ensure_ascii=False),),
+        )
 
 
 def db_upsert_profile(payload: dict[str, Any]) -> dict[str, Any] | None:
     player_id = clean_id(payload.get("playerId"))
     if not player_id:
         return None
+    incoming_data = clean_profile_data(payload.get("data"))
     incoming = profile_full_row({
         "id": player_id, "name": payload.get("name"), "points": payload.get("points"),
         "trophies": payload.get("trophies"), "coins": payload.get("coins"),
         "upgrades": payload.get("upgrades"), "skin": payload.get("skin"),
         "cosmicOwned": payload.get("cosmicOwned"), "heroVersion1": payload.get("heroVersion1"),
-        "adminRevision": payload.get("adminRevision"),
+        "adminRevision": payload.get("adminRevision"), "revision": payload.get("revision"),
+        "dataVersion": payload.get("dataVersion", PROFILE_DATA_VERSION), "data": incoming_data,
     })
-    known_revision = clean_number(payload.get("adminRevision"))
-    with db_connect() as conn, conn.cursor() as cur:
-        cur.execute("SELECT player_id, name, points, trophies, coins, move_level, fire_level, hp_level, skin, cosmic_owned, hero_version1, admin_revision FROM players WHERE player_id=%s", (player_id,))
-        row = cur.fetchone()
-        if row:
-            old = profile_full_row({"id":row[0],"name":row[1],"points":row[2],"trophies":row[3],"coins":row[4],"move_level":row[5],"fire_level":row[6],"hp_level":row[7],"skin":row[8],"cosmic_owned":row[9],"hero_version1":row[10],"admin_revision":row[11]})
-            if old["adminRevision"] > known_revision:
-                merged = old
-                if incoming["name"] != "Gracz" or old["name"] == "Gracz":
-                    merged["name"] = incoming["name"]
+    known_admin_revision = clean_number(payload.get("adminRevision"))
+    client_version = clean_mode_text(payload.get("clientVersion"), 40)
+    with db_connect() as conn:
+        conn.autocommit = False
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT player_id,name,points,trophies,coins,move_level,fire_level,hp_level,skin,cosmic_owned,hero_version1,admin_revision,revision,data_version,profile_data
+                   FROM players WHERE player_id=%s FOR UPDATE""",
+                (player_id,),
+            )
+            row = cur.fetchone()
+            if row:
+                old = profile_full_row({
+                    "id":row[0],"name":row[1],"points":row[2],"trophies":row[3],"coins":row[4],
+                    "move_level":row[5],"fire_level":row[6],"hp_level":row[7],"skin":row[8],
+                    "cosmic_owned":row[9],"hero_version1":row[10],"admin_revision":row[11],
+                    "revision":row[12],"data_version":row[13],"profile_data":row[14],
+                })
+                if old["adminRevision"] > known_admin_revision:
+                    merged = dict(old)
+                    if incoming["name"] != "Gracz" or old["name"] == "Gracz":
+                        merged["name"] = incoming["name"]
+                else:
+                    merged = dict(incoming)
+                    if incoming["name"] == "Gracz" and old["name"] != "Gracz":
+                        merged["name"] = old["name"]
+                    merged["points"] = max(old["points"], incoming["points"])
+                    merged["trophies"] = max(old["trophies"], incoming["trophies"])
+                    merged["coins"] = max(old["coins"], incoming["coins"])
+                    merged["upgrades"] = {k:max(old["upgrades"][k],incoming["upgrades"][k]) for k in ("move","fire","hp")}
+                    merged["cosmicOwned"] = old["cosmicOwned"] or incoming["cosmicOwned"]
+                    merged["heroVersion1"] = old["heroVersion1"] or incoming["heroVersion1"]
+                    merged["skin"] = incoming["skin"] if incoming["skin"] == "classic" or merged["cosmicOwned"] else old["skin"]
+                    merged["adminRevision"] = old["adminRevision"]
+                    merged["data"] = {**old.get("data", {}), **incoming_data}
+                    merged["dataVersion"] = max(old.get("dataVersion", 1), incoming.get("dataVersion", 1))
+                cur.execute(
+                    """UPDATE players SET name=%s,points=%s,trophies=%s,coins=%s,move_level=%s,fire_level=%s,hp_level=%s,
+                           skin=%s,cosmic_owned=%s,hero_version1=%s,admin_revision=%s,profile_data=%s::jsonb,data_version=%s,
+                           revision=revision+1,last_client_version=%s,last_seen=NOW(),updated_at=NOW()
+                       WHERE player_id=%s
+                       RETURNING player_id,name,points,trophies,coins,move_level,fire_level,hp_level,skin,cosmic_owned,hero_version1,admin_revision,revision,data_version,profile_data""",
+                    (merged["name"],merged["points"],merged["trophies"],merged["coins"],merged["upgrades"]["move"],merged["upgrades"]["fire"],merged["upgrades"]["hp"],merged["skin"],merged["cosmicOwned"],merged["heroVersion1"],merged["adminRevision"],json.dumps(merged.get("data",{}),ensure_ascii=False),merged.get("dataVersion",PROFILE_DATA_VERSION),client_version,player_id),
+                )
             else:
-                merged = incoming
-                if incoming["name"] == "Gracz" and old["name"] != "Gracz":
-                    merged["name"] = old["name"]
-                merged["points"] = max(old["points"], incoming["points"])
-                merged["trophies"] = max(old["trophies"], incoming["trophies"])
-                merged["coins"] = max(old["coins"], incoming["coins"])
-                merged["upgrades"] = {k:max(old["upgrades"][k],incoming["upgrades"][k]) for k in ("move","fire","hp")}
-                merged["cosmicOwned"] = old["cosmicOwned"] or incoming["cosmicOwned"]
-                merged["heroVersion1"] = old["heroVersion1"] or incoming["heroVersion1"]
-                merged["skin"] = incoming["skin"] if incoming["skin"] == "classic" or merged["cosmicOwned"] else old["skin"]
-                merged["adminRevision"] = old["adminRevision"]
-            cur.execute("""
-                UPDATE players SET name=%s, points=%s, trophies=%s, coins=%s, move_level=%s, fire_level=%s, hp_level=%s,
-                    skin=%s, cosmic_owned=%s, hero_version1=%s, admin_revision=%s, updated_at=NOW() WHERE player_id=%s
-                RETURNING player_id, name, points, trophies, coins, move_level, fire_level, hp_level, skin, cosmic_owned, hero_version1, admin_revision
-            """, (merged["name"],merged["points"],merged["trophies"],merged["coins"],merged["upgrades"]["move"],merged["upgrades"]["fire"],merged["upgrades"]["hp"],merged["skin"],merged["cosmicOwned"],merged["heroVersion1"],merged["adminRevision"],player_id))
-        else:
-            cur.execute("""
-                INSERT INTO players (player_id,name,points,trophies,coins,move_level,fire_level,hp_level,skin,cosmic_owned,hero_version1,admin_revision,updated_at)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,0,NOW())
-                RETURNING player_id, name, points, trophies, coins, move_level, fire_level, hp_level, skin, cosmic_owned, hero_version1, admin_revision
-            """, (player_id,incoming["name"],incoming["points"],incoming["trophies"],incoming["coins"],incoming["upgrades"]["move"],incoming["upgrades"]["fire"],incoming["upgrades"]["hp"],incoming["skin"],incoming["cosmicOwned"],incoming["heroVersion1"]))
-        result = cur.fetchone()
+                cur.execute(
+                    """INSERT INTO players (player_id,name,points,trophies,coins,move_level,fire_level,hp_level,skin,cosmic_owned,hero_version1,admin_revision,revision,data_version,profile_data,last_client_version,last_seen,updated_at)
+                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,0,1,%s,%s::jsonb,%s,NOW(),NOW())
+                       RETURNING player_id,name,points,trophies,coins,move_level,fire_level,hp_level,skin,cosmic_owned,hero_version1,admin_revision,revision,data_version,profile_data""",
+                    (player_id,incoming["name"],incoming["points"],incoming["trophies"],incoming["coins"],incoming["upgrades"]["move"],incoming["upgrades"]["fire"],incoming["upgrades"]["hp"],incoming["skin"],incoming["cosmicOwned"],incoming["heroVersion1"],incoming.get("dataVersion",PROFILE_DATA_VERSION),json.dumps(incoming_data,ensure_ascii=False),client_version),
+                )
+            result = cur.fetchone()
+            cur.execute(
+                "INSERT INTO data_audit(account_id,event_type,payload) VALUES (%s,'profile_sync',%s::jsonb)",
+                (player_id, json.dumps({"revision": int(result[12]), "clientVersion": client_version}, ensure_ascii=False)),
+            )
+        conn.commit()
     touch(player_id)
-    return profile_full_row({"id":result[0],"name":result[1],"points":result[2],"trophies":result[3],"coins":result[4],"move_level":result[5],"fire_level":result[6],"hp_level":result[7],"skin":result[8],"cosmic_owned":result[9],"hero_version1":result[10],"admin_revision":result[11]}) if result else None
+    return profile_full_row({
+        "id":result[0],"name":result[1],"points":result[2],"trophies":result[3],"coins":result[4],
+        "move_level":result[5],"fire_level":result[6],"hp_level":result[7],"skin":result[8],
+        "cosmic_owned":result[9],"hero_version1":result[10],"admin_revision":result[11],
+        "revision":result[12],"data_version":result[13],"profile_data":result[14],
+    })
 
 
 def db_leaderboard_payload(player_id: str = "") -> dict[str, Any]:
@@ -949,6 +1118,46 @@ def db_leaderboard_payload(player_id: str = "") -> dict[str, Any]:
     }
 
 
+def save_match_result(account_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    mode = clean_mode_text(payload.get("mode"), 32) or "unknown"
+    result = clean_mode_text(payload.get("result"), 24) or "finished"
+    points_delta = clean_number(payload.get("pointsDelta"), 1_000_000_000)
+    trophies_delta = clean_number(payload.get("trophiesDelta"), 1_000_000_000)
+    coins_delta = clean_number(payload.get("coinsDelta"), 1_000_000_000)
+    duration = clean_float(payload.get("durationSeconds"), 0.0, 7 * 24 * 3600, 0.0)
+    details = clean_profile_data(payload.get("details"))
+    client_version = clean_mode_text(payload.get("clientVersion"), 40)
+    if DATABASE_URL:
+        with db_connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                """INSERT INTO match_results(account_id,mode,result,points_delta,trophies_delta,coins_delta,duration_seconds,details,client_version)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s) RETURNING id,EXTRACT(EPOCH FROM created_at)""",
+                (clean_id(account_id),mode,result,points_delta,trophies_delta,coins_delta,duration,json.dumps(details,ensure_ascii=False),client_version),
+            )
+            row = cur.fetchone()
+        return {"ok": True, "id": int(row[0]), "createdAt": float(row[1])}
+    return {"ok": True, "id": 0, "createdAt": now()}
+
+
+def live_sync_payload(account_id: str, profile_revision: int, config_revision: int) -> dict[str, Any]:
+    profile = db_get_profile(account_id) if DATABASE_URL else profile_full_row(profiles.get(account_id, {}))
+    current_config_revision = db_config_revision() if DATABASE_URL else 0
+    result: dict[str, Any] = {
+        "ok": True,
+        "serverTime": now(),
+        "schemaVersion": DB_SCHEMA_VERSION if DATABASE_URL else 0,
+        "storage": "postgres" if DATABASE_URL else "json",
+        "profileRevision": clean_revision(profile.get("revision", 0) if profile else 0),
+        "configRevision": current_config_revision,
+        "online": online_count(),
+    }
+    if profile and result["profileRevision"] > clean_revision(profile_revision):
+        result["profile"] = profile
+    if current_config_revision > clean_revision(config_revision):
+        result["config"] = public_game_config()
+    return result
+
+
 # ----------------------------- lokalny JSON -----------------------------
 
 def load_profiles() -> None:
@@ -991,15 +1200,22 @@ def json_upsert_profile(payload: dict[str, Any]) -> dict[str, Any] | None:
     player_id = clean_id(payload.get("playerId"))
     if not player_id:
         return None
-    incoming = profile_full_row({"id":player_id,"name":payload.get("name"),"points":payload.get("points"),"trophies":payload.get("trophies"),"coins":payload.get("coins"),"upgrades":payload.get("upgrades"),"skin":payload.get("skin"),"cosmicOwned":payload.get("cosmicOwned"),"heroVersion1":payload.get("heroVersion1"),"adminRevision":payload.get("adminRevision")})
+    incoming = profile_full_row({
+        "id":player_id,"name":payload.get("name"),"points":payload.get("points"),
+        "trophies":payload.get("trophies"),"coins":payload.get("coins"),
+        "upgrades":payload.get("upgrades"),"skin":payload.get("skin"),
+        "cosmicOwned":payload.get("cosmicOwned"),"heroVersion1":payload.get("heroVersion1"),
+        "adminRevision":payload.get("adminRevision"),"revision":payload.get("revision"),
+        "dataVersion":payload.get("dataVersion",PROFILE_DATA_VERSION),"data":payload.get("data"),
+    })
     old = profile_full_row(profiles.get(player_id, {"id":player_id,"name":"Gracz"}))
     known = clean_number(payload.get("adminRevision"))
     if old["adminRevision"] > known:
-        entry = old
+        entry = dict(old)
         if incoming["name"] != "Gracz" or old["name"] == "Gracz":
             entry["name"] = incoming["name"]
     else:
-        entry = incoming
+        entry = dict(incoming)
         if incoming["name"] == "Gracz" and old["name"] != "Gracz":
             entry["name"] = old["name"]
         entry["points"] = max(old["points"], incoming["points"])
@@ -1009,6 +1225,9 @@ def json_upsert_profile(payload: dict[str, Any]) -> dict[str, Any] | None:
         entry["cosmicOwned"] = old["cosmicOwned"] or incoming["cosmicOwned"]
         entry["heroVersion1"] = old["heroVersion1"] or incoming["heroVersion1"]
         entry["adminRevision"] = old["adminRevision"]
+        entry["data"] = {**old.get("data",{}), **incoming.get("data",{})}
+        entry["dataVersion"] = max(old.get("dataVersion",1), incoming.get("dataVersion",1))
+    entry["revision"] = max(old.get("revision",0), incoming.get("revision",0)) + 1
     profiles[player_id] = entry
     save_profiles(); touch(player_id); return entry
 
@@ -1082,7 +1301,7 @@ def admin_update_player(payload: dict[str, Any]) -> dict[str, Any]:
                 VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
                 ON CONFLICT (player_id) DO UPDATE SET name=EXCLUDED.name,points=EXCLUDED.points,trophies=EXCLUDED.trophies,coins=EXCLUDED.coins,
                     move_level=EXCLUDED.move_level,fire_level=EXCLUDED.fire_level,hp_level=EXCLUDED.hp_level,skin=EXCLUDED.skin,
-                    cosmic_owned=EXCLUDED.cosmic_owned,hero_version1=EXCLUDED.hero_version1,admin_revision=players.admin_revision+1,updated_at=NOW()
+                    cosmic_owned=EXCLUDED.cosmic_owned,hero_version1=EXCLUDED.hero_version1,admin_revision=players.admin_revision+1,revision=players.revision+1,last_seen=NOW(),updated_at=NOW()
                 RETURNING player_id,name,points,trophies,coins,move_level,fire_level,hp_level,skin,cosmic_owned,hero_version1,admin_revision
             """, (player_id,entry["name"],entry["points"],entry["trophies"],entry["coins"],entry["upgrades"]["move"],entry["upgrades"]["fire"],entry["upgrades"]["hp"],entry["skin"],entry["cosmicOwned"],entry["heroVersion1"],entry["adminRevision"]))
             r=cur.fetchone()
@@ -1792,7 +2011,7 @@ def duel_tick_loop() -> None:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "ArenaStarsRenderNeon/2.0-accounts-chat"
+    server_version = "ArenaStarsSQL/4.0-live-sync"
     protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt: str, *args: Any) -> None:
@@ -1865,14 +2084,9 @@ class Handler(BaseHTTPRequestHandler):
         account_mark_login(clean_id(account.get("account_id")))
         profile = None
         try:
-            if DATABASE_URL:
-                with db_connect() as conn, conn.cursor() as cur:
-                    cur.execute("SELECT player_id,name,points,trophies,coins,move_level,fire_level,hp_level,skin,cosmic_owned,hero_version1,admin_revision FROM players WHERE player_id=%s", (account["account_id"],))
-                    r=cur.fetchone()
-                    if r: profile=profile_full_row({"id":r[0],"name":r[1],"points":r[2],"trophies":r[3],"coins":r[4],"move_level":r[5],"fire_level":r[6],"hp_level":r[7],"skin":r[8],"cosmic_owned":r[9],"hero_version1":r[10],"admin_revision":r[11]})
-            else:
-                profile=profile_full_row(profiles.get(account["account_id"],{}))
-        except Exception: profile=None
+            profile = db_get_profile(account["account_id"]) if DATABASE_URL else profile_full_row(profiles.get(account["account_id"],{}))
+        except Exception:
+            profile = None
         self.send_json({"ok":True,"account":account_public(account),"profile":profile}, extra_headers={"Set-Cookie":cookie})
 
     def admin_token(self) -> str:
@@ -1918,8 +2132,27 @@ class Handler(BaseHTTPRequestHandler):
             if not self.require_admin(): return
             q=(parse_qs(parsed.query).get("q") or [""])[0]
             self.send_json({"ok":True,"accounts":admin_accounts(q)}); return
+        if parsed.path == "/api/sync":
+            account = self.require_account()
+            if not account: return
+            query = parse_qs(parsed.query)
+            profile_revision = clean_revision((query.get("profileRevision") or [0])[0])
+            config_revision = clean_revision((query.get("configRevision") or [0])[0])
+            try:
+                self.send_json(live_sync_payload(account["account_id"], profile_revision, config_revision))
+            except Exception as exc:
+                print(f"Błąd synchronizacji danych: {exc}")
+                self.send_json({"error":"Synchronizacja chwilowo niedostępna."}, HTTPStatus.SERVICE_UNAVAILABLE)
+            return
+        if parsed.path == "/api/database/status":
+            if not self.require_admin(): return
+            try:
+                self.send_json({"ok": True, **db_schema_status()})
+            except Exception as exc:
+                self.send_json({"error": str(exc)}, HTTPStatus.SERVICE_UNAVAILABLE)
+            return
         if parsed.path == "/api/config":
-            self.send_json({"ok": True, "config": public_game_config()})
+            self.send_json({"ok": True, "config": public_game_config(), "configRevision": db_config_revision() if DATABASE_URL else 0})
             return
         if parsed.path == "/api/admin/status":
             query = parse_qs(parsed.query)
@@ -1973,7 +2206,7 @@ class Handler(BaseHTTPRequestHandler):
                     with db_connect() as conn, conn.cursor() as cur:
                         cur.execute("SELECT 1")
                         cur.fetchone()
-                self.send_json({"ok": True, "storage": "neon" if DATABASE_URL else "json", "build": "chat-global-private-offline-v3"})
+                self.send_json({"ok": True, "storage": "postgres" if DATABASE_URL else "json", "build": "central-sql-live-sync-v4", "schemaVersion": DB_SCHEMA_VERSION if DATABASE_URL else 0})
             except Exception as exc:
                 self.send_json({"ok": False, "error": str(exc)}, HTTPStatus.SERVICE_UNAVAILABLE)
             return
@@ -2064,6 +2297,15 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(result)
             except Exception as exc:
                 self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+        if parsed.path == "/api/match/result":
+            account = self.require_account()
+            if not account: return
+            try:
+                self.send_json(save_match_result(account["account_id"], payload))
+            except Exception as exc:
+                print(f"Błąd zapisu wyniku meczu: {exc}")
+                self.send_json({"error":"Nie udało się zapisać historii meczu."}, HTTPStatus.SERVICE_UNAVAILABLE)
             return
         if parsed.path == "/api/profile":
             account=self.require_account()
@@ -2190,7 +2432,7 @@ if __name__ == "__main__":
     print("\nArena Stars 3D — PRZETRWANIE + POJEDYNKI 1V1/BOT + TOP 200")
     print(f"Adres lokalny: http://localhost:{PORT}")
     print(f"Adres w tej samej sieci: http://{local_ip()}:{PORT}")
-    print(f"Zapis profili: {'Neon Postgres' if DATABASE_URL else 'lokalny players.json'}")
+    print(f"Zapis danych: {'PostgreSQL/Neon, schemat v'+str(DB_SCHEMA_VERSION) if DATABASE_URL else 'lokalny JSON (tryb testowy)'}")
     print("Zatrzymanie serwera: Ctrl+C\n")
     try:
         server.serve_forever()
