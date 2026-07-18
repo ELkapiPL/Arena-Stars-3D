@@ -482,6 +482,21 @@
     }
     body.mobile-device.arena-playing #hud{display:block!important}
 
+
+    .databaseGuardMessage{
+      margin:0 0 12px;
+      padding:12px 13px;
+      border:1px solid rgba(255,92,116,.55);
+      border-radius:12px;
+      background:rgba(118,16,42,.32);
+      color:#ffd5dd;
+      font-size:12px;
+      font-weight:900;
+      line-height:1.45;
+      white-space:pre-line;
+    }
+    .databaseGuardMessage[hidden]{display:none!important}
+
   </style>
 </head>
 <body class="lobby-mode">
@@ -594,6 +609,7 @@
   <div id="authOverlay">
     <section id="authCard" class="authCard">
       <h2>Konto Arena Stars</h2><p class="authLead">Przy pierwszym wejściu utwórz konto. Nazwa i adres e-mail są unikatowe, a postęp zostaje zapisany na serwerze.</p>
+      <div id="databaseGuardMessage" class="databaseGuardMessage" hidden role="alert"></div>
       <div id="authTabs" class="authTabs"><button type="button" class="authTab active" data-auth-tab="register" onclick="return ArenaAccountUI.switchPane('register', event)">UTWÓRZ KONTO</button><button type="button" class="authTab" data-auth-tab="login" onclick="return ArenaAccountUI.switchPane('login', event)">ZALOGUJ SIĘ</button></div>
       <form class="authPane active" data-auth-pane="register" onsubmit="return ArenaAccountUI.submit('register', event)">
         <div class="authField"><label>UNIKATOWA NAZWA KONTA</label><input id="registerUsername" maxlength="20" autocomplete="username"></div>
@@ -677,7 +693,7 @@
     </section>
 
     <section id="adminDashboard" class="adminCard">
-      <div class="adminTop"><div><h2>Centrum sterowania Arena Stars</h2><span id="adminDeployStatus" class="adminStatusPill">Sprawdzanie wdrożeń…</span></div><div class="adminActions"><button id="adminLogoutBtn" class="adminSecondary">WYLOGUJ</button><button id="adminCloseBtn" class="adminClose">✕</button></div></div>
+      <div class="adminTop"><div><h2>Centrum sterowania Arena Stars</h2><span id="adminDeployStatus" class="adminStatusPill">Sprawdzanie wdrożeń…</span> <span id="adminDatabaseStatus" class="adminStatusPill">Sprawdzanie SQL…</span></div><div class="adminActions"><button id="adminLogoutBtn" class="adminSecondary">WYLOGUJ</button><button id="adminCloseBtn" class="adminClose">✕</button></div></div>
       <div class="adminTabs"><button class="adminTab active" data-admin-tab="settings">USTAWIENIA</button><button class="adminTab" data-admin-tab="players">GRACZE</button><button class="adminTab" data-admin-tab="accounts">KONTA I BANY</button><button class="adminTab" data-admin-tab="modes">TRYBY</button><button class="adminTab" data-admin-tab="deploy">AKTUALIZACJA</button></div>
 
       <div class="adminPane active" data-admin-pane="settings">
@@ -975,6 +991,6 @@
 </script>
 
 
-<script src="game.js?v=mobile-real-fullscreen-scroll-v1"></script>
+<script src="game.js?v=persistent-neon-sql-v11"></script>
 </body>
 </html>

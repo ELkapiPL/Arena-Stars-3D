@@ -39,7 +39,31 @@ DATA_FILE = ROOT / "players.json"
 SETTINGS_FILE = ROOT / "game_settings.json"
 ACCOUNTS_FILE = ROOT / "accounts.json"
 CHAT_FILE = ROOT / "chat_messages.json"
-DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
+def _read_database_url() -> str:
+    """Czyta adres Neon z najczęściej używanych nazw zmiennych."""
+    for name in ("DATABASE_URL", "NEON_DATABASE_URL", "POSTGRES_URL", "POSTGRESQL_URL"):
+        value = os.environ.get(name, "").strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1].strip()
+        if value:
+            return value
+    return ""
+
+
+DATABASE_URL = _read_database_url()
+IS_RENDER = bool(
+    os.environ.get("RENDER")
+    or os.environ.get("RENDER_SERVICE_ID")
+    or os.environ.get("RENDER_EXTERNAL_HOSTNAME")
+)
+REQUIRE_SQL = IS_RENDER or os.environ.get("REQUIRE_SQL", "").strip().lower() in {"1", "true", "yes", "on"}
+ALLOW_LOCAL_JSON = (
+    not REQUIRE_SQL
+    and os.environ.get("ALLOW_LOCAL_JSON", "1").strip().lower() in {"1", "true", "yes", "on"}
+)
+DB_READY = False
+DB_STARTUP_ERROR = ""
+DB_CONNECTED_AT = 0.0
 HOST = "0.0.0.0"
 PORT = int(os.environ.get("PORT", "8765"))
 VISIBLE_RANKING_SIZE = 200
@@ -57,7 +81,7 @@ APP_PUBLIC_URL = os.environ.get("APP_PUBLIC_URL", "").strip().rstrip("/")
 CHAT_MAX_MESSAGE = 300
 CHAT_MAX_RECIPIENTS = 20
 CHAT_HISTORY_LIMIT = 160
-DB_SCHEMA_VERSION = 7
+DB_SCHEMA_VERSION = 8
 PROFILE_DATA_VERSION = 1
 DUEL_PLAYER_TIMEOUT = 12.0
 DUEL_WAIT_TIMEOUT = 45.0
@@ -139,6 +163,38 @@ game_config: dict[str, Any] = dict(DEFAULT_GAME_CONFIG)
 
 def now() -> float:
     return time.time()
+
+
+def persistent_storage_error() -> str:
+    if DB_STARTUP_ERROR:
+        return DB_STARTUP_ERROR
+    if not DATABASE_URL:
+        return (
+            "Brak zmiennej DATABASE_URL w usłudze Render. "
+            "Konta nie mogą być tworzone, dopóki Neon SQL nie zostanie podłączony."
+        )
+    return "Baza Neon SQL nie jest obecnie dostępna."
+
+
+def persistent_storage_required_and_unavailable() -> bool:
+    return bool((REQUIRE_SQL or DATABASE_URL) and not DB_READY)
+
+
+def persistent_storage_public_status() -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "ok": bool(DB_READY or (ALLOW_LOCAL_JSON and not REQUIRE_SQL)),
+        "persistent": bool(DB_READY),
+        "storage": "postgres" if DB_READY else ("json-test" if ALLOW_LOCAL_JSON and not REQUIRE_SQL else "unavailable"),
+        "databaseConfigured": bool(DATABASE_URL),
+        "sqlRequired": bool(REQUIRE_SQL),
+        "schemaVersion": DB_SCHEMA_VERSION if DB_READY else 0,
+        "build": "persistent-neon-sql-v11",
+    }
+    if DB_READY:
+        payload["connectedAt"] = DB_CONNECTED_AT
+    else:
+        payload["error"] = persistent_storage_error()
+    return payload
 
 
 def clean_id(value: Any) -> str:
@@ -392,8 +448,8 @@ def db_config_revision() -> int:
 
 
 def db_schema_status() -> dict[str, Any]:
-    if not DATABASE_URL:
-        return {"schemaVersion": 0, "storage": "json"}
+    if not DB_READY:
+        return persistent_storage_public_status()
     with db_connect() as conn, conn.cursor() as cur:
         cur.execute("SELECT COALESCE(MAX(version),0) FROM schema_migrations")
         version = int(cur.fetchone()[0])
@@ -401,7 +457,27 @@ def db_schema_status() -> dict[str, Any]:
         players_count = int(cur.fetchone()[0])
         cur.execute("SELECT COUNT(*) FROM accounts")
         accounts_count = int(cur.fetchone()[0])
-    return {"schemaVersion": version, "storage": "postgres", "players": players_count, "accounts": accounts_count}
+        cur.execute("SELECT COUNT(*) FROM chat_messages")
+        messages_count = int(cur.fetchone()[0])
+        cur.execute("SELECT COUNT(*) FROM match_results")
+        matches_count = int(cur.fetchone()[0])
+        cur.execute("SELECT COUNT(*) FROM account_sessions WHERE expires_at>NOW()")
+        sessions_count = int(cur.fetchone()[0])
+    return {
+        "ok": True,
+        "persistent": True,
+        "databaseConfigured": True,
+        "sqlRequired": bool(REQUIRE_SQL),
+        "schemaVersion": version,
+        "storage": "postgres",
+        "accounts": accounts_count,
+        "players": players_count,
+        "messages": messages_count,
+        "matches": matches_count,
+        "activeSessions": sessions_count,
+        "connectedAt": DB_CONNECTED_AT,
+        "build": "persistent-neon-sql-v11",
+    }
 
 
 def admin_secret_equal(provided: Any, expected: str) -> bool:
@@ -755,7 +831,10 @@ def account_public(row: dict[str, Any]) -> dict[str, Any]:
 
 def load_account_storage() -> None:
     global local_accounts, local_chat_messages, local_chat_seq
-    if DATABASE_URL:
+    if DATABASE_URL or not ALLOW_LOCAL_JSON:
+        local_accounts = {}
+        local_chat_messages = []
+        local_chat_seq = 0
         return
     try:
         raw = json.loads(ACCOUNTS_FILE.read_text(encoding="utf-8")) if ACCOUNTS_FILE.exists() else {}
@@ -773,6 +852,8 @@ def load_account_storage() -> None:
 def save_account_storage() -> None:
     if DATABASE_URL:
         return
+    if not ALLOW_LOCAL_JSON:
+        raise RuntimeError("Lokalny zapis kont jest wyłączony. Podłącz Neon SQL.")
     ACCOUNTS_FILE.write_text(json.dumps(local_accounts, ensure_ascii=False, indent=2), encoding="utf-8")
     CHAT_FILE.write_text(json.dumps(local_chat_messages[-3000:], ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -945,17 +1026,49 @@ def account_create(username_value: Any, email_value: Any, password_value: Any, r
     password_hash, password_salt = make_password_hash(password)
     if DATABASE_URL:
         try:
-            with db_connect() as conn, conn.cursor() as cur:
-                cur.execute("INSERT INTO accounts (account_id,username,username_key,email,email_key,password_hash,password_salt,last_login) VALUES (%s,%s,%s,%s,%s,%s,%s,NOW())", (account_id,username,username_key,email,email_key,password_hash,password_salt))
+            with db_connect() as conn:
+                conn.autocommit = False
+                try:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "INSERT INTO accounts (account_id,username,username_key,email,email_key,password_hash,password_salt,last_login) "
+                            "VALUES (%s,%s,%s,%s,%s,%s,%s,NOW())",
+                            (account_id,username,username_key,email,email_key,password_hash,password_salt),
+                        )
+                        cur.execute(
+                            """INSERT INTO players (
+                                   player_id,name,points,trophies,coins,move_level,fire_level,hp_level,
+                                   skin,cosmic_owned,hero_version1,admin_revision,revision,data_version,profile_data,updated_at
+                               ) VALUES (%s,%s,0,0,0,0,0,0,'classic',FALSE,FALSE,0,1,%s,'{}'::jsonb,NOW())
+                               ON CONFLICT(player_id) DO UPDATE SET name=EXCLUDED.name,updated_at=NOW()""",
+                            (account_id,clean_name(username),PROFILE_DATA_VERSION),
+                        )
+                        cur.execute(
+                            "INSERT INTO data_audit(account_id,event_type,payload) "
+                            "VALUES (%s,'account_created',%s::jsonb)",
+                            (account_id,json.dumps({"username":username},ensure_ascii=False)),
+                        )
+                    conn.commit()
+                except Exception:
+                    conn.rollback()
+                    raise
         except Exception as exc:
-            if "unique" in str(exc).lower():
+            lowered = str(exc).lower()
+            if "unique" in lowered and ("email" in lowered or "email_key" in lowered):
+                raise ValueError("Ten adres e-mail jest już używany przez inne konto.") from exc
+            if "unique" in lowered:
                 raise ValueError("Ta nazwa konta jest już zajęta.") from exc
             raise
     else:
+        if not ALLOW_LOCAL_JSON:
+            raise RuntimeError("Baza Neon SQL nie jest podłączona. Konto nie zostało utworzone.")
         local_accounts[account_id] = {"account_id":account_id,"username":username,"username_key":username_key,"email":email,"email_key":email_key,"password_hash":password_hash,"password_salt":password_salt,"banned_until_ts":0,"ban_reason":"","ban_count":0,"created_at":now(),"last_login":now()}
         save_account_storage()
-    ensure_account_profile(account_id, username)
-    return account_get(account_id) or {"account_id":account_id,"username":username}
+        ensure_account_profile(account_id, username)
+    stored = account_get(account_id)
+    if not stored:
+        raise RuntimeError("Serwer nie potwierdził zapisu konta w bazie SQL.")
+    return stored
 
 
 def account_mark_login(account_id: str) -> None:
@@ -1313,7 +1426,10 @@ def init_database() -> None:
         cur.execute("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS ban_count INTEGER NOT NULL DEFAULT 0")
         cur.execute("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS email VARCHAR(254)")
         cur.execute("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS email_key VARCHAR(254)")
+        cur.execute("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS storage_version INTEGER NOT NULL DEFAULT 1")
         cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS accounts_email_key_unique ON accounts (email_key) WHERE email_key IS NOT NULL")
+        cur.execute("CREATE INDEX IF NOT EXISTS accounts_last_login_idx ON accounts (last_login DESC)")
+        cur.execute("UPDATE accounts SET storage_version=1 WHERE storage_version IS NULL")
         cur.execute(
             """CREATE TABLE IF NOT EXISTS account_sessions (
                 token_hash CHAR(64) PRIMARY KEY,
@@ -1378,7 +1494,7 @@ def init_database() -> None:
         cur.execute("CREATE INDEX IF NOT EXISTS data_audit_account_idx ON data_audit (account_id, created_at DESC)")
         cur.execute(
             "INSERT INTO schema_migrations(version,description) VALUES (%s,%s) ON CONFLICT(version) DO NOTHING",
-            (DB_SCHEMA_VERSION, "Adresy e-mail kont i jednorazowe resetowanie hasła przez e-mail"),
+            (DB_SCHEMA_VERSION, "Wymuszony trwały zapis wszystkich kont i profili w Neon SQL"),
         )
         cur.execute(
             """INSERT INTO server_state(key,value,revision,updated_at)
@@ -1386,6 +1502,56 @@ def init_database() -> None:
                ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value, revision=server_state.revision+1, updated_at=NOW()""",
             (json.dumps({"schemaVersion": DB_SCHEMA_VERSION, "profileDataVersion": PROFILE_DATA_VERSION}, ensure_ascii=False),),
         )
+
+
+
+def initialize_persistent_storage() -> bool:
+    global DB_READY, DB_STARTUP_ERROR, DB_CONNECTED_AT
+    DB_READY = False
+    DB_CONNECTED_AT = 0.0
+    if not DATABASE_URL:
+        DB_STARTUP_ERROR = (
+            "Brak DATABASE_URL. W Renderze otwórz Environment i podłącz zmienną "
+            "DATABASE_URL do bazy Neon PostgreSQL."
+        )
+        if REQUIRE_SQL:
+            print(f"KRYTYCZNY BŁĄD PAMIĘCI SQL: {DB_STARTUP_ERROR}")
+        return False
+
+    last_error = ""
+    for attempt in range(1, 5):
+        try:
+            close_db_pool()
+            init_db_pool()
+            init_database()
+            with db_connect() as conn, conn.cursor() as cur:
+                cur.execute("SELECT 1")
+                cur.fetchone()
+                cur.execute("SELECT COUNT(*) FROM accounts")
+                accounts_count = int(cur.fetchone()[0])
+                cur.execute("SELECT COUNT(*) FROM players")
+                players_count = int(cur.fetchone()[0])
+            DB_READY = True
+            DB_STARTUP_ERROR = ""
+            DB_CONNECTED_AT = now()
+            print(
+                "Neon SQL połączony: "
+                f"schemat v{DB_SCHEMA_VERSION}, konta={accounts_count}, profile={players_count}"
+            )
+            return True
+        except Exception as exc:
+            last_error = f"{type(exc).__name__}: {exc}"
+            DB_STARTUP_ERROR = f"Nie udało się połączyć z Neon SQL: {last_error}"
+            DB_READY = False
+            close_db_pool()
+            if attempt < 4:
+                delay = min(6, 2 ** (attempt - 1))
+                print(f"Próba SQL {attempt}/4 nieudana. Ponawiam za {delay} s: {last_error}")
+                time.sleep(delay)
+
+    print(f"KRYTYCZNY BŁĄD PAMIĘCI SQL: {DB_STARTUP_ERROR}")
+    return False
+
 
 
 def db_upsert_profile(payload: dict[str, Any]) -> dict[str, Any] | None:
@@ -1555,7 +1721,7 @@ def live_sync_payload(account_id: str, profile_revision: int, config_revision: i
 
 def load_profiles() -> None:
     global profiles
-    if DATABASE_URL:
+    if DATABASE_URL or not ALLOW_LOCAL_JSON:
         profiles = {}
         return
     try:
@@ -1584,6 +1750,8 @@ def load_profiles() -> None:
 
 
 def save_profiles() -> None:
+    if not ALLOW_LOCAL_JSON:
+        raise RuntimeError("Lokalny zapis profili jest wyłączony. Podłącz Neon SQL.")
     temp = DATA_FILE.with_suffix(".tmp")
     temp.write_text(json.dumps(profiles, ensure_ascii=False, indent=2), encoding="utf-8")
     temp.replace(DATA_FILE)
@@ -2404,7 +2572,7 @@ def duel_tick_loop() -> None:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "ArenaStarsSQL/4.0-live-sync"
+    server_version = "ArenaStarsSQL/5.0-persistent-neon"
     protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt: str, *args: Any) -> None:
@@ -2484,6 +2652,21 @@ class Handler(BaseHTTPRequestHandler):
         proto = self.headers.get("X-Forwarded-Proto") or ""
         return build_public_url(host, proto)
 
+    def require_persistent_storage(self) -> bool:
+        if not persistent_storage_required_and_unavailable():
+            return True
+        self.send_json(
+            {
+                "error": persistent_storage_error(),
+                "databaseRequired": True,
+                "persistent": False,
+                "storage": "unavailable",
+                "databaseConfigured": bool(DATABASE_URL),
+            },
+            HTTPStatus.SERVICE_UNAVAILABLE,
+        )
+        return False
+
     def send_account_login(self, account: dict[str, Any]) -> None:
         account_id = clean_id(account.get("account_id"))
         token = secrets.token_urlsafe(36)
@@ -2540,6 +2723,17 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
+        if parsed.path == "/api/health":
+            status = persistent_storage_public_status()
+            if DB_READY:
+                try:
+                    status = db_schema_status()
+                except Exception as exc:
+                    status = {**status, "ok":False, "persistent":False, "error":f"Kontrola SQL nie powiodła się: {exc}"}
+            self.send_json(status, HTTPStatus.OK if status.get("ok") else HTTPStatus.SERVICE_UNAVAILABLE)
+            return
+        if parsed.path.startswith("/api/") and not self.require_persistent_storage():
+            return
         if parsed.path == "/api/auth/status":
             account = self.account_session()
             if not account:
@@ -2630,20 +2824,12 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 self.send_json(state)
             return
-        if parsed.path == "/api/health":
-            try:
-                if DATABASE_URL:
-                    with db_connect() as conn, conn.cursor() as cur:
-                        cur.execute("SELECT 1")
-                        cur.fetchone()
-                self.send_json({"ok": True, "storage": "postgres" if DATABASE_URL else "json", "build": "mobile-real-fullscreen-scroll-v1", "schemaVersion": DB_SCHEMA_VERSION if DATABASE_URL else 0})
-            except Exception as exc:
-                self.send_json({"ok": False, "error": str(exc)}, HTTPStatus.SERVICE_UNAVAILABLE)
-            return
         self.serve_static(parsed.path)
 
     def do_POST(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
+        if parsed.path.startswith("/api/") and not self.require_persistent_storage():
+            return
         if parsed.path == "/api/admin/deploy-zip":
             if not self.require_admin(): return
             raw = self.read_bytes(ADMIN_UPLOAD_MAX_RAW)
@@ -2923,17 +3109,24 @@ def local_ip() -> str:
 
 
 if __name__ == "__main__":
+    initialize_persistent_storage()
     load_profiles()
     load_account_storage()
-    init_db_pool()
-    init_database()
-    load_game_config()
+    if DB_READY or (ALLOW_LOCAL_JSON and not DATABASE_URL):
+        load_game_config()
+    else:
+        game_config = dict(DEFAULT_GAME_CONFIG)
     threading.Thread(target=duel_tick_loop, name="duel-tick", daemon=True).start()
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     print("\nArena Stars 3D — PRZETRWANIE + POJEDYNKI 1V1/BOT + TOP 200")
     print(f"Adres lokalny: http://localhost:{PORT}")
     print(f"Adres w tej samej sieci: http://{local_ip()}:{PORT}")
-    print(f"Zapis danych: {'PostgreSQL/Neon, schemat v'+str(DB_SCHEMA_VERSION) if DATABASE_URL else 'lokalny JSON (tryb testowy)'}")
+    if DB_READY:
+        print(f"Zapis danych: PostgreSQL/Neon — TRWAŁY, schemat v{DB_SCHEMA_VERSION}")
+    elif ALLOW_LOCAL_JSON and not REQUIRE_SQL:
+        print("Zapis danych: lokalny JSON — wyłącznie tryb testowy")
+    else:
+        print(f"Zapis danych: ZABLOKOWANY — {persistent_storage_error()}")
     print("Zatrzymanie serwera: Ctrl+C\n")
     try:
         server.serve_forever()

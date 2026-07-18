@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-window.__arenaBuild='mobile-real-fullscreen-scroll-v10';
+window.__arenaBuild='persistent-neon-sql-v11';
 
 const canvas = document.getElementById('game');
 const gl = canvas.getContext('webgl2', {antialias:true, alpha:false});
@@ -1195,7 +1195,47 @@ async function completeAccountLogin(data){
   syncProfile().then(fetchRanking).catch(()=>{});
   startChatPolling();
 }
-async function authBootstrap(){try{const data=await api('/api/auth/status');if(data.authenticated){if(data.account?.banned){showAccountBan(data.account);return;}await completeAccountLogin(data);}else{authUI.overlay.classList.remove('hidden');}}catch(e){authMessage('Serwer kont nie odpowiada. Odśwież stronę za chwilę.',true);}}
+function setDatabaseGuard(text=''){
+  const box=$('databaseGuardMessage');
+  if(box){box.hidden=!text;box.textContent=text||'';}
+  const blocked=!!text;
+  for(const id of ['registerBtn','loginBtn','resetRequestBtn']){
+    const button=$(id);
+    if(button)button.disabled=blocked;
+  }
+}
+async function verifyPersistentDatabase(){
+  try{
+    const response=await fetch('/api/health',{cache:'no-store',credentials:'same-origin'});
+    const status=await response.json().catch(()=>({}));
+    if(status.sqlRequired&&status.persistent!==true){
+      const text=status.error||'Baza Neon SQL nie jest podłączona.';
+      setDatabaseGuard(`DANE KONTA NIE ZOSTANĄ UTWORZONE\n${text}`);
+      authMessage('Administrator musi ponownie podłączyć DATABASE_URL w Renderze.',true);
+      authUI.overlay.classList.remove('hidden');
+      return false;
+    }
+    setDatabaseGuard('');
+    return true;
+  }catch(e){
+    setDatabaseGuard('Nie można sprawdzić połączenia z pamięcią SQL.');
+    authMessage('Serwer bazy danych nie odpowiada.',true);
+    authUI.overlay.classList.remove('hidden');
+    return false;
+  }
+}
+async function authBootstrap(){
+  if(!(await verifyPersistentDatabase()))return;
+  try{
+    const data=await api('/api/auth/status');
+    if(data.authenticated){
+      if(data.account?.banned){showAccountBan(data.account);return;}
+      await completeAccountLogin(data);
+    }else authUI.overlay.classList.remove('hidden');
+  }catch(e){
+    authMessage(e?.message||'Serwer kont nie odpowiada. Odśwież stronę za chwilę.',true);
+  }
+}
 window.addEventListener('arena-auth-success',event=>{
   completeAccountLogin(event.detail||window.__arenaPendingAuth||{}).catch(()=>authMessage('Nie udało się wczytać profilu po zalogowaniu.',true));
 });
@@ -1344,13 +1384,29 @@ chatUI.input?.addEventListener('keydown',e=>{
 
 
 // ---------- Panel administratora ----------
-const adminUI={overlay:$('adminOverlay'),open:$('adminOpenBtn'),loginCard:$('adminLoginCard'),dashboard:$('adminDashboard'),loginClose:$('adminLoginClose'),close:$('adminCloseBtn'),logout:$('adminLogoutBtn'),password:$('adminPasswordInput'),login:$('adminLoginBtn'),forgot:$('adminForgotBtn'),passwordArea:$('adminPasswordArea'),recoveryArea:$('adminRecoveryArea'),recovery:$('adminRecoveryInput'),recoverBtn:$('adminRecoveryBtn'),back:$('adminBackToPassword'),loginMsg:$('adminLoginMsg'),playerId:$('adminPlayerId'),deployStatus:$('adminDeployStatus'),settingsMsg:$('adminSettingsMsg'),playerMsg:$('adminPlayerMsg'),modesMsg:$('adminModesMsg'),deployMsg:$('adminDeployMsg')};
+const adminUI={overlay:$('adminOverlay'),open:$('adminOpenBtn'),loginCard:$('adminLoginCard'),dashboard:$('adminDashboard'),loginClose:$('adminLoginClose'),close:$('adminCloseBtn'),logout:$('adminLogoutBtn'),password:$('adminPasswordInput'),login:$('adminLoginBtn'),forgot:$('adminForgotBtn'),passwordArea:$('adminPasswordArea'),recoveryArea:$('adminRecoveryArea'),recovery:$('adminRecoveryInput'),recoverBtn:$('adminRecoveryBtn'),back:$('adminBackToPassword'),loginMsg:$('adminLoginMsg'),playerId:$('adminPlayerId'),deployStatus:$('adminDeployStatus'),databaseStatus:$('adminDatabaseStatus'),settingsMsg:$('adminSettingsMsg'),playerMsg:$('adminPlayerMsg'),modesMsg:$('adminModesMsg'),deployMsg:$('adminDeployMsg')};
 let adminConfig=null,adminSelectedPlayer=null;
 function adminMsg(el,text,bad=false){if(!el)return;el.textContent=text||'';el.classList.toggle('bad',bad);}
 function adminOpen(show=true){adminUI.overlay?.classList.toggle('open',show);adminUI.overlay?.setAttribute('aria-hidden',show?'false':'true');if(show)adminCheckStatus();}
 async function adminCheckStatus(){try{const s=await api('/api/admin/status');adminUI.playerId.textContent=playerId;adminUI.deployStatus.textContent=s.deploymentConfigured?`WDROŻENIA GOTOWE • ${s.repo||''}`:'BRAK KONFIGURACJI GITHUB';adminUI.deployStatus.className=`adminStatusPill ${s.deploymentConfigured?'ok':'bad'}`;if(s.authorized){await adminShowDashboard();}else{adminUI.loginCard.style.display='block';adminUI.dashboard.style.display='none';if(!s.configured)adminMsg(adminUI.loginMsg,'Najpierw ustaw ADMIN_PASSWORD i ADMIN_RECOVERY_CODE w Renderze.',true);else if(!s.accountMatches)adminMsg(adminUI.loginMsg,'To ID konta nie zgadza się z ADMIN_PLAYER_ID.',true);else adminMsg(adminUI.loginMsg,'');}}catch(e){adminMsg(adminUI.loginMsg,'Serwer panelu nie odpowiada.',true);}}
 async function adminAuth(kind){const path=kind==='recovery'?'/api/admin/recover':'/api/admin/login',body={playerId,[kind==='recovery'?'code':'password']:kind==='recovery'?adminUI.recovery.value:adminUI.password.value};try{const r=await api(path,{method:'POST',body:JSON.stringify(body)});if(r.ok)await adminShowDashboard();}catch(e){adminMsg(adminUI.loginMsg,'Nieprawidłowe dane albo konto nie ma dostępu.',true);}}
-async function adminShowDashboard(){adminUI.loginCard.style.display='none';adminUI.dashboard.style.display='block';await adminLoadConfig();await adminSearchPlayers('');await adminSearchAccounts('');}
+async function adminRefreshDatabaseStatus(){
+  try{
+    const s=await api('/api/database/status');
+    if(adminUI.databaseStatus){
+      adminUI.databaseStatus.textContent=`SQL OK • ${Number(s.accounts||0).toLocaleString('pl-PL')} KONT • ${Number(s.players||0).toLocaleString('pl-PL')} PROFILI`;
+      adminUI.databaseStatus.className='adminStatusPill ok';
+      adminUI.databaseStatus.title=`Wiadomości: ${s.messages||0}, mecze: ${s.matches||0}, schemat: v${s.schemaVersion||0}`;
+    }
+  }catch(e){
+    if(adminUI.databaseStatus){
+      adminUI.databaseStatus.textContent='SQL NIEDOSTĘPNY';
+      adminUI.databaseStatus.className='adminStatusPill bad';
+      adminUI.databaseStatus.title=e?.message||'Błąd bazy danych';
+    }
+  }
+}
+async function adminShowDashboard(){adminUI.loginCard.style.display='none';adminUI.dashboard.style.display='block';await adminRefreshDatabaseStatus();await adminLoadConfig();await adminSearchPlayers('');await adminSearchAccounts('');}
 function n(id){return Number($(id)?.value)||0;}function c(id){return !!$(id)?.checked;}
 function fillAdminConfig(cfg){adminConfig=cfg;const map={cfgSurvivalBot:'survivalBotLevel',cfgDuelBot:'duelBotLevel',cfgBotWait:'duelBotWaitSeconds',cfgHpMultiplier:'duelHpMultiplier',cfgRounds:'duelMaxRounds',cfgWins:'duelWinsToTakeMatch',cfgWinCoins:'duelWinCoins',cfgWinTrophies:'duelWinTrophies',cfgWinPoints:'duelWinPoints',cfgDrawCoins:'duelDrawCoins',cfgDrawTrophies:'duelDrawTrophies',cfgDrawPoints:'duelDrawPoints',cfgProfanityBanMinutes:'profanityBanMinutes',cfgSqlSyncSeconds:'sqlSyncSeconds'};for(const [id,key] of Object.entries(map))if($(id))$(id).value=cfg[key];$('cfgSoloEnabled').checked=cfg.soloEnabled!==false;$('cfgDuelEnabled').checked=cfg.duelEnabled!==false;$('cfgAnnouncement').value=cfg.announcement||'';renderAdminModes();}
 async function adminLoadConfig(){try{const r=await api('/api/admin/config');fillAdminConfig(r.config);}catch(e){adminMsg(adminUI.settingsMsg,'Nie udało się pobrać ustawień.',true);}}
