@@ -2636,7 +2636,7 @@ class Handler(BaseHTTPRequestHandler):
                     with db_connect() as conn, conn.cursor() as cur:
                         cur.execute("SELECT 1")
                         cur.fetchone()
-                self.send_json({"ok": True, "storage": "postgres" if DATABASE_URL else "json", "build": "email-password-reset-v1", "schemaVersion": DB_SCHEMA_VERSION if DATABASE_URL else 0})
+                self.send_json({"ok": True, "storage": "postgres" if DATABASE_URL else "json", "build": "mobile-real-fullscreen-scroll-v1", "schemaVersion": DB_SCHEMA_VERSION if DATABASE_URL else 0})
             except Exception as exc:
                 self.send_json({"ok": False, "error": str(exc)}, HTTPStatus.SERVICE_UNAVAILABLE)
             return

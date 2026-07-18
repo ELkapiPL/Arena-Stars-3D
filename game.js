@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-window.__arenaBuild='mobile-fullscreen-charge-fix-v9';
+window.__arenaBuild='mobile-real-fullscreen-scroll-v10';
 
 const canvas = document.getElementById('game');
 const gl = canvas.getContext('webgl2', {antialias:true, alpha:false});
@@ -17,7 +17,7 @@ const ui = {
   score:$('score'), wave:$('wave'), kills:$('kills'), coins:$('coins'), trophies:$('trophies'), healthText:$('healthText'), healthFill:$('healthFill'), ammoText:$('ammoText'), ammoFill:$('ammoFill'),
   superText:$('superText'), superFill:$('superFill'), hyperText:$('hyperText'), hyperFill:$('hyperFill'), finalScore:$('finalScore'), finalKills:$('finalKills'), finalCoins:$('finalCoins'), finalTrophies:$('finalTrophies'),
   savedTrophies:$('savedTrophies'), savedPoints:$('savedPoints'), savedCoins:$('savedCoins'), skinNotice:$('skinNotice'), versionOneBtn:$('versionOneBtn'), versionNotice:$('versionNotice'), rankingBody:$('rankingBody'), rankingPosition:$('rankingPosition'), rankingLive:$('rankingLive'), rankingTotal:$('rankingTotal'), nicknameInput:$('nicknameInput'), saveNameBtn:$('saveNameBtn'), onlineStatus:$('onlineStatus'), onlineHudCount:$('onlineHudCount'), modeBtn:$('modeBtn'), modeMenu:$('modeMenu'), soloModeOption:$('soloModeOption'), duelModeOption:$('duelModeOption'), duelQueueView:$('duelQueueView'), duelQueueText:$('duelQueueText'), duelCancelBtn:$('duelCancelBtn'), duelOpponentName:$('duelOpponentName'), duelOpponentHp:$('duelOpponentHp'), hudModeText:$('hudModeText'), gameOverTitle:$('gameOverTitle'), gameOverBadge:$('gameOverBadge'), endStats:$('endStats'),
-  crosshair:$('crosshair'), centerMsg:$('centerMsg'), mobileControls:$('mobileControls'), mobileMoveStick:$('mobileMoveStick'), mobileMoveKnob:$('mobileMoveKnob'), mobileAttackStick:$('mobileAttackStick'), mobileAttackKnob:$('mobileAttackKnob'), mobileSuperBtn:$('mobileSuperBtn'), mobileHyperBtn:$('mobileHyperBtn'), rotatePhoneOverlay:$('rotatePhoneOverlay'), rotateLockBtn:$('rotateLockBtn'),
+  crosshair:$('crosshair'), centerMsg:$('centerMsg'), mobileControls:$('mobileControls'), mobileMoveStick:$('mobileMoveStick'), mobileMoveKnob:$('mobileMoveKnob'), mobileAttackStick:$('mobileAttackStick'), mobileAttackKnob:$('mobileAttackKnob'), mobileSuperBtn:$('mobileSuperBtn'), mobileHyperBtn:$('mobileHyperBtn'), rotatePhoneOverlay:$('rotatePhoneOverlay'), rotateLockBtn:$('rotateLockBtn'), mobileFullscreenGate:$('mobileFullscreenGate'), mobileFullscreenStartBtn:$('mobileFullscreenStartBtn'),
   upgradeButtons:[...document.querySelectorAll('[data-upgrade]')],
   persistentLevelEls:[...document.querySelectorAll('[data-persistent-level]')],
   skinCards:[...document.querySelectorAll('[data-skin]')]
@@ -88,6 +88,8 @@ const coarsePointer=matchMedia('(pointer: coarse)');
 const isMobileDevice=!forcedDesktop&&(forcedMobile||((navigator.maxTouchPoints||0)>0&&coarsePointer.matches)||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent));
 const mobileInput={moveX:0,moveZ:0,aimX:0,aimY:-1,movePointer:null,attackPointer:null};
 let mobilePortraitBlocked=false;
+let pendingMobileGameStart=null;
+let fullscreenGateBusy=false;
 function resetMobileInput(){mobileInput.moveX=0;mobileInput.moveZ=0;mobileInput.movePointer=null;mobileInput.attackPointer=null;mouse.down=false;ui.mobileMoveKnob?.style.setProperty('transform','translate(-50%,-50%)');ui.mobileAttackKnob?.style.setProperty('transform','translate(-50%,-50%)');ui.mobileAttackStick?.classList.remove('firing');}
 function updateMobileOrientation(){
   if(!isMobileDevice)return;
@@ -98,28 +100,74 @@ function updateMobileOrientation(){
   if(portrait)resetMobileInput();
 }
 function mobileFullscreenActive(){return !!(document.fullscreenElement||document.webkitFullscreenElement);}
+function fullscreenSupported(){
+  const root=document.documentElement;
+  return !!(root.requestFullscreen||root.webkitRequestFullscreen||root.msRequestFullscreen);
+}
 async function requestMobileFullscreen(){
-  if(!isMobileDevice)return false;
+  if(!isMobileDevice)return true;
   const root=document.documentElement;
   try{
     if(!mobileFullscreenActive()){
       const fn=root.requestFullscreen||root.webkitRequestFullscreen||root.msRequestFullscreen;
-      if(fn){
-        try{await fn.call(root,{navigationUI:'hide'});}catch(_){await fn.call(root);}
+      if(!fn)return false;
+      try{
+        const result=fn.call(root,{navigationUI:'hide'});
+        if(result&&typeof result.then==='function')await result;
+      }catch(firstError){
+        try{
+          const retry=fn.call(root);
+          if(retry&&typeof retry.then==='function')await retry;
+        }catch(_){}
       }
     }
   }catch(_){}
-  document.body.classList.toggle('mobile-fullscreen',mobileFullscreenActive());
-  try{window.scrollTo(0,1);}catch(_){}
+  const active=mobileFullscreenActive();
+  document.body.classList.toggle('mobile-fullscreen',active);
+  try{window.scrollTo({top:1,left:0,behavior:'instant'});}catch(_){try{window.scrollTo(0,1);}catch(__){}}
   setTimeout(()=>{updateMobileOrientation();try{resize();}catch(_){}},80);
-  return mobileFullscreenActive();
+  return active;
 }
 async function requestLandscapeOrientation(fullscreen=false){
-  if(!isMobileDevice)return;
-  if(fullscreen)await requestMobileFullscreen();
+  if(!isMobileDevice)return true;
+  let fullscreenResult=true;
+  if(fullscreen)fullscreenResult=await requestMobileFullscreen();
   try{if(screen.orientation?.lock)await screen.orientation.lock('landscape');}catch(_){}
   try{window.scrollTo(0,1);}catch(_){}
   updateMobileOrientation();
+  return fullscreenResult;
+}
+function hideMobileFullscreenGate(){
+  ui.mobileFullscreenGate?.classList.remove('open');
+  ui.mobileFullscreenGate?.setAttribute('aria-hidden','true');
+}
+function showMobileFullscreenGate(startCallback){
+  pendingMobileGameStart=startCallback;
+  ui.mobileFullscreenGate?.classList.add('open');
+  ui.mobileFullscreenGate?.setAttribute('aria-hidden','false');
+}
+async function continueFromMobileFullscreenGate(event){
+  event?.preventDefault?.();
+  event?.stopPropagation?.();
+  if(fullscreenGateBusy)return;
+  fullscreenGateBusy=true;
+  if(ui.mobileFullscreenStartBtn){
+    ui.mobileFullscreenStartBtn.disabled=true;
+    ui.mobileFullscreenStartBtn.textContent='URUCHAMIANIE…';
+  }
+  try{
+    await requestLandscapeOrientation(true);
+    hideMobileFullscreenGate();
+    const callback=pendingMobileGameStart;
+    pendingMobileGameStart=null;
+    callback?.();
+  }finally{
+    fullscreenGateBusy=false;
+    if(ui.mobileFullscreenStartBtn){
+      ui.mobileFullscreenStartBtn.disabled=false;
+      ui.mobileFullscreenStartBtn.textContent='URUCHOM GRĘ NA PEŁNYM EKRANIE';
+    }
+  }
 }
 function setStickPosition(stick,knob,clientX,clientY){
   const r=stick.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2,max=r.width*.34;
@@ -162,6 +210,8 @@ function setupMobileControls(){
   mobilePowerPress(ui.mobileSuperBtn,superAttack,25);
   mobilePowerPress(ui.mobileHyperBtn,activateHyper,[25,25,25]);
   ui.rotateLockBtn?.addEventListener('click',()=>requestLandscapeOrientation(true));
+  ui.mobileFullscreenStartBtn?.addEventListener('pointerup',continueFromMobileFullscreenGate,{passive:false});
+  ui.mobileFullscreenStartBtn?.addEventListener('click',continueFromMobileFullscreenGate);
   const fullscreenChanged=()=>{document.body.classList.toggle('mobile-fullscreen',mobileFullscreenActive());setTimeout(()=>{updateMobileOrientation();try{resize();}catch(_){}},60);};
   document.addEventListener('fullscreenchange',fullscreenChanged,{passive:true});
   document.addEventListener('webkitfullscreenchange',fullscreenChanged,{passive:true});
@@ -440,7 +490,7 @@ function cancelDuelQueue(){
 }
 function beginDuelMatch(data){
   clearTimeout(duelJoinTimer);duelJoinTimer=0;duelSearching=false;duelActive=true;duelEnded=false;duelMatchId=data.matchId;duelNetworkFailures=0;
-  reset();running=true;document.body.classList.remove('lobby-mode');document.body.classList.add('duel-mode');
+  reset();running=true;document.body.classList.add('arena-playing');document.body.classList.remove('lobby-mode');document.body.classList.add('duel-mode');
   ui.duelQueueView.style.display='none';ui.lobbyView.style.display='block';ui.gameOverView.style.display='none';ui.overlay.style.display='none';
   if(ui.hudModeText)ui.hudModeText.textContent='Pojedynek 1v1';
   history.replaceState(null,'','#pojedynki');
@@ -754,7 +804,7 @@ function finishDuel(data){
   const opponentName=duelOpponent?.name||'Przeciwnik';
   if(ui.endStats)ui.endStats.innerHTML=`<div class="endStat">Rundy<span>${duelYourWins}:${duelOpponentWins}</span></div><div class="endStat">Remisy rund<span>${duelRoundDraws}</span></div><div class="endStat">Przeciwnik<span>${escapeRankingName(opponentName)}</span></div><div class="endStat">Nagroda<span>${rewardPoints} ⭐ • ${rewardCoins} 🪙 • ${rewardTrophies} 🏆</span></div>`;
   const reason=data.reason||'Pojedynek został zakończony.';ui.gameOverView.querySelector('p').textContent=`${reason} ${won?`Otrzymujesz ${rewardPoints} punktów, ${rewardCoins} monet i ${rewardTrophies} pucharków.`:(draw?`Otrzymujesz ${rewardPoints} punktów, ${rewardCoins} monet i ${rewardTrophies} pucharki.`:'')}`.trim();
-  ui.duelQueueView.style.display='none';ui.lobbyView.style.display='none';ui.gameOverView.style.display='grid';document.body.classList.add('lobby-mode');document.body.classList.remove('duel-mode');ui.overlay.style.display='block';
+  ui.duelQueueView.style.display='none';ui.lobbyView.style.display='none';ui.gameOverView.style.display='grid';document.body.classList.remove('arena-playing');document.body.classList.add('lobby-mode');document.body.classList.remove('duel-mode');ui.overlay.style.display='block';
 }
 
 function updateLobby(){
@@ -895,10 +945,30 @@ function commitRun(){
   saveProgress();updateLobby();syncProfile().then(fetchRanking);
   recordMatchResult({mode:'solo',result:'finished',pointsDelta,trophiesDelta,coinsDelta,durationSeconds:survivalTime,details:{kills,wave,score}});
 }
-function showLobby(leaveDuel=true){if(leaveDuel&&(duelActive||duelSearching||duelMatchId))stopDuelSession(true);running=false;resetMobileInput();rankingCenterOnNextRender=true;document.body.classList.add('lobby-mode');document.body.classList.remove('duel-mode');ui.lobbyView.style.display='block';ui.duelQueueView.style.display='none';ui.gameOverView.style.display='none';ui.overlay.style.display='grid';if(ui.hudModeText)ui.hudModeText.textContent='Online';if(ui.gameOverBadge)ui.gameOverBadge.textContent='KONIEC MECZU • POSTĘP ZAPISANY';if(ui.gameOverTitle)ui.gameOverTitle.innerHTML='ROBOTY CIĘ<br>POKONAŁY';updateLobby();fetchRanking();}
-function startSoloGame(){if(running)commitRun();reset();running=true;document.body.classList.remove('lobby-mode');document.body.classList.remove('duel-mode');ui.lobbyView.style.display='block';ui.gameOverView.style.display='none';updateUI();ui.overlay.style.display='none';last=performance.now();}
-function startGame(){if(isMobileDevice)requestLandscapeOrientation(true);resetMobileInput();const base=selectedModeBase();if(base==='solo'&&gameConfig.soloEnabled!==false){startSoloGame();return;}if(base==='duel'&&gameConfig.duelEnabled!==false){startDuelQueue();return;}showMessage('TEN TRYB JEST WYŁĄCZONY');toggleModeMenu(true);}
-function gameOver(){running=false;commitRun();if(ui.gameOverBadge)ui.gameOverBadge.textContent='KONIEC MECZU • POSTĘP ZAPISANY';if(ui.gameOverTitle)ui.gameOverTitle.innerHTML='ROBOTY CIĘ<br>POKONAŁY';if(ui.endStats)ui.endStats.innerHTML='<div class="endStat">Punkty ⭐<span id="finalScore">0</span></div><div class="endStat">Pokonani 🤖<span id="finalKills">0</span></div><div class="endStat">Monety 🪙<span id="finalCoins">0</span></div><div class="endStat">Pucharki 🏆<span id="finalTrophies">0</span></div>';ui.finalScore=$('finalScore');ui.finalKills=$('finalKills');ui.finalCoins=$('finalCoins');ui.finalTrophies=$('finalTrophies');ui.finalScore.textContent=score;ui.finalKills.textContent=kills;ui.finalCoins.textContent=runCoins;ui.finalTrophies.textContent=trophies;ui.gameOverView.querySelector('p').textContent='Wybierz następną akcję.';ui.lobbyView.style.display='none';ui.gameOverView.style.display='grid';document.body.classList.add('lobby-mode');ui.overlay.style.display='block';}
+function showLobby(leaveDuel=true){if(leaveDuel&&(duelActive||duelSearching||duelMatchId))stopDuelSession(true);running=false;resetMobileInput();hideMobileFullscreenGate();pendingMobileGameStart=null;document.body.classList.remove('arena-playing');rankingCenterOnNextRender=true;document.body.classList.add('lobby-mode');document.body.classList.remove('duel-mode');ui.lobbyView.style.display='block';ui.duelQueueView.style.display='none';ui.gameOverView.style.display='none';ui.overlay.style.display='grid';if(ui.hudModeText)ui.hudModeText.textContent='Online';if(ui.gameOverBadge)ui.gameOverBadge.textContent='KONIEC MECZU • POSTĘP ZAPISANY';if(ui.gameOverTitle)ui.gameOverTitle.innerHTML='ROBOTY CIĘ<br>POKONAŁY';updateLobby();fetchRanking();}
+function startSoloGame(){if(running)commitRun();reset();running=true;document.body.classList.add('arena-playing');document.body.classList.remove('lobby-mode');document.body.classList.remove('duel-mode');ui.lobbyView.style.display='block';ui.gameOverView.style.display='none';updateUI();ui.overlay.style.display='none';last=performance.now();}
+function startSelectedGameNow(){
+  resetMobileInput();
+  const base=selectedModeBase();
+  if(base==='solo'&&gameConfig.soloEnabled!==false){startSoloGame();return;}
+  if(base==='duel'&&gameConfig.duelEnabled!==false){startDuelQueue();return;}
+  showMessage('TEN TRYB JEST WYŁĄCZONY');
+  toggleModeMenu(true);
+}
+async function startGame(){
+  if(!isMobileDevice){startSelectedGameNow();return;}
+  if(mobilePortraitBlocked){
+    await requestLandscapeOrientation(false);
+    return;
+  }
+  const active=await requestLandscapeOrientation(true);
+  if(active||!fullscreenSupported()){
+    startSelectedGameNow();
+    return;
+  }
+  showMobileFullscreenGate(startSelectedGameNow);
+}
+function gameOver(){running=false;commitRun();if(ui.gameOverBadge)ui.gameOverBadge.textContent='KONIEC MECZU • POSTĘP ZAPISANY';if(ui.gameOverTitle)ui.gameOverTitle.innerHTML='ROBOTY CIĘ<br>POKONAŁY';if(ui.endStats)ui.endStats.innerHTML='<div class="endStat">Punkty ⭐<span id="finalScore">0</span></div><div class="endStat">Pokonani 🤖<span id="finalKills">0</span></div><div class="endStat">Monety 🪙<span id="finalCoins">0</span></div><div class="endStat">Pucharki 🏆<span id="finalTrophies">0</span></div>';ui.finalScore=$('finalScore');ui.finalKills=$('finalKills');ui.finalCoins=$('finalCoins');ui.finalTrophies=$('finalTrophies');ui.finalScore.textContent=score;ui.finalKills.textContent=kills;ui.finalCoins.textContent=runCoins;ui.finalTrophies.textContent=trophies;ui.gameOverView.querySelector('p').textContent='Wybierz następną akcję.';ui.lobbyView.style.display='none';ui.gameOverView.style.display='grid';document.body.classList.remove('arena-playing');document.body.classList.add('lobby-mode');ui.overlay.style.display='block';}
 function showMessage(t){ui.centerMsg.textContent=t;ui.centerMsg.style.opacity='1';messageClock=1.4;}
 function updateUI(){
   ui.score.textContent=score;ui.wave.textContent=wave;ui.kills.textContent=kills;ui.coins.textContent=walletCoins;ui.trophies.textContent=trophies;

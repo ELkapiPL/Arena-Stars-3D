@@ -357,6 +357,131 @@
     .authPane[data-auth-pane="resetConfirm"] .authSecondary,
     .authPane[data-auth-pane="emailRequired"] .authSecondary{display:none}
 
+
+    /* ===== MOBILNE OKNA KONTA: przewijanie i klawiatura ekranowa ===== */
+    #authOverlay{
+      overflow-x:hidden!important;
+      overflow-y:auto!important;
+      -webkit-overflow-scrolling:touch;
+      overscroll-behavior:contain;
+      touch-action:pan-y!important;
+      height:var(--arena-visual-height,100dvh);
+      min-height:0;
+      padding:
+        max(14px,env(safe-area-inset-top))
+        max(12px,env(safe-area-inset-right))
+        max(22px,env(safe-area-inset-bottom))
+        max(12px,env(safe-area-inset-left));
+    }
+    #authOverlay .authCard{
+      flex:0 0 auto;
+      max-height:none!important;
+      margin:auto;
+    }
+    #authOverlay .authPane,
+    #authOverlay .authCard{touch-action:pan-y}
+    #authOverlay input{scroll-margin-block:110px}
+    @media (pointer:coarse),(max-width:900px){
+      #authOverlay{align-items:flex-start!important;justify-content:center!important}
+      #authOverlay .authCard{
+        width:min(430px,100%);
+        margin:0 auto;
+        padding:clamp(16px,4vw,24px);
+      }
+      #authOverlay .authCard h2{font-size:clamp(23px,6vw,30px)}
+      #authOverlay .authLead{margin-bottom:13px}
+      #authOverlay .authField{margin:10px 0}
+      #authOverlay .authField input{font-size:16px}
+    }
+    @media (pointer:coarse) and (orientation:landscape) and (max-height:520px){
+      #authOverlay{padding-top:8px;padding-bottom:20px}
+      #authOverlay .authCard{width:min(620px,94vw);padding:14px 18px}
+      #authOverlay .authCard h2{font-size:21px;margin-bottom:3px}
+      #authOverlay .authLead{font-size:11px;margin-bottom:9px}
+      #authOverlay .authTabs{margin-bottom:8px}
+      #authOverlay .authTab{padding:8px}
+      #authOverlay .authField{margin:7px 0;gap:4px}
+      #authOverlay .authField input{padding:9px 11px}
+      #authOverlay .authPrimary,#authOverlay .authSecondary{padding:9px}
+      #authOverlay .authMsg{margin-top:7px}
+    }
+
+    /* ===== PEŁNY EKRAN: podczas meczu widoczne jest wyłącznie pole gry ===== */
+    #mobileFullscreenGate{
+      display:none;
+      position:fixed;
+      inset:0;
+      z-index:12000;
+      place-items:center;
+      padding:
+        max(18px,env(safe-area-inset-top))
+        max(18px,env(safe-area-inset-right))
+        max(18px,env(safe-area-inset-bottom))
+        max(18px,env(safe-area-inset-left));
+      background:radial-gradient(circle at 50% 40%,#263b7c,#070b18 72%);
+      color:#fff;
+      text-align:center;
+      touch-action:manipulation;
+    }
+    #mobileFullscreenGate.open{display:grid}
+    .mobileFullscreenGateCard{
+      width:min(440px,92vw);
+      padding:24px 22px;
+      border-radius:24px;
+      background:rgba(8,15,36,.96);
+      border:1px solid rgba(255,255,255,.20);
+      box-shadow:0 26px 80px rgba(0,0,0,.58);
+    }
+    .mobileFullscreenGateIcon{display:block;font-size:58px;line-height:1}
+    .mobileFullscreenGateCard h2{margin:10px 0 7px}
+    .mobileFullscreenGateCard p{margin:0 0 18px;color:#c6d5ee;line-height:1.45}
+    #mobileFullscreenStartBtn{
+      width:100%;
+      border:0;
+      border-radius:15px;
+      padding:14px 16px;
+      background:linear-gradient(180deg,#63edff,#3987ff);
+      color:#06152c;
+      font-weight:1000;
+      cursor:pointer;
+      touch-action:manipulation;
+    }
+
+    body.mobile-device.arena-playing{
+      position:fixed!important;
+      inset:0!important;
+      width:100vw!important;
+      height:100vh!important;
+      min-height:100vh!important;
+      overflow:hidden!important;
+      overscroll-behavior:none!important;
+      background:#08101f!important;
+    }
+    @supports(height:100dvh){
+      body.mobile-device.arena-playing{
+        height:100dvh!important;
+        min-height:100dvh!important;
+      }
+    }
+    body.mobile-device.arena-playing #overlay,
+    body.mobile-device.arena-playing #authOverlay,
+    body.mobile-device.arena-playing #adminOverlay,
+    body.mobile-device.arena-playing #chatOverlay{
+      display:none!important;
+    }
+    body.mobile-device.arena-playing #game{
+      display:block!important;
+      visibility:visible!important;
+      position:fixed!important;
+      inset:0!important;
+      width:100vw!important;
+      height:100vh!important;
+    }
+    @supports(height:100dvh){
+      body.mobile-device.arena-playing #game{height:100dvh!important}
+    }
+    body.mobile-device.arena-playing #hud{display:block!important}
+
   </style>
 </head>
 <body class="lobby-mode">
@@ -390,6 +515,15 @@
   </div>
   <div id="rotatePhoneOverlay" role="dialog" aria-modal="true" aria-label="Obróć telefon poziomo">
     <div class="rotatePhoneCard"><span class="rotatePhoneIcon">📱</span><h2>Obróć telefon poziomo</h2><p>Gra na telefonie działa tylko w układzie poziomym. Obróć urządzenie, aby zobaczyć całą arenę i sterowanie.</p><button id="rotateLockBtn" type="button">WŁĄCZ TRYB POZIOMY</button></div>
+  </div>
+
+  <div id="mobileFullscreenGate" role="dialog" aria-modal="true" aria-label="Uruchom pełny ekran">
+    <div class="mobileFullscreenGateCard">
+      <span class="mobileFullscreenGateIcon">⛶</span>
+      <h2>Pełny ekran gry</h2>
+      <p>Dotknij przycisku, aby ukryć pasek przeglądarki i uruchomić arenę na całym ekranie.</p>
+      <button id="mobileFullscreenStartBtn" type="button">URUCHOM GRĘ NA PEŁNYM EKRANIE</button>
+    </div>
   </div>
 
   <div id="overlay">
@@ -817,6 +951,30 @@
 })();
 </script>
 
-<script src="game.js?v=email-password-reset-v1"></script>
+<script id="arenaMobileViewportFix">
+(() => {
+  const setHeight = () => {
+    const height = Math.max(240, Math.round(window.visualViewport?.height || window.innerHeight || 0));
+    document.documentElement.style.setProperty('--arena-visual-height', `${height}px`);
+  };
+  setHeight();
+  window.addEventListener('resize', setHeight, {passive:true});
+  window.addEventListener('orientationchange', () => setTimeout(setHeight, 120), {passive:true});
+  window.visualViewport?.addEventListener('resize', () => {
+    setHeight();
+    const active = document.activeElement;
+    if (active && document.getElementById('authOverlay')?.contains(active)) {
+      setTimeout(() => active.scrollIntoView({block:'center', inline:'nearest', behavior:'smooth'}), 80);
+    }
+  }, {passive:true});
+  document.addEventListener('focusin', event => {
+    if (!document.getElementById('authOverlay')?.contains(event.target)) return;
+    setTimeout(() => event.target.scrollIntoView({block:'center', inline:'nearest', behavior:'smooth'}), 220);
+  });
+})();
+</script>
+
+
+<script src="game.js?v=mobile-real-fullscreen-scroll-v1"></script>
 </body>
 </html>
