@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-window.__arenaBuild='arena-shop-coins-v19';
+window.__arenaBuild='arena-mobile-fullscreen-layout-v20';
 
 const canvas = document.getElementById('game');
 const earlyMobileHint=((navigator.maxTouchPoints||0)>0&&matchMedia('(pointer: coarse)').matches)||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
@@ -94,6 +94,8 @@ const mobileInput={moveX:0,moveZ:0,aimX:0,aimY:-1,movePointer:null,attackPointer
 let mobilePortraitBlocked=false;
 let pendingMobileGameStart=null;
 let fullscreenGateBusy=false;
+let pendingMobileGateMode='game';
+const settleWithin=(value,ms,fallback=false)=>Promise.race([Promise.resolve(value).catch(()=>fallback),new Promise(resolve=>setTimeout(()=>resolve(fallback),ms))]);
 function resetMobileInput(){mobileInput.moveX=0;mobileInput.moveZ=0;mobileInput.movePointer=null;mobileInput.attackPointer=null;mouse.down=false;ui.mobileMoveKnob?.style.setProperty('transform','translate(-50%,-50%)');ui.mobileAttackKnob?.style.setProperty('transform','translate(-50%,-50%)');ui.mobileAttackStick?.classList.remove('firing');}
 function updateMobileOrientation(){
   if(!isMobileDevice)return;
@@ -115,15 +117,9 @@ async function requestMobileFullscreen(){
     if(!mobileFullscreenActive()){
       const fn=root.requestFullscreen||root.webkitRequestFullscreen||root.msRequestFullscreen;
       if(!fn)return false;
-      try{
-        const result=fn.call(root,{navigationUI:'hide'});
-        if(result&&typeof result.then==='function')await result;
-      }catch(firstError){
-        try{
-          const retry=fn.call(root);
-          if(retry&&typeof retry.then==='function')await retry;
-        }catch(_){}
-      }
+      let request=null;
+      try{request=fn.call(root,{navigationUI:'hide'});}catch(_){try{request=fn.call(root);}catch(__){request=null;}}
+      if(request&&typeof request.then==='function')await settleWithin(request,850,false);
     }
   }catch(_){}
   const active=mobileFullscreenActive();
@@ -135,8 +131,13 @@ async function requestMobileFullscreen(){
 async function requestLandscapeOrientation(fullscreen=false){
   if(!isMobileDevice)return true;
   let fullscreenResult=true;
-  if(fullscreen)fullscreenResult=await requestMobileFullscreen();
-  try{if(screen.orientation?.lock)await screen.orientation.lock('landscape');}catch(_){}
+  if(fullscreen)fullscreenResult=await settleWithin(requestMobileFullscreen(),1100,false);
+  try{
+    if(screen.orientation?.lock){
+      const lock=screen.orientation.lock('landscape');
+      if(lock&&typeof lock.then==='function')await settleWithin(lock,450,false);
+    }
+  }catch(_){}
   try{window.scrollTo(0,1);}catch(_){}
   updateMobileOrientation();
   return fullscreenResult;
@@ -147,6 +148,7 @@ function hideMobileFullscreenGate(){
 }
 function showMobileFullscreenGate(startCallback=null,mode='game'){
   pendingMobileGameStart=startCallback;
+  pendingMobileGateMode=mode;
   if(ui.mobileFullscreenTitle)ui.mobileFullscreenTitle.textContent=mode==='lobby'?'Pełny ekran lobby':'Pełny ekran gry';
   if(ui.mobileFullscreenText)ui.mobileFullscreenText.textContent=mode==='lobby'?'Dotknij przycisku, aby ukryć pasek przeglądarki i korzystać z lobby na całym ekranie.':'Dotknij przycisku, aby ukryć pasek przeglądarki i uruchomić arenę na całym ekranie.';
   if(ui.mobileFullscreenStartBtn)ui.mobileFullscreenStartBtn.textContent=mode==='lobby'?'WEJDŹ DO LOBBY NA PEŁNYM EKRANIE':'URUCHOM GRĘ NA PEŁNYM EKRANIE';
@@ -159,37 +161,32 @@ async function continueFromMobileFullscreenGate(event){
   if(fullscreenGateBusy)return;
   fullscreenGateBusy=true;
   const callback=pendingMobileGameStart;
+  const mode=pendingMobileGateMode;
   pendingMobileGameStart=null;
   if(ui.mobileFullscreenStartBtn){
     ui.mobileFullscreenStartBtn.disabled=true;
     ui.mobileFullscreenStartBtn.textContent='URUCHAMIANIE…';
   }
-
-  // Najważniejsze: bramka znika natychmiast po dotknięciu. Nie czekamy,
-  // aż Android/Chrome zakończy animację pełnego ekranu, bo część telefonów
-  // nie rozwiązuje tej obietnicy i ekran wygląda wtedy jak zawieszony.
-  hideMobileFullscreenGate();
-  document.body.classList.add('lobby-mode');
-  try{ui.overlay.style.display='grid';ui.lobbyView.style.display='block';}catch(_){}
-  callback?.();
-  requestAnimationFrame(()=>{updateMobileOrientation();try{resize();}catch(_){}});
-
-  // Pełny ekran i blokada pozioma są próbą dodatkową, już poza krytyczną
-  // ścieżką wejścia do lobby. Nawet gdy przeglądarka odmówi, lobby działa.
-  Promise.race([
-    requestLandscapeOrientation(true),
-    new Promise(resolve=>setTimeout(()=>resolve(false),900))
-  ]).catch(()=>false).finally(()=>{
-    setTimeout(()=>{updateMobileOrientation();try{resize();}catch(_){}},80);
-  });
-
-  setTimeout(()=>{
+  try{
+    // Wywołanie pełnego ekranu zaczyna się bezpośrednio po dotknięciu,
+    // ale nie blokujemy lobby na przeglądarkach, które nie kończą tej obietnicy.
+    const orientationTask=requestLandscapeOrientation(true);
+    hideMobileFullscreenGate();
+    callback?.();
+    requestAnimationFrame(()=>{
+      hideMobileFullscreenGate();
+      updateMobileOrientation();
+      try{resize();}catch(_){}
+    });
+    await settleWithin(orientationTask,1250,false);
+  }finally{
+    hideMobileFullscreenGate();
     fullscreenGateBusy=false;
     if(ui.mobileFullscreenStartBtn){
       ui.mobileFullscreenStartBtn.disabled=false;
-      ui.mobileFullscreenStartBtn.textContent='WEJDŹ DO LOBBY NA PEŁNYM EKRANIE';
+      ui.mobileFullscreenStartBtn.textContent=mode==='game'?'URUCHOM GRĘ NA PEŁNYM EKRANIE':'WEJDŹ DO LOBBY NA PEŁNYM EKRANIE';
     }
-  },180);
+  }
 }
 function setStickPosition(stick,knob,clientX,clientY){
   const r=stick.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2,max=r.width*.34;
@@ -233,8 +230,7 @@ function setupMobileControls(){
   mobilePowerPress(ui.mobileHyperBtn,activateHyper,[25,25,25]);
   ui.rotateLockBtn?.addEventListener('click',()=>requestLandscapeOrientation(true));
   ui.lobbyFullscreenBtn?.addEventListener('click',async e=>{e.preventDefault();await requestLandscapeOrientation(true);hideMobileFullscreenGate();});
-  ui.mobileFullscreenStartBtn?.addEventListener('pointerup',continueFromMobileFullscreenGate,{passive:false});
-  ui.mobileFullscreenStartBtn?.addEventListener('click',continueFromMobileFullscreenGate);
+  ui.mobileFullscreenStartBtn?.addEventListener('click',continueFromMobileFullscreenGate,{passive:false});
   const fullscreenChanged=()=>{document.body.classList.toggle('mobile-fullscreen',mobileFullscreenActive());setTimeout(()=>{updateMobileOrientation();try{resize();}catch(_){}},60);};
   document.addEventListener('fullscreenchange',fullscreenChanged,{passive:true});
   document.addEventListener('webkitfullscreenchange',fullscreenChanged,{passive:true});

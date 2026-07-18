@@ -729,32 +729,278 @@
     @media(max-width:850px){.coinGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.storeSkinList{grid-template-columns:1fr}.storePanel{max-height:96vh}.storeHeader h2{font-size:23px}}
     @media(pointer:coarse) and (orientation:landscape){body.mobile-device.lobby-mode #skinDock{left:max(7px,env(safe-area-inset-left))!important;top:max(61px,calc(env(safe-area-inset-top) + 54px))!important;bottom:auto!important;width:146px!important;height:auto!important;padding:0!important;overflow:visible!important}body.mobile-device.lobby-mode #storeOpenBtn{min-height:54px!important;grid-template-columns:35px 1fr 12px;gap:5px;padding:6px;border-radius:11px}body.mobile-device.lobby-mode .storeDockIcon{width:34px;height:34px;border-radius:9px;font-size:18px}body.mobile-device.lobby-mode .storeDockText b{font-size:11px}body.mobile-device.lobby-mode .storeDockText small{font-size:6px;margin-top:2px}body.mobile-device.lobby-mode .storeDockArrow{font-size:18px}body.mobile-device #storeOverlay{height:var(--arena-visual-height,100dvh);padding:6px;overscroll-behavior:contain}body.mobile-device .storePanel{width:calc(100vw - 12px);max-height:calc(var(--arena-visual-height,100dvh) - 12px);border-radius:14px}body.mobile-device .storeHeader{padding:9px 11px}body.mobile-device .storeHeader h2{font-size:16px}body.mobile-device .storeHeader p{font-size:8px;margin-top:2px}body.mobile-device .storeClose{width:32px;height:32px;font-size:15px}body.mobile-device .storeTabs{padding:7px 8px 0}body.mobile-device .storeTab{min-width:100px;padding:7px;font-size:8px}body.mobile-device .storeBody{padding:8px}body.mobile-device .coinShopIntro,body.mobile-device .storeSectionTitle{margin-bottom:7px;padding:6px;font-size:7px}body.mobile-device .coinShopIntro b,body.mobile-device .storeSectionTitle b{font-size:8px}body.mobile-device .coinGrid{grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}body.mobile-device .coinCard{min-height:190px;padding:29px 6px 7px;border-radius:11px}body.mobile-device .coinSaving{padding:5px 2px;font-size:6px}body.mobile-device .coinBestBadge{display:none}body.mobile-device .coinIcon{font-size:27px}body.mobile-device .coinAmount{font-size:18px;margin-top:3px}body.mobile-device .coinLabel{font-size:6px}body.mobile-device .coinPrice{font-size:15px;margin-top:7px}body.mobile-device .coinCompare{font-size:6px;min-height:26px}body.mobile-device .coinBuyBtn{padding:7px 3px;font-size:7px;border-radius:7px;box-shadow:0 3px 0 #a85b13}body.mobile-device .storeMessage{font-size:7px;margin-top:5px;min-height:12px}body.mobile-device .storePaymentNote{font-size:6px}body.mobile-device .storeSkinList{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}body.mobile-device .storeSkinList .skinCard{grid-template-columns:37px 1fr;min-height:58px;padding:6px}body.mobile-device .storeSkinList .skinPreview{height:37px;font-size:19px}body.mobile-device .storeSkinList .skinName{font-size:8px}body.mobile-device .storeSkinList .skinDesc{font-size:6px;display:block}body.mobile-device .storeSkinList .skinState{font-size:6px}}
 
-  
 
-    /* ===== MOBILNE LOBBY 2.1: poprawka wyjścia poza prawą krawędź ===== */
+    /* ===== MOBILE V20: visual viewport + bezpieczny prawy górny róg ===== */
     @media (pointer:coarse) and (orientation:landscape){
+      body.mobile-device.lobby-mode{
+        left:var(--arena-visual-left,0px)!important;
+        top:var(--arena-visual-top,0px)!important;
+        right:auto!important;bottom:auto!important;
+        width:var(--arena-visual-width,100vw)!important;
+        max-width:var(--arena-visual-width,100vw)!important;
+      }
+      body.mobile-device.lobby-mode #overlay,
+      body.mobile-device.lobby-mode #lobbyView{
+        left:0!important;top:0!important;right:auto!important;bottom:auto!important;
+        width:100%!important;max-width:100%!important;
+      }
+      body.mobile-device.lobby-mode #accountBox,
+      body.mobile-device.lobby-mode #accountUser,
+      body.mobile-device.lobby-mode #rankingDock,
+      body.mobile-device.lobby-mode #playBtn{
+        right:max(7px,env(safe-area-inset-right))!important;
+      }
+      body.mobile-device.lobby-mode #modeBtn{
+        right:max(143px,calc(env(safe-area-inset-right) + 136px))!important;
+      }
       body.mobile-device.lobby-mode #accountBox{
-        max-width:calc(100vw - max(14px,env(safe-area-inset-left)) - max(14px,env(safe-area-inset-right)) - 120px);
-        display:flex;justify-content:flex-end;overflow:hidden;
+        display:flex!important;flex-wrap:nowrap!important;justify-content:flex-end!important;
+        max-width:min(190px,calc(100% - 210px))!important;overflow:hidden!important;
       }
-      body.mobile-device.lobby-mode #accountBox .accountStat{
-        min-width:54px!important;max-width:70px;padding:4px 5px!important;font-size:6px!important;line-height:1.05;
+      body.mobile-device.lobby-mode .accountStat{
+        min-width:50px!important;max-width:64px!important;padding:4px 5px!important;
+        overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;
       }
-      body.mobile-device.lobby-mode #accountBox .accountStat strong{font-size:10px!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-      body.mobile-device.lobby-mode #ownerFreeBadge{max-width:76px!important}
-      body.mobile-device.lobby-mode #ownerFreeBadge strong{font-size:7px!important;white-space:normal!important;line-height:1.05}
-      body.mobile-device.lobby-mode #accountUser{max-width:150px!important}
-      body.mobile-device.lobby-mode #rankingDock{right:max(5px,env(safe-area-inset-right))!important;width:min(178px,24vw)!important}
+      body.mobile-device.lobby-mode #ownerFreeBadge{
+        width:52px!important;min-width:52px!important;max-width:52px!important;
+        font-size:0!important;line-height:1!important;
+      }
+      body.mobile-device.lobby-mode #ownerFreeBadge::before{content:'ADMIN';font-size:7px;font-weight:1000}
+      body.mobile-device.lobby-mode #ownerFreeBadge strong{display:none!important}
+      body.mobile-device.lobby-mode #accountUser{max-width:150px!important;overflow:hidden!important}
+      body.mobile-device.lobby-mode #accountUsername{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      body.mobile-device.lobby-mode #rankingDock{max-width:calc(100% - 175px)!important}
     }
-    @media (pointer:coarse) and (orientation:landscape) and (max-width:780px){
-      body.mobile-device.lobby-mode #accountBox .accountStat{min-width:48px!important;max-width:59px!important}
-      body.mobile-device.lobby-mode #ownerFreeBadge{display:none!important}
-      body.mobile-device.lobby-mode #accountUser{top:max(38px,calc(env(safe-area-inset-top) + 34px))!important;max-width:128px!important}
-      body.mobile-device.lobby-mode #rankingDock{top:max(53px,calc(env(safe-area-inset-top) + 47px))!important;width:154px!important}
-      body.mobile-device.lobby-mode .lobbyLogo{font-size:clamp(23px,6.6vh,34px)!important}
+    @media (pointer:coarse) and (orientation:landscape) and (max-width:650px){
+      body.mobile-device.lobby-mode #modeBtn{
+        right:max(119px,calc(env(safe-area-inset-right) + 112px))!important;
+      }
+      body.mobile-device.lobby-mode #accountBox{max-width:164px!important}
+      body.mobile-device.lobby-mode .accountStat{min-width:44px!important;max-width:55px!important;font-size:6px!important}
+      body.mobile-device.lobby-mode .accountStat strong{font-size:10px!important}
+      body.mobile-device.lobby-mode #ownerFreeBadge{width:44px!important;min-width:44px!important;max-width:44px!important}
+      body.mobile-device.lobby-mode #ownerFreeBadge::before{font-size:6px}
+      body.mobile-device.lobby-mode #accountUser{max-width:130px!important}
     }
 
-</style>
+
+
+    /* ===== AWARYJNA NAPRAWA LOBBY NA TELEFONACH W POZIOMIE ===== */
+    /* Ta sekcja działa także wtedy, gdy telefon ma szerokość > 800 px w CSS, */
+    /* dlatego opieramy się głównie na małej wysokości ekranu. */
+    @media (orientation:landscape) and (max-height:760px){
+      body.lobby-mode,
+      body.lobby-mode #overlay,
+      body.lobby-mode #lobbyView{
+        overflow:hidden!important;
+      }
+
+      body.lobby-mode .lobbyLogo{
+        top:max(4px,env(safe-area-inset-top));
+        font-size:clamp(26px,5.2vh,40px);
+        line-height:.86;
+      }
+      body.lobby-mode .lobbyLogo small{display:none}
+
+      body.lobby-mode #lobbyTrophies{
+        left:max(6px,env(safe-area-inset-left));
+        top:max(6px,env(safe-area-inset-top));
+        gap:6px;
+        padding:6px 9px;
+        border-radius:12px;
+      }
+      body.lobby-mode .trophyIcon{font-size:18px}
+      body.lobby-mode .trophyText{font-size:8px}
+      body.lobby-mode .trophyText strong{font-size:15px;margin-top:1px}
+
+      body.lobby-mode #accountBox{
+        right:max(6px,env(safe-area-inset-right));
+        top:max(6px,env(safe-area-inset-top));
+        gap:5px;
+      }
+      body.lobby-mode .accountStat{
+        min-width:68px;
+        padding:6px 8px;
+        border-radius:11px;
+        font-size:7px;
+      }
+      body.lobby-mode .accountStat strong{font-size:12px;margin-top:1px}
+      body.lobby-mode #accountUser{
+        right:max(6px,env(safe-area-inset-right));
+        top:max(46px,calc(env(safe-area-inset-top) + 40px));
+        max-width:190px;
+        padding:4px 7px;
+        border-radius:9px;
+        font-size:8px;
+        gap:5px;
+      }
+      body.lobby-mode #accountLogoutBtn{padding:4px 6px;font-size:8px}
+
+      body.lobby-mode #skinDock{
+        left:max(6px,env(safe-area-inset-left));
+        top:max(62px,calc(env(safe-area-inset-top) + 56px));
+        bottom:142px;
+        width:clamp(136px,22vw,170px);
+        padding:7px;
+        border-radius:14px;
+        overflow:auto;
+        scrollbar-width:thin;
+      }
+      body.lobby-mode #skinShopTitle{font-size:8px;margin:0 0 5px 2px}
+      body.lobby-mode .skinList{gap:4px}
+      body.lobby-mode .skinCard{grid-template-columns:34px 1fr;gap:6px;padding:5px;border-radius:9px;min-height:42px}
+      body.lobby-mode .skinPreview{height:32px;border-radius:8px;font-size:18px}
+      body.lobby-mode .skinName{font-size:9px;line-height:1.06}
+      body.lobby-mode .skinDesc{display:none}
+      body.lobby-mode .skinState{font-size:6px;margin-top:2px;padding:2px 4px}
+      body.lobby-mode #skinNotice{display:none}
+
+      body.lobby-mode #versionDock{
+        left:max(6px,env(safe-area-inset-left));
+        bottom:56px;
+        width:clamp(136px,22vw,170px);
+        max-height:82px;
+        padding:7px;
+        border-radius:14px;
+        overflow:hidden;
+      }
+      body.lobby-mode #versionTitle{font-size:7px;margin:0 0 4px 2px}
+      body.lobby-mode .versionCard{padding:6px;border-radius:9px}
+      body.lobby-mode .versionCard h3{font-size:10px;margin:0 0 2px}
+      body.lobby-mode .versionBonuses{display:none}
+      body.lobby-mode .versionPrice{font-size:8px;margin-top:2px}
+      body.lobby-mode .versionBuyBtn{margin-top:4px;padding:6px;font-size:8px;border-radius:8px;box-shadow:0 3px 0 #a95c11}
+      body.lobby-mode #versionNotice{display:none}
+
+      body.lobby-mode #rankingDock{
+        right:max(6px,env(safe-area-inset-right));
+        top:max(62px,calc(env(safe-area-inset-top) + 56px));
+        bottom:56px;
+        width:clamp(154px,25vw,194px);
+        padding:7px;
+        border-radius:14px;
+      }
+      body.lobby-mode .rankingHead{padding:1px 2px 4px}
+      body.lobby-mode .rankingTitle{font-size:8px}
+      body.lobby-mode .rankingLive{font-size:7px}
+      body.lobby-mode .onlineProfile{margin:0 1px 4px;padding:5px;border-radius:8px}
+      body.lobby-mode .onlineMode{font-size:6px}
+      body.lobby-mode .onlineStatus{font-size:7px;margin-top:2px}
+      body.lobby-mode .nicknameRow{margin-top:4px;gap:3px}
+      body.lobby-mode .nicknameRow input{padding:5px;font-size:8px}
+      body.lobby-mode .nicknameRow button{padding:5px;font-size:7px}
+      body.lobby-mode .rankingMe{padding:5px 6px;font-size:7px}
+      body.lobby-mode .rankingMe strong{font-size:9px}
+      body.lobby-mode .rankingTotal{font-size:6px;margin-bottom:3px}
+      body.lobby-mode .rankingColumns,
+      body.lobby-mode .rankingRow{grid-template-columns:28px 1fr 52px;gap:3px}
+      body.lobby-mode .rankingColumns{padding:4px;font-size:6px}
+      body.lobby-mode .rankingRow{min-height:21px;padding:3px 4px;font-size:7px}
+      body.lobby-mode .rankingFoot{display:none}
+
+      body.lobby-mode #heroStage{
+        left:50%;
+        top:43%;
+        width:min(28vw,210px);
+        opacity:.92;
+        pointer-events:none;
+      }
+      body.lobby-mode .heroBody{width:43%;border-width:3px}
+      body.lobby-mode .heroOrb{animation:none}
+      body.lobby-mode .heroOrb.o2{transform:translate(78px,-10px)}
+      body.lobby-mode .heroOrb.o3{transform:translate(-74px,22px)}
+
+      body.lobby-mode #savedUpgrades{
+        left:50%;
+        bottom:56px;
+        transform:translateX(-50%);
+        width:min(320px,44vw);
+        display:grid;
+        grid-template-columns:repeat(3,1fr);
+        gap:4px;
+        padding:5px;
+        border-radius:11px;
+      }
+      body.lobby-mode .savedUpgrade{min-width:0;padding:4px 3px;border-radius:7px;font-size:6px;line-height:1.15}
+      body.lobby-mode .savedUpgrade span{display:block;font-size:6px}
+      body.lobby-mode .savedUpgrade strong{display:block;margin:2px 0 0;font-size:9px}
+
+      body.lobby-mode #chatOpenBtn,
+      body.lobby-mode #passOpenBtn,
+      body.lobby-mode #lobbyFullscreenBtn,
+      body.lobby-mode #adminOpenBtn,
+      body.lobby-mode #modeBtn,
+      body.lobby-mode #playBtn{
+        top:auto!important;
+        bottom:max(8px,env(safe-area-inset-bottom))!important;
+        height:42px!important;
+        min-width:0!important;
+        padding:0 8px!important;
+        border-radius:11px!important;
+        font-size:10px!important;
+        line-height:42px!important;
+        box-shadow:0 4px 0 rgba(12,25,58,.9)!important;
+        transform:none!important;
+        white-space:nowrap;
+      }
+      body.lobby-mode #chatOpenBtn{left:max(6px,env(safe-area-inset-left))!important;right:auto!important;width:72px!important}
+      body.lobby-mode #passOpenBtn{left:max(82px,calc(env(safe-area-inset-left) + 76px))!important;right:auto!important;width:108px!important}
+      body.lobby-mode #lobbyFullscreenBtn{display:block!important;left:max(194px,calc(env(safe-area-inset-left) + 188px))!important;right:auto!important;width:42px!important;font-size:0!important;padding:0!important}
+      body.lobby-mode #lobbyFullscreenBtn:after{content:'⛶';font-size:18px;line-height:42px}
+      body.lobby-mode #adminOpenBtn{left:max(240px,calc(env(safe-area-inset-left) + 234px))!important;right:auto!important;width:68px!important;overflow:hidden;text-overflow:ellipsis}
+      body.lobby-mode #modeBtn{right:max(140px,calc(env(safe-area-inset-right) + 134px))!important;left:auto!important;width:98px!important}
+      body.lobby-mode #playBtn{right:max(6px,env(safe-area-inset-right))!important;left:auto!important;width:130px!important;font-size:16px!important}
+
+      body.lobby-mode #modeMenu{
+        right:max(6px,env(safe-area-inset-right));
+        bottom:56px;
+        width:min(250px,90vw);
+        max-height:calc(100dvh - 72px);
+        overflow:auto;
+        padding:8px;
+        border-radius:12px;
+      }
+      body.lobby-mode .modeMenuTitle{font-size:8px;margin-bottom:5px}
+      body.lobby-mode .modeOption{grid-template-columns:35px 1fr;gap:7px;padding:7px;border-radius:10px}
+      body.lobby-mode .modeIcon{width:35px;height:35px;font-size:20px}
+      body.lobby-mode .modeName{font-size:10px}
+      body.lobby-mode .modeDesc{font-size:7px}
+
+      body.lobby-mode #chatOverlay .chatCard{
+        width:calc(100vw - 12px);
+        height:calc(100dvh - 12px);
+        grid-template-columns:132px 1fr;
+        border-radius:14px;
+      }
+      body.lobby-mode #chatOverlay .chatSidebar{padding:7px}
+      body.lobby-mode #chatOverlay .chatModeSwitch{gap:4px;margin:7px 0}
+      body.lobby-mode #chatOverlay .chatModeBtn{padding:6px;font-size:8px}
+      body.lobby-mode #chatOverlay .chatPublicInfo{padding:7px;font-size:8px}
+      body.lobby-mode #chatOverlay .chatSearch{margin:6px 0;padding:7px}
+      body.lobby-mode #chatOverlay .chatHeader{padding:8px 10px;font-size:9px}
+      body.lobby-mode #chatOverlay .chatMessages{padding:8px 10px;gap:5px}
+      body.lobby-mode #chatOverlay .chatMessage{font-size:9px;padding:6px 8px}
+      body.lobby-mode #chatOverlay .chatComposer{padding:7px 9px;gap:6px}
+      body.lobby-mode #chatOverlay .chatComposer textarea{height:42px;padding:7px;font-size:10px}
+      body.lobby-mode #chatOverlay .chatSend{padding:0 12px;font-size:9px}
+    }
+
+    @media (orientation:landscape) and (max-height:760px) and (max-width:740px){
+      body.lobby-mode #skinDock,
+      body.lobby-mode #versionDock{width:142px}
+      body.lobby-mode #rankingDock{width:156px}
+      body.lobby-mode #heroStage{width:24vw}
+      body.lobby-mode #savedUpgrades{width:250px}
+      body.lobby-mode #chatOpenBtn{width:58px!important;font-size:9px!important}
+      body.lobby-mode #passOpenBtn{left:max(68px,calc(env(safe-area-inset-left) + 62px))!important;width:88px!important;font-size:8px!important}
+      body.lobby-mode #lobbyFullscreenBtn{left:max(160px,calc(env(safe-area-inset-left) + 154px))!important;width:38px!important}
+      body.lobby-mode #adminOpenBtn{left:max(202px,calc(env(safe-area-inset-left) + 196px))!important;width:42px!important;font-size:0!important}
+      body.lobby-mode #adminOpenBtn:after{content:'⚙';font-size:17px}
+      body.lobby-mode #modeBtn{right:max(118px,calc(env(safe-area-inset-right) + 112px))!important;width:82px!important;font-size:8px!important}
+      body.lobby-mode #playBtn{width:108px!important;font-size:14px!important}
+    }
+
+  </style>
 </head>
 <body class="lobby-mode">
   <canvas id="game"></canvas>
@@ -1283,8 +1529,15 @@
 <script id="arenaMobileViewportFix">
 (() => {
   const setHeight = () => {
-    const height = Math.max(240, Math.round(window.visualViewport?.height || window.innerHeight || 0));
+    const viewport = window.visualViewport;
+    const height = Math.max(240, Math.round(viewport?.height || window.innerHeight || 0));
+    const width = Math.max(320, Math.round(viewport?.width || window.innerWidth || 0));
+    const left = Math.max(0, Math.round(viewport?.offsetLeft || 0));
+    const top = Math.max(0, Math.round(viewport?.offsetTop || 0));
     document.documentElement.style.setProperty('--arena-visual-height', `${height}px`);
+    document.documentElement.style.setProperty('--arena-visual-width', `${width}px`);
+    document.documentElement.style.setProperty('--arena-visual-left', `${left}px`);
+    document.documentElement.style.setProperty('--arena-visual-top', `${top}px`);
   };
   setHeight();
   window.addEventListener('resize', setHeight, {passive:true});
@@ -1296,6 +1549,7 @@
       setTimeout(() => active.scrollIntoView({block:'center', inline:'nearest', behavior:'smooth'}), 80);
     }
   }, {passive:true});
+  window.visualViewport?.addEventListener('scroll', setHeight, {passive:true});
   document.addEventListener('focusin', event => {
     if (!document.getElementById('authOverlay')?.contains(event.target)) return;
     setTimeout(() => event.target.scrollIntoView({block:'center', inline:'nearest', behavior:'smooth'}), 220);
@@ -1304,6 +1558,6 @@
 </script>
 
 
-<script src="game.js?v=arena-shop-coins-v19"></script>
+<script src="game.js?v=arena-mobile-fullscreen-layout-v20"></script>
 </body>
 </html>

@@ -229,7 +229,7 @@ def persistent_storage_public_status() -> dict[str, Any]:
         "schemaVersion": DB_SCHEMA_VERSION if DB_READY else 0,
         "emailResetConfigured": bool(RESEND_API_KEY and PASSWORD_RESET_FROM),
         "passwordResetTtlMinutes": PASSWORD_RESET_TTL // 60,
-        "build": "arena-shop-coins-v19",
+        "build": "arena-mobile-fullscreen-layout-v20",
     }
     if DB_READY:
         payload["connectedAt"] = DB_CONNECTED_AT
@@ -595,7 +595,7 @@ def db_schema_status() -> dict[str, Any]:
         "connectedAt": DB_CONNECTED_AT,
         "emailResetConfigured": bool(RESEND_API_KEY and PASSWORD_RESET_FROM),
         "passwordResetTtlMinutes": PASSWORD_RESET_TTL // 60,
-        "build": "arena-shop-coins-v19",
+        "build": "arena-mobile-fullscreen-layout-v20",
     }
 
 
