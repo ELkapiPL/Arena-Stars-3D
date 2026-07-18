@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-window.__arenaBuild='arena-karnet-40-pucharkow-mniej-monet-v15';
+window.__arenaBuild='mobile-lobby-chat-owner-skin-v16';
 
 const canvas = document.getElementById('game');
 const earlyMobileHint=((navigator.maxTouchPoints||0)>0&&matchMedia('(pointer: coarse)').matches)||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
@@ -279,7 +279,7 @@ function loadProgress(){
 let profile=loadProgress();
 profile.name=persistNickname(profile.name);
 let profileDirty=false,profileSyncBusy=false,profileChangeSeq=0,lastConfigRevision=0,backgroundSyncBusy=false;
-const CLIENT_VERSION='arena-karnet-40-pucharkow-mniej-monet-v15';
+const CLIENT_VERSION='mobile-lobby-chat-owner-skin-v16';
 function saveProgress(markDirty=true){try{profile.name=persistNickname(profile.name);localStorage.setItem(SAVE_KEY,JSON.stringify(profile));if(markDirty){profileDirty=true;profileChangeSeq++;}}catch(_){} }
 function getPlayerId(){
   try{let id=localStorage.getItem(PLAYER_ID_KEY);if(!id){id=(crypto.randomUUID?crypto.randomUUID():`gracz-${Date.now()}-${Math.random().toString(16).slice(2)}`);localStorage.setItem(PLAYER_ID_KEY,id);}return id;}
@@ -357,7 +357,7 @@ async function syncProfile(force=true){
     if(data.profile){
       const remote=data.profile,forced=Number(remote.adminRevision||0)>Number(profile.adminRevision||0);
       profile.name=persistNickname(remote.name||profile.name);
-      if(forced){profile.points=Number(remote.points)||0;profile.trophies=Number(remote.trophies)||0;profile.coins=Number(remote.coins)||0;profile.upgrades={move:safeUpgradeLevel(remote.upgrades?.move),fire:safeUpgradeLevel(remote.upgrades?.fire),hp:safeUpgradeLevel(remote.upgrades?.hp)};profile.ownedSkins={classic:true,cosmic:remote.cosmicOwned===true};profile.heroVersion1=remote.heroVersion1===true;profile.skin=remote.skin==='cosmic'&&profile.ownedSkins.cosmic?'cosmic':'classic';}
+      if(forced){profile.points=Number(remote.points)||0;profile.trophies=Number(remote.trophies)||0;profile.coins=Number(remote.coins)||0;profile.upgrades={move:safeUpgradeLevel(remote.upgrades?.move),fire:safeUpgradeLevel(remote.upgrades?.fire),hp:safeUpgradeLevel(remote.upgrades?.hp)};const arenaOwned=ownerFreeShop||remote.arenaSkinOwned===true||remote.data?.arenaVipPlusSkinOwned===true;profile.ownedSkins={classic:true,cosmic:remote.cosmicOwned===true,arena_vip_plus:arenaOwned};profile.heroVersion1=remote.heroVersion1===true;profile.skin=remote.skin==='arena_vip_plus'&&arenaOwned?'arena_vip_plus':(remote.skin==='cosmic'&&profile.ownedSkins.cosmic?'cosmic':'classic');}
       else{profile.points=Math.max(profile.points,Number(remote.points)||0);profile.trophies=Math.max(profile.trophies,Number(remote.trophies)||0);profile.coins=Math.max(profile.coins,Number(remote.coins)||0);}
       profile.adminRevision=Math.max(Number(profile.adminRevision)||0,Number(remote.adminRevision)||0);profile.revision=Math.max(Number(profile.revision)||0,Number(remote.revision)||0);profile.dataVersion=Math.max(Number(profile.dataVersion)||1,Number(remote.dataVersion)||1);profile.data={...(profile.data||{}),...(remote.data||{})};if(remote.data?.mode)profile.mode=remote.data.mode;walletCoins=profile.coins;saveProgress(false);updateLobby();
     }
@@ -1187,6 +1187,10 @@ async function completeAccountLogin(data){
     try{localStorage.setItem(PLAYER_ID_KEY,accountId);}catch(_){}
   }
   ownerFreeShop=currentAccount.ownerBenefits===true;
+  if(ownerFreeShop){
+    profile.data={...(profile.data||{}),arenaVipPlusSkinOwned:true,arenaPassTier:'vip_plus'};
+    profile.ownedSkins={...(profile.ownedSkins||{}),classic:true,arena_vip_plus:true};
+  }
   const adminButton=$('adminOpenBtn');
   if(adminButton){adminButton.hidden=!ownerFreeShop;adminButton.style.display=ownerFreeShop?'':'none';}
   profile.name=safePlayerName(currentAccount.username);
@@ -1352,13 +1356,42 @@ async function loadChatUsers(){
     chatUI.status.textContent='Nie udało się pobrać listy kont.';
   }
 }
-async function loadChatMessages(){if(!currentAccount)return;try{const r=await api('/api/chat/messages');renderChat(r.messages||[]);}catch(e){if(e.status!==423)chatUI.status.textContent='Czat chwilowo niedostępny.';}}
+let chatSessionRepairBusy=false;
+async function repairChatSession(){
+  if(chatSessionRepairBusy)return false;
+  chatSessionRepairBusy=true;
+  try{
+    const status=await api('/api/auth/status',{timeoutMs:15000});
+    if(status.authenticated){
+      currentAccount=status.account;
+      applyServerProfile(status.profile);
+      return true;
+    }
+    currentAccount=null;authFinished=false;
+    authMessage('Sesja wygasła. Zaloguj się ponownie, aby korzystać z czatu.',true);
+    authUI.overlay?.classList.remove('hidden');
+    return false;
+  }catch(_){return false;}
+  finally{chatSessionRepairBusy=false;}
+}
+async function loadChatMessages(retry=true){
+  if(!currentAccount)return;
+  try{
+    const r=await api('/api/chat/messages',{timeoutMs:15000});
+    renderChat(r.messages||[]);
+    if(chatUI.status?.textContent==='Czat chwilowo niedostępny.'||chatUI.status?.textContent==='Łączenie z czatem…')chatUI.status.textContent='';
+  }catch(e){
+    if(e.status===423)return;
+    if(e.status===401&&retry&&await repairChatSession())return loadChatMessages(false);
+    chatUI.status.textContent=e?.message||'Czat chwilowo niedostępny.';
+  }
+}
 function startChatPolling(){clearInterval(chatPollTimer);loadChatUsers();loadChatMessages();chatPollTimer=setInterval(()=>{if(!document.hidden){loadChatMessages();if(chatUI.overlay.classList.contains('open'))loadChatUsers();}},2500);}
 chatUI.open?.addEventListener('click',()=>{
   chatUI.overlay.classList.add('open');
   chatUnread=0;
   chatUI.badge.style.display='none';
-  chatUI.status.textContent='';
+  chatUI.status.textContent='Łączenie z czatem…';
   setChatMode('broadcast');
   loadChatMessages();
 });
@@ -1389,7 +1422,11 @@ chatUI.send?.addEventListener('click',async()=>{
       :`Wiadomość prywatna wysłana do ${chatRecipientName}.`;
     await loadChatMessages();
   }catch(e){
-    chatUI.status.textContent=e.message||'Nie udało się wysłać.';
+    if(e.status===401&&await repairChatSession()){
+      chatUI.status.textContent='Sesja czatu została odświeżona. Kliknij WYŚLIJ ponownie.';
+    }else{
+      chatUI.status.textContent=e.message||'Nie udało się wysłać.';
+    }
   }
 });
 chatUI.input?.addEventListener('keydown',e=>{

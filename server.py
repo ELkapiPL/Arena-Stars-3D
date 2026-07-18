@@ -81,7 +81,7 @@ APP_PUBLIC_URL = os.environ.get("APP_PUBLIC_URL", "").strip().rstrip("/")
 CHAT_MAX_MESSAGE = 300
 CHAT_MAX_RECIPIENTS = 20
 CHAT_HISTORY_LIMIT = 160
-DB_SCHEMA_VERSION = 9
+DB_SCHEMA_VERSION = 10
 PROFILE_DATA_VERSION = 2
 ARENA_PASS_SEASON = 1
 ARENA_PASS_LEVELS = 20
@@ -221,7 +221,7 @@ def persistent_storage_public_status() -> dict[str, Any]:
         "databaseConfigured": bool(DATABASE_URL),
         "sqlRequired": bool(REQUIRE_SQL),
         "schemaVersion": DB_SCHEMA_VERSION if DB_READY else 0,
-        "build": "arena-karnet-40-pucharkow-mniej-monet-v15",
+        "build": "mobile-lobby-chat-owner-skin-v16",
     }
     if DB_READY:
         payload["connectedAt"] = DB_CONNECTED_AT
@@ -453,16 +453,44 @@ def save_game_config(value: Any) -> dict[str, Any]:
     return public_game_config()
 
 
+def apply_owner_entitlements_to_data(player_id: str, value: Any) -> dict[str, Any]:
+    data = clean_profile_data(value)
+    if clean_id(player_id) == clean_id(ADMIN_PLAYER_ID):
+        data["arenaVipPlusSkinOwned"] = True
+        data["arenaPassTier"] = "vip_plus"
+        data["arenaPassSeason"] = ARENA_PASS_SEASON
+    return data
+
+
+def persist_owner_entitlements(cur: Any, player_id: str) -> None:
+    if clean_id(player_id) != clean_id(ADMIN_PLAYER_ID):
+        return
+    cur.execute(
+        """UPDATE players
+           SET profile_data = COALESCE(profile_data,'{}'::jsonb) ||
+               jsonb_build_object('arenaVipPlusSkinOwned',TRUE,'arenaPassTier','vip_plus','arenaPassSeason',%s),
+               revision = revision + 1,
+               admin_revision = admin_revision + 1,
+               updated_at = NOW()
+           WHERE player_id=%s
+             AND (COALESCE(profile_data->>'arenaVipPlusSkinOwned','false') <> 'true'
+                  OR COALESCE(profile_data->>'arenaPassTier','') <> 'vip_plus')""",
+        (ARENA_PASS_SEASON, clean_id(player_id)),
+    )
+
+
 def profile_full_row(row: dict[str, Any]) -> dict[str, Any]:
     upgrades = row.get("upgrades") if isinstance(row.get("upgrades"), dict) else {}
+    player_id = clean_id(row.get("id") or row.get("player_id"))
     data = row.get("data", row.get("profile_data", {}))
     if isinstance(data, str):
         try:
             data = json.loads(data)
         except Exception:
             data = {}
+    data = apply_owner_entitlements_to_data(player_id, data)
     return {
-        "id": clean_id(row.get("id") or row.get("player_id")),
+        "id": player_id,
         "name": clean_name(row.get("name")),
         "points": clean_number(row.get("points")),
         "trophies": clean_number(row.get("trophies")),
@@ -502,6 +530,7 @@ def db_get_profile(player_id: str) -> dict[str, Any] | None:
     if not DATABASE_URL:
         return profile_full_row(profiles.get(player_id, {})) if player_id in profiles else None
     with db_connect() as conn, conn.cursor() as cur:
+        persist_owner_entitlements(cur, player_id)
         cur.execute(
             """SELECT player_id,name,points,trophies,coins,move_level,fire_level,hp_level,skin,cosmic_owned,hero_version1,admin_revision,revision,data_version,profile_data
                FROM players WHERE player_id=%s""",
@@ -556,7 +585,7 @@ def db_schema_status() -> dict[str, Any]:
         "matches": matches_count,
         "activeSessions": sessions_count,
         "connectedAt": DB_CONNECTED_AT,
-        "build": "arena-karnet-40-pucharkow-mniej-monet-v15",
+        "build": "mobile-lobby-chat-owner-skin-v16",
     }
 
 
@@ -1247,17 +1276,63 @@ def contains_profanity(text: str) -> bool:
     return bool(PROFANITY_RE.search(normalize_for_moderation(text)))
 
 
+chat_schema_checked_at = 0.0
+chat_schema_guard = threading.Lock()
+
+
+def ensure_chat_schema(force: bool = False) -> None:
+    global chat_schema_checked_at
+    if not DATABASE_URL:
+        return
+    current = now()
+    if not force and current - chat_schema_checked_at < 300:
+        return
+    with chat_schema_guard:
+        current = now()
+        if not force and current - chat_schema_checked_at < 300:
+            return
+        with db_connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                """CREATE TABLE IF NOT EXISTS chat_messages (
+                    id BIGSERIAL PRIMARY KEY,
+                    batch_id VARCHAR(64) NOT NULL,
+                    sender_id VARCHAR(80) NOT NULL REFERENCES accounts(account_id) ON DELETE CASCADE,
+                    recipient_id VARCHAR(80) REFERENCES accounts(account_id) ON DELETE CASCADE,
+                    body VARCHAR(300) NOT NULL,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    is_broadcast BOOLEAN NOT NULL DEFAULT FALSE
+                )"""
+            )
+            cur.execute("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS is_broadcast BOOLEAN NOT NULL DEFAULT FALSE")
+            cur.execute("ALTER TABLE chat_messages ALTER COLUMN recipient_id DROP NOT NULL")
+            cur.execute("CREATE INDEX IF NOT EXISTS chat_messages_users_idx ON chat_messages (sender_id, recipient_id, id DESC)")
+            cur.execute("CREATE INDEX IF NOT EXISTS chat_messages_created_idx ON chat_messages (created_at DESC)")
+        chat_schema_checked_at = current
+
+
+def chat_database_retry(operation: Any) -> Any:
+    ensure_chat_schema()
+    try:
+        return operation()
+    except Exception as first_error:
+        print(f"Naprawa czatu po błędzie SQL: {type(first_error).__name__}: {first_error}")
+        ensure_chat_schema(force=True)
+        return operation()
+
+
 def chat_users(current_id: str, query: str = "") -> list[dict[str, Any]]:
     query_key = query.strip().casefold()
     rows: list[dict[str, Any]] = []
     if DATABASE_URL:
-        with db_connect() as conn, conn.cursor() as cur:
-            if query_key:
-                cur.execute("SELECT account_id, username, EXTRACT(EPOCH FROM banned_until), ban_reason FROM accounts WHERE account_id<>%s AND username_key LIKE %s ORDER BY username_key LIMIT 100", (current_id,f"%{query_key}%"))
-            else:
-                cur.execute("SELECT account_id, username, EXTRACT(EPOCH FROM banned_until), ban_reason FROM accounts WHERE account_id<>%s ORDER BY username_key LIMIT 100", (current_id,))
-            raw = cur.fetchall()
-            rows = [{"account_id":r[0],"username":r[1],"banned_until_ts":float(r[2] or 0),"ban_reason":r[3] or ""} for r in raw]
+        def load_chat_users() -> list[Any]:
+            with db_connect() as conn, conn.cursor() as cur:
+                if query_key:
+                    cur.execute("SELECT account_id, username, EXTRACT(EPOCH FROM banned_until), ban_reason FROM accounts WHERE account_id<>%s AND username_key LIKE %s ORDER BY username_key LIMIT 100", (current_id,f"%{query_key}%"))
+                else:
+                    cur.execute("SELECT account_id, username, EXTRACT(EPOCH FROM banned_until), ban_reason FROM accounts WHERE account_id<>%s ORDER BY username_key LIMIT 100", (current_id,))
+                return cur.fetchall()
+        raw = chat_database_retry(load_chat_users)
+        rows = [{"account_id":r[0],"username":r[1],"banned_until_ts":float(r[2] or 0),"ban_reason":r[3] or ""} for r in raw]
     else:
         rows = [dict(r) for aid,r in local_accounts.items() if aid != current_id and (not query_key or query_key in str(r.get("username_key", "")))]
         rows.sort(key=lambda r:str(r.get("username_key","")))
@@ -1281,11 +1356,13 @@ def chat_send(sender: dict[str, Any], recipients_value: Any, body_value: Any, br
 
     if broadcast:
         if DATABASE_URL:
-            with db_connect() as conn, conn.cursor() as cur:
-                cur.execute(
-                    "INSERT INTO chat_messages (batch_id,sender_id,recipient_id,body,created_at,is_broadcast) VALUES (%s,%s,NULL,%s,TO_TIMESTAMP(%s),TRUE)",
-                    (batch_id, sender["account_id"], body, created),
-                )
+            def save_broadcast() -> None:
+                with db_connect() as conn, conn.cursor() as cur:
+                    cur.execute(
+                        "INSERT INTO chat_messages (batch_id,sender_id,recipient_id,body,created_at,is_broadcast) VALUES (%s,%s,NULL,%s,TO_TIMESTAMP(%s),TRUE)",
+                        (batch_id, sender["account_id"], body, created),
+                    )
+            chat_database_retry(save_broadcast)
         else:
             local_chat_seq += 1
             local_chat_messages.append({
@@ -1311,12 +1388,14 @@ def chat_send(sender: dict[str, Any], recipients_value: Any, body_value: Any, br
         raise ValueError("Wybierz jednego odbiorcę albo przełącz czat na cały serwer.")
 
     if DATABASE_URL:
-        with db_connect() as conn, conn.cursor() as cur:
-            for rid in recipients:
-                cur.execute(
-                    "INSERT INTO chat_messages (batch_id,sender_id,recipient_id,body,created_at,is_broadcast) VALUES (%s,%s,%s,%s,TO_TIMESTAMP(%s),FALSE)",
-                    (batch_id, sender["account_id"], rid, body, created),
-                )
+        def save_private() -> None:
+            with db_connect() as conn, conn.cursor() as cur:
+                for rid in recipients:
+                    cur.execute(
+                        "INSERT INTO chat_messages (batch_id,sender_id,recipient_id,body,created_at,is_broadcast) VALUES (%s,%s,%s,%s,TO_TIMESTAMP(%s),FALSE)",
+                        (batch_id, sender["account_id"], rid, body, created),
+                    )
+        chat_database_retry(save_private)
     else:
         for rid in recipients:
             local_chat_seq += 1
@@ -1336,22 +1415,25 @@ def chat_send(sender: dict[str, Any], recipients_value: Any, body_value: Any, br
 def chat_history(account_id: str, limit: int = CHAT_HISTORY_LIMIT) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
     if DATABASE_URL:
-        with db_connect() as conn, conn.cursor() as cur:
-            cur.execute(
-                """SELECT m.id,m.batch_id,m.sender_id,s.username,m.recipient_id,r.username,m.body,
-                          EXTRACT(EPOCH FROM m.created_at),COALESCE(m.is_broadcast,FALSE)
-                   FROM chat_messages m
-                   JOIN accounts s ON s.account_id=m.sender_id
-                   LEFT JOIN accounts r ON r.account_id=m.recipient_id
-                   WHERE m.sender_id=%s OR m.recipient_id=%s OR COALESCE(m.is_broadcast,FALSE)=TRUE
-                   ORDER BY m.id DESC LIMIT %s""",
-                (account_id, account_id, limit * 4),
-            )
-            records = [{
-                "id": x[0], "batch_id": x[1], "sender_id": x[2], "sender_name": x[3],
-                "recipient_id": x[4], "recipient_name": x[5] or "", "body": x[6],
-                "created_at": float(x[7]), "is_broadcast": bool(x[8]),
-            } for x in cur.fetchall()][::-1]
+        def load_chat_history() -> list[Any]:
+            with db_connect() as conn, conn.cursor() as cur:
+                cur.execute(
+                    """SELECT m.id,m.batch_id,m.sender_id,s.username,m.recipient_id,r.username,m.body,
+                              EXTRACT(EPOCH FROM m.created_at),COALESCE(m.is_broadcast,FALSE)
+                       FROM chat_messages m
+                       JOIN accounts s ON s.account_id=m.sender_id
+                       LEFT JOIN accounts r ON r.account_id=m.recipient_id
+                       WHERE m.sender_id=%s OR m.recipient_id=%s OR COALESCE(m.is_broadcast,FALSE)=TRUE
+                       ORDER BY m.id DESC LIMIT %s""",
+                    (account_id, account_id, limit * 4),
+                )
+                return cur.fetchall()
+        chat_rows = chat_database_retry(load_chat_history)
+        records = [{
+            "id": x[0], "batch_id": x[1], "sender_id": x[2], "sender_name": x[3],
+            "recipient_id": x[4], "recipient_name": x[5] or "", "body": x[6],
+            "created_at": float(x[7]), "is_broadcast": bool(x[8]),
+        } for x in chat_rows][::-1]
     else:
         name_map = {aid: str(r.get("username") or "") for aid, r in local_accounts.items()}
         for m in local_chat_messages:
@@ -1574,7 +1656,7 @@ def init_database() -> None:
         cur.execute("CREATE INDEX IF NOT EXISTS data_audit_account_idx ON data_audit (account_id, created_at DESC)")
         cur.execute(
             "INSERT INTO schema_migrations(version,description) VALUES (%s,%s) ON CONFLICT(version) DO NOTHING",
-            (DB_SCHEMA_VERSION, "Wymuszony trwały zapis wszystkich kont i profili w Neon SQL"),
+            (DB_SCHEMA_VERSION, "Mobilne lobby 2.0, samonaprawiający czat i stałe uprawnienia właściciela"),
         )
         cur.execute(
             """INSERT INTO server_state(key,value,revision,updated_at)
@@ -2816,7 +2898,7 @@ def duel_tick_loop() -> None:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "ArenaStarsSQL/5.0-persistent-neon"
+    server_version = "ArenaStarsSQL/5.1-mobile-chat-owner"
     protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt: str, *args: Any) -> None:
@@ -2923,6 +3005,7 @@ class Handler(BaseHTTPRequestHandler):
                 cur.execute("DELETE FROM account_sessions WHERE expires_at < NOW()")
                 cur.execute("INSERT INTO account_sessions (token_hash,account_id,expires_at) VALUES (%s,%s,TO_TIMESTAMP(%s))", (digest,account_id,expiry))
                 cur.execute("UPDATE accounts SET last_login=NOW() WHERE account_id=%s", (account_id,))
+                persist_owner_entitlements(cur, account_id)
                 cur.execute(
                     """SELECT player_id,name,points,trophies,coins,move_level,fire_level,hp_level,skin,cosmic_owned,hero_version1,admin_revision,revision,data_version,profile_data
                        FROM players WHERE player_id=%s""",
@@ -2997,11 +3080,21 @@ class Handler(BaseHTTPRequestHandler):
             account=self.require_account()
             if not account: return
             q=(parse_qs(parsed.query).get("q") or [""])[0]
-            self.send_json({"ok":True,"users":chat_users(account["account_id"],q)}); return
+            try:
+                self.send_json({"ok":True,"users":chat_users(account["account_id"],q)})
+            except Exception as exc:
+                print(f"Błąd listy czatu: {type(exc).__name__}: {exc}")
+                self.send_json({"error":"Czat nie mógł pobrać listy kont. Serwer spróbuje naprawić bazę przy następnej próbie."}, HTTPStatus.SERVICE_UNAVAILABLE)
+            return
         if parsed.path == "/api/chat/messages":
             account=self.require_account()
             if not account: return
-            self.send_json({"ok":True,"messages":chat_history(account["account_id"])}); return
+            try:
+                self.send_json({"ok":True,"messages":chat_history(account["account_id"])})
+            except Exception as exc:
+                print(f"Błąd historii czatu: {type(exc).__name__}: {exc}")
+                self.send_json({"error":"Czat chwilowo naprawia połączenie z bazą. Spróbuj ponownie za moment."}, HTTPStatus.SERVICE_UNAVAILABLE)
+            return
         if parsed.path == "/api/admin/accounts":
             if not self.require_admin(): return
             q=(parse_qs(parsed.query).get("q") or [""])[0]
@@ -3199,7 +3292,11 @@ class Handler(BaseHTTPRequestHandler):
                 result=chat_send(account,payload.get("recipients"),payload.get("body"),payload.get("broadcast"))
                 if result.get("banned"): self.send_json({"error":"Automatyczny ban za przeklinanie.",**result},HTTPStatus.LOCKED)
                 else: self.send_json(result)
-            except ValueError as exc: self.send_json({"error":str(exc)},HTTPStatus.BAD_REQUEST)
+            except ValueError as exc:
+                self.send_json({"error":str(exc)},HTTPStatus.BAD_REQUEST)
+            except Exception as exc:
+                print(f"Błąd wysyłania czatu: {type(exc).__name__}: {exc}")
+                self.send_json({"error":"Nie udało się wysłać wiadomości. Czat ponownie łączy się z bazą."},HTTPStatus.SERVICE_UNAVAILABLE)
             return
         if parsed.path == "/api/admin/ban":
             if not self.require_admin(): return

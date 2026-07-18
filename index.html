@@ -535,6 +535,180 @@
     .passLegend{padding:0 22px 14px;color:#aebde1;font-size:11px;font-weight:700}.passLegend b{color:#fff}
     @media(max-width:760px){body.mobile-device.lobby-mode #lobbyFullscreenBtn{display:block}#passOpenBtn{left:auto;right:10px;top:170px;bottom:auto;padding:10px 12px;font-size:11px}.passHeader{padding:15px}.passHeader h2{font-size:23px}.passSummary{grid-template-columns:1fr;padding:12px}.passPanel{width:98vw}.passLevelColumn{grid-template-rows:50px 118px 118px 118px}.passGrid{grid-template-columns:repeat(20,140px)}.passTrackLabels{grid-template-rows:50px 118px 118px 118px;width:78px}.passScroller{padding-left:8px}}
 
+
+
+    /* ===== LOBBY MOBILNE 2.0: wszystko mieści się w poziomie bez nachodzenia ===== */
+    @media (pointer:coarse) and (orientation:landscape){
+      body.mobile-device.lobby-mode{
+        position:fixed!important;inset:0!important;width:100vw!important;
+        height:var(--arena-visual-height,100dvh)!important;min-height:0!important;
+        overflow:hidden!important;overscroll-behavior:none!important;
+      }
+      body.mobile-device.lobby-mode #overlay,
+      body.mobile-device.lobby-mode #lobbyView{
+        position:fixed!important;inset:0!important;width:100vw!important;
+        height:var(--arena-visual-height,100dvh)!important;overflow:hidden!important;
+      }
+      body.mobile-device.lobby-mode .lobbyLogo{
+        top:max(5px,env(safe-area-inset-top));font-size:clamp(25px,7.2vh,38px);
+        line-height:.86;pointer-events:none
+      }
+      body.mobile-device.lobby-mode .lobbyLogo small{display:none}
+      body.mobile-device.lobby-mode #lobbyTrophies{
+        left:max(7px,env(safe-area-inset-left));top:max(6px,env(safe-area-inset-top));
+        gap:5px;padding:5px 8px;border-radius:11px
+      }
+      body.mobile-device.lobby-mode .trophyIcon{font-size:17px}
+      body.mobile-device.lobby-mode .trophyText{font-size:7px}
+      body.mobile-device.lobby-mode .trophyText strong{font-size:14px;margin-top:1px}
+      body.mobile-device.lobby-mode #accountBox{
+        right:max(7px,env(safe-area-inset-right));top:max(6px,env(safe-area-inset-top));gap:4px
+      }
+      body.mobile-device.lobby-mode .accountStat{
+        min-width:62px;padding:5px 7px;border-radius:10px;font-size:7px
+      }
+      body.mobile-device.lobby-mode .accountStat strong{font-size:12px;margin-top:1px}
+      body.mobile-device.lobby-mode #accountUser{
+        right:max(7px,env(safe-area-inset-right));top:max(43px,calc(env(safe-area-inset-top) + 40px));
+        max-width:190px;padding:4px 7px;border-radius:9px;font-size:8px;gap:5px
+      }
+      body.mobile-device.lobby-mode #accountLogoutBtn{padding:4px 6px;font-size:8px}
+
+      body.mobile-device.lobby-mode #skinDock{
+        left:max(7px,env(safe-area-inset-left));top:max(61px,calc(env(safe-area-inset-top) + 54px));
+        bottom:166px;width:166px;padding:7px;border-radius:13px;overflow:auto;
+        scrollbar-width:thin;box-shadow:0 10px 24px rgba(0,0,0,.28)
+      }
+      body.mobile-device.lobby-mode #skinShopTitle{font-size:8px;margin:0 0 5px 2px}
+      body.mobile-device.lobby-mode .skinList{gap:4px}
+      body.mobile-device.lobby-mode .skinCard{
+        grid-template-columns:34px 1fr;gap:6px;padding:5px;border-radius:9px;min-height:43px
+      }
+      body.mobile-device.lobby-mode .skinPreview{height:32px;border-radius:8px;font-size:18px}
+      body.mobile-device.lobby-mode .skinName{font-size:9px;line-height:1.05}
+      body.mobile-device.lobby-mode .skinDesc{display:none}
+      body.mobile-device.lobby-mode .skinState{font-size:6px;margin-top:2px;padding:2px 4px}
+      body.mobile-device.lobby-mode #skinNotice{display:none}
+
+      body.mobile-device.lobby-mode #versionDock{
+        left:max(7px,env(safe-area-inset-left));right:auto;top:auto;
+        bottom:58px;width:166px;height:101px;padding:7px;border-radius:13px;overflow:hidden
+      }
+      body.mobile-device.lobby-mode #versionTitle{font-size:7px;margin:0 0 4px 2px}
+      body.mobile-device.lobby-mode .versionCard{padding:6px;border-radius:9px}
+      body.mobile-device.lobby-mode .versionCard h3{font-size:10px;margin:0 0 2px}
+      body.mobile-device.lobby-mode .versionBonuses{display:none}
+      body.mobile-device.lobby-mode .versionPrice{font-size:8px;margin-top:2px}
+      body.mobile-device.lobby-mode .versionBuyBtn{margin-top:4px;padding:6px;font-size:8px;border-radius:8px;box-shadow:0 3px 0 #a95c11}
+      body.mobile-device.lobby-mode #versionNotice{display:none}
+
+      body.mobile-device.lobby-mode #rankingDock{
+        right:max(7px,env(safe-area-inset-right));top:max(61px,calc(env(safe-area-inset-top) + 54px));
+        bottom:58px;width:184px;padding:7px;border-radius:13px
+      }
+      body.mobile-device.lobby-mode .rankingHead{padding:1px 2px 4px}
+      body.mobile-device.lobby-mode .rankingTitle{font-size:8px}
+      body.mobile-device.lobby-mode .rankingLive{font-size:7px}
+      body.mobile-device.lobby-mode .onlineProfile{margin:0 1px 4px;padding:5px;border-radius:8px}
+      body.mobile-device.lobby-mode .onlineMode{font-size:6px}
+      body.mobile-device.lobby-mode .onlineStatus{font-size:7px;margin-top:2px}
+      body.mobile-device.lobby-mode .nicknameRow{margin-top:4px;gap:3px}
+      body.mobile-device.lobby-mode .nicknameRow input{padding:5px;font-size:8px}
+      body.mobile-device.lobby-mode .nicknameRow button{padding:5px;font-size:7px}
+      body.mobile-device.lobby-mode .rankingMe{padding:5px 6px;font-size:7px}
+      body.mobile-device.lobby-mode .rankingMe strong{font-size:9px}
+      body.mobile-device.lobby-mode .rankingTotal{font-size:6px;margin-bottom:3px}
+      body.mobile-device.lobby-mode .rankingColumns,
+      body.mobile-device.lobby-mode .rankingRow{grid-template-columns:28px 1fr 52px;gap:3px}
+      body.mobile-device.lobby-mode .rankingColumns{padding:4px;font-size:6px}
+      body.mobile-device.lobby-mode .rankingRow{min-height:21px;padding:3px 4px;font-size:7px}
+      body.mobile-device.lobby-mode .rankingFoot{display:none}
+
+      body.mobile-device.lobby-mode #heroStage{
+        left:50%;top:45%;width:min(30vw,210px);opacity:.90;pointer-events:none
+      }
+      body.mobile-device.lobby-mode .heroBody{width:43%;border-width:3px}
+      body.mobile-device.lobby-mode .heroOrb{animation:none}
+      body.mobile-device.lobby-mode .heroOrb.o2{transform:translate(78px,-10px)}
+      body.mobile-device.lobby-mode .heroOrb.o3{transform:translate(-74px,22px)}
+
+      body.mobile-device.lobby-mode #savedUpgrades{
+        left:50%;right:auto;bottom:58px;transform:translateX(-50%);
+        width:min(318px,42vw);display:grid;grid-template-columns:repeat(3,1fr);
+        gap:4px;padding:5px;border-radius:11px
+      }
+      body.mobile-device.lobby-mode .savedUpgrade{
+        min-width:0;padding:4px 3px;border-radius:7px;font-size:6px;line-height:1.15
+      }
+      body.mobile-device.lobby-mode .savedUpgrade span{display:block;font-size:6px}
+      body.mobile-device.lobby-mode .savedUpgrade strong{display:block;margin:2px 0 0;font-size:9px}
+
+      body.mobile-device.lobby-mode #chatOpenBtn,
+      body.mobile-device.lobby-mode #passOpenBtn,
+      body.mobile-device.lobby-mode #lobbyFullscreenBtn,
+      body.mobile-device.lobby-mode #adminOpenBtn,
+      body.mobile-device.lobby-mode #modeBtn,
+      body.mobile-device.lobby-mode #playBtn{
+        top:auto!important;bottom:max(8px,env(safe-area-inset-bottom))!important;height:42px!important;
+        min-width:0!important;padding:0 8px!important;border-radius:11px!important;
+        font-size:10px!important;line-height:42px!important;box-shadow:0 4px 0 rgba(12,25,58,.9)!important;
+        transform:none!important;white-space:nowrap
+      }
+      body.mobile-device.lobby-mode #chatOpenBtn{left:max(7px,env(safe-area-inset-left))!important;right:auto!important;width:72px!important}
+      body.mobile-device.lobby-mode #passOpenBtn{left:max(83px,calc(env(safe-area-inset-left) + 76px))!important;width:108px!important}
+      body.mobile-device.lobby-mode #lobbyFullscreenBtn{
+        display:block!important;left:max(195px,calc(env(safe-area-inset-left) + 188px))!important;right:auto!important;width:42px!important;
+        font-size:0!important;padding:0!important
+      }
+      body.mobile-device.lobby-mode #lobbyFullscreenBtn:after{content:'⛶';font-size:18px;line-height:42px}
+      body.mobile-device.lobby-mode #adminOpenBtn{
+        left:max(241px,calc(env(safe-area-inset-left) + 234px))!important;right:auto!important;width:70px!important;
+        overflow:hidden;text-overflow:ellipsis
+      }
+      body.mobile-device.lobby-mode #modeBtn{right:max(143px,calc(env(safe-area-inset-right) + 136px))!important;left:auto!important;width:102px!important}
+      body.mobile-device.lobby-mode #playBtn{right:max(7px,env(safe-area-inset-right))!important;left:auto!important;width:132px!important;font-size:17px!important}
+      body.mobile-device.lobby-mode #modeMenu{
+        right:max(7px,env(safe-area-inset-right));bottom:56px;width:250px;max-height:calc(100dvh - 70px);overflow:auto;padding:8px;border-radius:12px
+      }
+      body.mobile-device.lobby-mode .modeMenuTitle{font-size:8px;margin-bottom:5px}
+      body.mobile-device.lobby-mode .modeOption{grid-template-columns:35px 1fr;gap:7px;padding:7px;border-radius:10px}
+      body.mobile-device.lobby-mode .modeIcon{width:35px;height:35px;font-size:20px}
+      body.mobile-device.lobby-mode .modeName{font-size:10px}
+      body.mobile-device.lobby-mode .modeDesc{font-size:7px}
+      body.mobile-device.lobby-mode .saveNote{display:none!important}
+
+      body.mobile-device.lobby-mode #chatOverlay .chatCard{
+        width:calc(100vw - 12px);height:calc(var(--arena-visual-height,100dvh) - 12px);
+        grid-template-columns:132px 1fr;border-radius:14px
+      }
+      body.mobile-device.lobby-mode #chatOverlay .chatSidebar{padding:7px}
+      body.mobile-device.lobby-mode #chatOverlay .chatModeSwitch{gap:4px;margin:7px 0}
+      body.mobile-device.lobby-mode #chatOverlay .chatModeBtn{padding:6px;font-size:8px}
+      body.mobile-device.lobby-mode #chatOverlay .chatPublicInfo{padding:7px;font-size:8px}
+      body.mobile-device.lobby-mode #chatOverlay .chatSearch{margin:6px 0;padding:7px}
+      body.mobile-device.lobby-mode #chatOverlay .chatHeader{padding:8px 10px;font-size:9px}
+      body.mobile-device.lobby-mode #chatOverlay .chatMessages{padding:8px 10px;gap:5px}
+      body.mobile-device.lobby-mode #chatOverlay .chatMessage{font-size:9px;padding:6px 8px}
+      body.mobile-device.lobby-mode #chatOverlay .chatComposer{padding:7px 9px;gap:6px}
+      body.mobile-device.lobby-mode #chatOverlay .chatComposer textarea{height:42px;padding:7px;font-size:10px}
+      body.mobile-device.lobby-mode #chatOverlay .chatSend{padding:0 12px;font-size:9px}
+    }
+
+    @media (pointer:coarse) and (orientation:landscape) and (max-width:650px){
+      body.mobile-device.lobby-mode #skinDock,
+      body.mobile-device.lobby-mode #versionDock{width:146px}
+      body.mobile-device.lobby-mode #rankingDock{width:158px}
+      body.mobile-device.lobby-mode #heroStage{width:25vw}
+      body.mobile-device.lobby-mode #savedUpgrades{width:250px}
+      body.mobile-device.lobby-mode #chatOpenBtn{width:58px!important;font-size:9px!important}
+      body.mobile-device.lobby-mode #passOpenBtn{left:max(69px,calc(env(safe-area-inset-left) + 62px))!important;width:88px!important;font-size:8px!important}
+      body.mobile-device.lobby-mode #lobbyFullscreenBtn{left:max(161px,calc(env(safe-area-inset-left) + 154px))!important;width:38px!important}
+      body.mobile-device.lobby-mode #adminOpenBtn{left:max(203px,calc(env(safe-area-inset-left) + 196px))!important;width:44px!important;font-size:0!important}
+      body.mobile-device.lobby-mode #adminOpenBtn:after{content:'⚙';font-size:17px}
+      body.mobile-device.lobby-mode #modeBtn{right:max(119px,calc(env(safe-area-inset-right) + 112px))!important;width:84px!important;font-size:8px!important}
+      body.mobile-device.lobby-mode #playBtn{width:110px!important;font-size:14px!important}
+    }
+
   </style>
 </head>
 <body class="lobby-mode">
@@ -1043,6 +1217,6 @@
 </script>
 
 
-<script src="game.js?v=arena-karnet-40-pucharkow-mniej-monet-v15"></script>
+<script src="game.js?v=mobile-lobby-chat-owner-skin-v16"></script>
 </body>
 </html>
