@@ -338,6 +338,10 @@ def profile_full_row(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def profile_from_db_row(row: Any) -> dict[str, Any] | None:
+    return profile_from_db_row(row)
+
+
 def db_get_profile(player_id: str) -> dict[str, Any] | None:
     player_id = clean_id(player_id)
     if not player_id:
@@ -2183,15 +2187,31 @@ class Handler(BaseHTTPRequestHandler):
         return account
 
     def send_account_login(self, account: dict[str, Any]) -> None:
-        token = create_account_session(clean_id(account.get("account_id")))
+        account_id = clean_id(account.get("account_id"))
+        token = secrets.token_urlsafe(36)
+        digest = token_hash(token)
+        expiry = now() + AUTH_SESSION_TTL
+        profile = None
+        if DATABASE_URL:
+            # Jedno połączenie z Neon zamiast kilku kolejnych — logowanie jest znacznie szybsze.
+            with db_connect() as conn, conn.cursor() as cur:
+                cur.execute("DELETE FROM account_sessions WHERE expires_at < NOW()")
+                cur.execute("INSERT INTO account_sessions (token_hash,account_id,expires_at) VALUES (%s,%s,TO_TIMESTAMP(%s))", (digest,account_id,expiry))
+                cur.execute("UPDATE accounts SET last_login=NOW() WHERE account_id=%s", (account_id,))
+                cur.execute(
+                    """SELECT player_id,name,points,trophies,coins,move_level,fire_level,hp_level,skin,cosmic_owned,hero_version1,admin_revision,revision,data_version,profile_data
+                       FROM players WHERE player_id=%s""",
+                    (account_id,),
+                )
+                profile = profile_from_db_row(cur.fetchone())
+        else:
+            local_auth_sessions[digest] = {"account_id":account_id,"expires":expiry}
+            if account_id in local_accounts:
+                local_accounts[account_id]["last_login"] = now()
+                save_account_storage()
+            profile = profile_full_row(profiles.get(account_id,{}))
         secure = bool(os.environ.get("RENDER")) or self.headers.get("X-Forwarded-Proto") == "https"
         cookie = f"arena_session={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age={AUTH_SESSION_TTL}" + ("; Secure" if secure else "")
-        account_mark_login(clean_id(account.get("account_id")))
-        profile = None
-        try:
-            profile = db_get_profile(account["account_id"]) if DATABASE_URL else profile_full_row(profiles.get(account["account_id"],{}))
-        except Exception:
-            profile = None
         self.send_json({"ok":True,"account":account_public(account),"profile":profile}, extra_headers={"Set-Cookie":cookie})
 
     def admin_token(self) -> str:
@@ -2316,7 +2336,7 @@ class Handler(BaseHTTPRequestHandler):
                     with db_connect() as conn, conn.cursor() as cur:
                         cur.execute("SELECT 1")
                         cur.fetchone()
-                self.send_json({"ok": True, "storage": "postgres" if DATABASE_URL else "json", "build": "admin-ban-sync-zip-v5", "schemaVersion": DB_SCHEMA_VERSION if DATABASE_URL else 0})
+                self.send_json({"ok": True, "storage": "postgres" if DATABASE_URL else "json", "build": "login-final-neon-v4", "schemaVersion": DB_SCHEMA_VERSION if DATABASE_URL else 0})
             except Exception as exc:
                 self.send_json({"ok": False, "error": str(exc)}, HTTPStatus.SERVICE_UNAVAILABLE)
             return
@@ -2330,20 +2350,32 @@ class Handler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/api/auth/register":
             try:
-                with lock: account=account_create(payload.get("username"),payload.get("password"),payload.get("playerId"))
+                with lock:
+                    account = account_create(payload.get("username"),payload.get("password"),payload.get("playerId"))
                 self.send_account_login(account)
-            except ValueError as exc: self.send_json({"error":str(exc)}, HTTPStatus.CONFLICT)
-            except Exception as exc: print(f"Błąd rejestracji: {exc}"); self.send_json({"error":"Nie udało się utworzyć konta."}, HTTPStatus.INTERNAL_SERVER_ERROR)
+            except ValueError as exc:
+                self.send_json({"error":str(exc)}, HTTPStatus.CONFLICT)
+            except Exception as exc:
+                print(f"Błąd rejestracji konta: {type(exc).__name__}: {exc}")
+                self.send_json({"error":"Baza kont chwilowo nie odpowiada. Spróbuj ponownie za kilka sekund."}, HTTPStatus.SERVICE_UNAVAILABLE)
             return
         if parsed.path == "/api/auth/login":
             try:
-                _, key=normalize_username(payload.get("username")); account=account_get_by_username(key)
-                if not account or not verify_password(str(payload.get("password") or ""),account["password_hash"],account["password_salt"]):
-                    self.send_json({"error":"Nieprawidłowa nazwa konta lub hasło."}, HTTPStatus.UNAUTHORIZED); return
-                ban=account_ban_payload(account)
-                if ban["banned"]: self.send_json({"error":"Konto jest zbanowane.",**ban}, HTTPStatus.LOCKED); return
+                _, key = normalize_username(payload.get("username"))
+                account = account_get_by_username(key)
+                if not account:
+                    self.send_json({"error":"Takie konto nie istnieje."}, HTTPStatus.NOT_FOUND); return
+                if not verify_password(str(payload.get("password") or ""), account["password_hash"], account["password_salt"]):
+                    self.send_json({"error":"Nieprawidłowe hasło do konta."}, HTTPStatus.UNAUTHORIZED); return
+                ban = account_ban_payload(account)
+                if ban["banned"]:
+                    self.send_json({"error":"Konto jest zbanowane.",**ban}, HTTPStatus.LOCKED); return
                 self.send_account_login(account)
-            except ValueError as exc: self.send_json({"error":str(exc)}, HTTPStatus.BAD_REQUEST)
+            except ValueError as exc:
+                self.send_json({"error":str(exc)}, HTTPStatus.BAD_REQUEST)
+            except Exception as exc:
+                print(f"Błąd logowania konta: {type(exc).__name__}: {exc}")
+                self.send_json({"error":"Baza kont chwilowo nie odpowiada. Spróbuj ponownie za kilka sekund."}, HTTPStatus.SERVICE_UNAVAILABLE)
             return
         if parsed.path == "/api/auth/logout":
             delete_account_session(self.account_token())

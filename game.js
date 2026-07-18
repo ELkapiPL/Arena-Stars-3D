@@ -1055,14 +1055,59 @@ for(const card of ui.skinCards){card.addEventListener('click',()=>selectSkin(car
 const authUI={overlay:$('authOverlay'),card:$('authCard'),banCard:$('banCard'),msg:$('authMsg'),registerUser:$('registerUsername'),registerPassword:$('registerPassword'),registerBtn:$('registerBtn'),loginUser:$('loginUsername'),loginPassword:$('loginPassword'),loginBtn:$('loginBtn'),banReason:$('banReason'),banUntil:$('banUntil'),accountUsername:$('accountUsername'),logout:$('accountLogoutBtn')};
 const chatUI={overlay:$('chatOverlay'),open:$('chatOpenBtn'),close:$('chatCloseBtn'),users:$('chatUsers'),search:$('chatSearch'),header:$('chatHeader'),messages:$('chatMessages'),input:$('chatInput'),send:$('chatSendBtn'),status:$('chatStatus'),badge:$('chatBadge'),modeAll:$('chatModeAll'),modePrivate:$('chatModePrivate'),publicInfo:$('chatPublicInfo'),privatePicker:$('chatPrivatePicker')};
 let currentAccount=null,authFinished=false,chatMode='broadcast',chatRecipientId='',chatRecipientName='',chatPollTimer=0,chatKnownLast=0,chatUnread=0;
-function authMessage(text,bad=false){if(authUI.msg){authUI.msg.textContent=text||'';authUI.msg.style.color=bad?'#ff7890':'#ffdd75';}}
+function authMessage(text,bad=false){if(authUI.msg){authUI.msg.textContent=text||'';authUI.msg.style.color=bad?'#ff9aac':'#ffe08a';authUI.msg.classList.toggle('authError',bad);}}
 function showAccountBan(data){if(!authUI.overlay)return;authUI.overlay.classList.remove('hidden');authUI.card.style.display='none';authUI.banCard.style.display='block';authUI.banReason.textContent=data.banReason||'Blokada konta';const until=Number(data.bannedUntil)||0;authUI.banUntil.textContent=until?`Koniec blokady: ${new Date(until*1000).toLocaleString('pl-PL')}`:'Blokada aktywna';}
 function setAuthPane(name){document.querySelectorAll('.authTab').forEach(x=>x.classList.toggle('active',x.dataset.authTab===name));document.querySelectorAll('.authPane').forEach(x=>x.classList.toggle('active',x.dataset.authPane===name));authMessage('');}
 function applyServerProfile(serverProfile){if(!serverProfile)return;profile={...profile,...serverProfile,data:{...(profile.data||{}),...(serverProfile.data||{})},ownedSkins:{classic:true,cosmic:serverProfile.cosmicOwned===true},heroVersion1:serverProfile.heroVersion1===true,upgrades:{...profile.upgrades,...(serverProfile.upgrades||{})}};if(serverProfile.data?.mode)profile.mode=serverProfile.data.mode;walletCoins=profile.coins||0;saveProgress(false);}
 async function completeAccountLogin(data){currentAccount=data.account;if(!currentAccount)return;const accountId=currentAccount.playerId||currentAccount.id;if(accountId&&accountId!==playerId){localStorage.setItem(PLAYER_ID_KEY,accountId);location.reload();return;}ownerFreeShop=currentAccount.ownerBenefits===true;const adminButton=$('adminOpenBtn');if(adminButton){adminButton.hidden=!ownerFreeShop;adminButton.style.display=ownerFreeShop?'':'none';}profile.name=safePlayerName(currentAccount.username);persistNickname(profile.name);applyServerProfile(data.profile);if(ui.nicknameInput){ui.nicknameInput.value=profile.name;ui.nicknameInput.disabled=true;}if(ui.saveNameBtn){ui.saveNameBtn.disabled=true;ui.saveNameBtn.textContent='NAZWA KONTA';}if(authUI.accountUsername)authUI.accountUsername.textContent=currentAccount.username;authUI.overlay.classList.add('hidden');authUI.card.style.display='block';authUI.banCard.style.display='none';authFinished=true;updateLobby();syncProfile().then(fetchRanking);startChatPolling();}
 async function authBootstrap(){try{const data=await api('/api/auth/status');if(data.authenticated){if(data.account?.banned){showAccountBan(data.account);return;}await completeAccountLogin(data);}else{authUI.overlay.classList.remove('hidden');}}catch(e){authMessage('Serwer kont nie odpowiada. Odśwież stronę za chwilę.',true);}}
-async function authSubmit(kind){authMessage('Łączenie z serwerem…');const register=kind==='register',username=(register?authUI.registerUser:authUI.loginUser).value,password=(register?authUI.registerPassword:authUI.loginPassword).value;try{const data=await api(register?'/api/auth/register':'/api/auth/login',{method:'POST',body:JSON.stringify({username,password,playerId})});await completeAccountLogin(data);}catch(e){authMessage(e.message||'Nie udało się zalogować.',true);}}
-document.querySelectorAll('.authTab').forEach(x=>x.addEventListener('click',()=>setAuthPane(x.dataset.authTab)));authUI.registerBtn?.addEventListener('click',()=>authSubmit('register'));authUI.loginBtn?.addEventListener('click',()=>authSubmit('login'));authUI.logout?.addEventListener('click',async()=>{await api('/api/auth/logout',{method:'POST',body:'{}'}).catch(()=>{});location.reload();});
+let authBusy=false;
+function setAuthButtonBusy(button,busy,label){
+  if(!button)return;
+  button.disabled=busy;
+  button.innerHTML=busy?`<span class="authSpinner"></span>${label}`:label;
+}
+async function authSubmit(kind){
+  if(authBusy)return;
+  const register=kind==='register';
+  const userInput=register?authUI.registerUser:authUI.loginUser;
+  const passInput=register?authUI.registerPassword:authUI.loginPassword;
+  const button=register?authUI.registerBtn:authUI.loginBtn;
+  const normalLabel=register?'UTWÓRZ KONTO':'ZALOGUJ SIĘ';
+  const username=(userInput?.value||'').trim();
+  const password=passInput?.value||'';
+  if(!username){authMessage('Wpisz nazwę konta.',true);userInput?.focus();return;}
+  if(!password){authMessage('Wpisz hasło do konta.',true);passInput?.focus();return;}
+  if(register&&password.length<6){authMessage('Hasło nowego konta musi mieć minimum 6 znaków.',true);passInput?.focus();return;}
+  authBusy=true;
+  setAuthButtonBusy(button,true,register?'TWORZENIE…':'LOGOWANIE…');
+  authMessage('Łączenie z bazą kont. Pierwsze połączenie po uśpieniu serwera może potrwać kilkanaście sekund…');
+  try{
+    const data=await api(register?'/api/auth/register':'/api/auth/login',{
+      method:'POST',
+      body:JSON.stringify({username,password,playerId}),
+      timeoutMs:35000
+    });
+    authMessage('Zalogowano. Wczytywanie profilu…');
+    await completeAccountLogin(data);
+  }catch(e){
+    let message=e?.message||'Nie udało się zalogować.';
+    if(e?.name==='AbortError'||/abort|timeout/i.test(message))message='Serwer odpowiada zbyt długo. Poczekaj 10 sekund i kliknij ZALOGUJ SIĘ ponownie.';
+    else if(e?.status===404)message='Takie konto nie istnieje. Kliknij UTWÓRZ KONTO, jeżeli chcesz je założyć.';
+    else if(e?.status===401)message='Nieprawidłowe hasło do tego konta.';
+    else if(e?.status===503||e?.status===500)message='Baza kont chwilowo nie odpowiada. Poczekaj kilka sekund i spróbuj ponownie.';
+    authMessage(message,true);
+  }finally{
+    authBusy=false;
+    setAuthButtonBusy(button,false,normalLabel);
+  }
+}
+document.querySelectorAll('.authTab').forEach(x=>x.addEventListener('click',event=>{event.preventDefault();setAuthPane(x.dataset.authTab);}));
+authUI.registerBtn?.addEventListener('click',event=>{event.preventDefault();authSubmit('register');});
+authUI.loginBtn?.addEventListener('click',event=>{event.preventDefault();authSubmit('login');});
+authUI.registerPassword?.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();authSubmit('register');}});
+authUI.loginPassword?.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();authSubmit('login');}});
+authUI.logout?.addEventListener('click',async()=>{await api('/api/auth/logout',{method:'POST',body:'{}'}).catch(()=>{});location.reload();});
 
 function chatEscape(value){return escapeRankingName(String(value||''));}
 function setChatMode(mode){

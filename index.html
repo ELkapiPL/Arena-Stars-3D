@@ -317,6 +317,29 @@
     #authOverlay .authTab,
     #authOverlay .authPrimary{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 
+
+    /* Czytelny stan logowania i brak pozornego zawieszenia */
+    .authMsg:not(:empty){
+      min-height:0;
+      margin-top:12px;
+      padding:10px 12px;
+      border-radius:10px;
+      background:rgba(255,221,117,.10);
+      border:1px solid rgba(255,221,117,.30);
+      line-height:1.35;
+    }
+    .authMsg.authError:not(:empty){
+      background:rgba(255,80,110,.12);
+      border-color:rgba(255,100,130,.38);
+    }
+    .authPrimary:disabled{opacity:.62;cursor:wait;filter:saturate(.65)}
+    .authPrimary .authSpinner{
+      display:inline-block;width:13px;height:13px;margin-right:7px;
+      border:2px solid rgba(5,20,43,.25);border-top-color:#06152b;
+      border-radius:50%;vertical-align:-2px;animation:authSpin .75s linear infinite;
+    }
+    @keyframes authSpin{to{transform:rotate(360deg)}}
+
   </style>
 </head>
 <body class="lobby-mode">
@@ -518,101 +541,6 @@
   </div>
 
   <div id="error"></div>
-  <script id="authClickFallback">
-  (() => {
-    const $ = id => document.getElementById(id);
-    const message = (text, bad = false) => {
-      const box = $('authMsg');
-      if (!box) return;
-      box.textContent = text || '';
-      box.style.color = bad ? '#ff7890' : '#ffdd75';
-    };
-
-    const switchPane = name => {
-      document.querySelectorAll('[data-auth-tab]').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.authTab === name);
-      });
-      document.querySelectorAll('[data-auth-pane]').forEach(pane => {
-        pane.classList.toggle('active', pane.dataset.authPane === name);
-      });
-      message('');
-      setTimeout(() => {
-        const input = name === 'login' ? $('loginUsername') : $('registerUsername');
-        input?.focus();
-      }, 0);
-    };
-
-    const getPlayerId = () => {
-      const key = 'arenaStars3D_online_player_id_v1';
-      let id = '';
-      try { id = localStorage.getItem(key) || ''; } catch (_) {}
-      if (!id) {
-        id = globalThis.crypto?.randomUUID?.() ||
-          `player-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-        try { localStorage.setItem(key, id); } catch (_) {}
-      }
-      return id;
-    };
-
-    const submit = async kind => {
-      const register = kind === 'register';
-      const username = $(register ? 'registerUsername' : 'loginUsername')?.value?.trim() || '';
-      const password = $(register ? 'registerPassword' : 'loginPassword')?.value || '';
-      if (!username || !password) {
-        message('Wpisz nazwę konta i hasło.', true);
-        return;
-      }
-      message('Łączenie z serwerem…');
-      const button = $(register ? 'registerBtn' : 'loginBtn');
-      if (button) button.disabled = true;
-      try {
-        const response = await fetch(register ? '/api/auth/register' : '/api/auth/login', {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({username, password, playerId: getPlayerId()})
-        });
-        let data = {};
-        try { data = await response.json(); } catch (_) {}
-        if (!response.ok) throw new Error(data.error || `Błąd serwera: ${response.status}`);
-        message('Zalogowano. Wczytywanie gry…');
-        location.reload();
-      } catch (error) {
-        message(error?.message || 'Nie udało się zalogować.', true);
-        if (button) button.disabled = false;
-      }
-    };
-
-    document.querySelectorAll('[data-auth-tab]').forEach(btn => {
-      btn.addEventListener('click', event => {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        switchPane(btn.dataset.authTab);
-      }, true);
-    });
-
-    $('registerBtn')?.addEventListener('click', event => {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      submit('register');
-    }, true);
-
-    $('loginBtn')?.addEventListener('click', event => {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      submit('login');
-    }, true);
-
-    ['registerPassword', 'loginPassword'].forEach(id => {
-      $(id)?.addEventListener('keydown', event => {
-        if (event.key !== 'Enter') return;
-        event.preventDefault();
-        submit(id.startsWith('register') ? 'register' : 'login');
-      }, true);
-    });
-  })();
-  </script>
-
-  <script src="game.js?v=mobile-login-click-fix-v2"></script>
+<script src="game.js?v=login-final-neon-v4"></script>
 </body>
 </html>
