@@ -112,13 +112,37 @@ function setArenaVisualViewportVars(){
 function refreshMobileViewportLayout(){
   if(!isMobileDevice)return;
   setArenaVisualViewportVars();
-  try{window.scrollTo(0,1);}catch(_){try{window.scrollTo({top:1,left:0,behavior:'instant'});}catch(__){}}
   const portrait=(window.visualViewport?.height||innerHeight)>(window.visualViewport?.width||innerWidth);
   mobilePortraitBlocked=portrait;
   document.body.classList.add('mobile-device');
   document.body.classList.toggle('mobile-portrait',portrait);
   if(portrait)resetMobileInput();
-  try{resize();}catch(_){}}
+  try{resize();}catch(_){}
+}
+function waitForStableMobileViewport(maxWait=1300){
+  if(!isMobileDevice)return Promise.resolve();
+  return new Promise(resolve=>{
+    const started=performance.now();
+    let last='',stableCount=0;
+    const check=()=>{
+      const v=window.visualViewport;
+      const state=[
+        Math.round(v?.width||innerWidth||0),
+        Math.round(v?.height||innerHeight||0),
+        Math.round(v?.offsetLeft||0),
+        Math.round(v?.offsetTop||0)
+      ].join(':');
+      if(state===last)stableCount++;else{last=state;stableCount=0;}
+      refreshMobileViewportLayout();
+      if(stableCount>=3||performance.now()-started>=maxWait){
+        refreshMobileViewportLayout();
+        resolve();
+      }else setTimeout(check,70);
+    };
+    check();
+  });
+}
+
 function scheduleMobileViewportRefresh(){
   if(!isMobileDevice)return;
   const burst=[0,40,120,260,520,900];
@@ -149,7 +173,6 @@ async function requestMobileFullscreen(){
   }catch(_){}
   const active=mobileFullscreenActive();
   document.body.classList.toggle('mobile-fullscreen',active);
-  try{window.scrollTo({top:1,left:0,behavior:'instant'});}catch(_){try{window.scrollTo(0,1);}catch(__){}}
   scheduleMobileViewportRefresh();
   return active;
 }
@@ -163,7 +186,6 @@ async function requestLandscapeOrientation(fullscreen=false){
       if(lock&&typeof lock.then==='function')await settleWithin(lock,450,false);
     }
   }catch(_){}
-  try{window.scrollTo(0,1);}catch(_){}
   updateMobileOrientation();
   return fullscreenResult;
 }
@@ -190,19 +212,21 @@ async function continueFromMobileFullscreenGate(event){
   pendingMobileGameStart=null;
   if(ui.mobileFullscreenStartBtn){
     ui.mobileFullscreenStartBtn.disabled=true;
-    ui.mobileFullscreenStartBtn.textContent='URUCHAMIANIE…';
+    ui.mobileFullscreenStartBtn.textContent=mode==='lobby'?'DOPASOWYWANIE EKRANU…':'URUCHAMIANIE…';
   }
   try{
-    // Wywołanie pełnego ekranu zaczyna się bezpośrednio po dotknięciu,
-    // ale nie blokujemy lobby na przeglądarkach, które nie kończą tej obietnicy.
     const orientationTask=requestLandscapeOrientation(true);
-    hideMobileFullscreenGate();
-    callback?.();
-    requestAnimationFrame(()=>{
+    if(mode==='game'){
       hideMobileFullscreenGate();
-      scheduleMobileViewportRefresh();
-    });
-    await settleWithin(orientationTask,1250,false);
+      callback?.();
+    }
+    await settleWithin(orientationTask,1350,false);
+    await waitForStableMobileViewport(1400);
+    scheduleMobileViewportRefresh();
+    if(mode==='lobby'){
+      callback?.();
+      hideMobileFullscreenGate();
+    }
   }finally{
     hideMobileFullscreenGate();
     scheduleMobileViewportRefresh();
@@ -213,6 +237,7 @@ async function continueFromMobileFullscreenGate(event){
     }
   }
 }
+
 function setStickPosition(stick,knob,clientX,clientY){
   const r=stick.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2,max=r.width*.34;
   let dx=clientX-cx,dy=clientY-cy,dist=Math.hypot(dx,dy);

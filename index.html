@@ -1000,6 +1000,29 @@
       body.lobby-mode #playBtn{width:108px!important;font-size:14px!important}
     }
 
+
+
+    /* ===== V23: lobby przywiązane do faktycznie widocznego obszaru telefonu ===== */
+    /* Android podczas wchodzenia w fullscreen chwilowo przesuwa visualViewport. */
+    /* Używamy więc nie tylko jego wysokości, ale również offsetTop/offsetLeft. */
+    @media (orientation:landscape) and (max-height:760px){
+      body.mobile-device.lobby-mode #overlay,
+      body.mobile-device.lobby-mode #lobbyView{
+        position:fixed!important;
+        inset:auto!important;
+        left:var(--arena-visual-left,0px)!important;
+        top:var(--arena-visual-top,0px)!important;
+        right:auto!important;
+        bottom:auto!important;
+        width:var(--arena-visual-width,100vw)!important;
+        height:var(--arena-visual-height,100dvh)!important;
+        min-width:0!important;
+        min-height:0!important;
+        overflow:hidden!important;
+        transform:none!important;
+      }
+    }
+
   </style>
 </head>
 <body class="lobby-mode">
@@ -1569,6 +1592,6 @@
 </script>
 
 
-<script src="game.js?v=arena-mobile-fullscreen-layout-v22"></script>
+<script src="game.js?v=arena-mobile-viewport-offset-fix-v23"></script>
 </body>
 </html>
