@@ -709,6 +709,26 @@
       body.mobile-device.lobby-mode #playBtn{width:110px!important;font-size:14px!important}
     }
 
+  
+
+    /* Sklep lobby: monety i skiny */
+    #skinDock{padding:0!important;background:transparent!important;border:0!important;box-shadow:none!important;overflow:visible!important}
+    #storeOpenBtn{width:100%;min-height:92px;display:grid;grid-template-columns:54px 1fr 20px;align-items:center;gap:10px;padding:13px;border:1px solid rgba(255,255,255,.2);border-radius:20px;background:linear-gradient(145deg,rgba(27,55,101,.96),rgba(58,24,92,.96));color:#fff;text-align:left;cursor:pointer;box-shadow:0 16px 42px rgba(0,0,0,.38),inset 0 0 24px rgba(93,229,255,.08);transition:.16s}
+    #storeOpenBtn:hover{transform:translateY(-2px);border-color:#79eaff;box-shadow:0 18px 48px rgba(0,0,0,.42),0 0 24px rgba(88,222,255,.16)}#storeOpenBtn:active{transform:translateY(2px)}
+    .storeDockIcon{width:52px;height:52px;display:grid;place-items:center;border-radius:15px;background:linear-gradient(145deg,#65efff,#8158ff 58%,#ff5daf);font-size:28px;box-shadow:inset 0 0 14px rgba(255,255,255,.25)}.storeDockText b{display:block;font-size:18px;letter-spacing:.08em}.storeDockText small{display:block;margin-top:5px;color:#c8d8ff;font-size:9px;font-weight:1000;letter-spacing:.08em}.storeDockArrow{font-size:30px;color:#8cecff;font-weight:1000}
+    #storeOverlay{display:none;position:fixed;inset:0;z-index:78;padding:18px;background:radial-gradient(circle at 50% 0,rgba(38,181,255,.24),transparent 42%),radial-gradient(circle at 80% 80%,rgba(184,64,255,.2),transparent 38%),rgba(2,6,18,.94);backdrop-filter:blur(14px);color:#f5f8ff;overflow:auto}
+    #storeOverlay.open{display:grid;place-items:center}
+    .storePanel{width:min(1120px,96vw);max-height:min(860px,94vh);display:flex;flex-direction:column;border:1px solid rgba(255,255,255,.2);border-radius:25px;background:linear-gradient(145deg,rgba(13,23,55,.99),rgba(8,12,31,.99));box-shadow:0 30px 90px rgba(0,0,0,.6);overflow:hidden}
+    .storeHeader{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:20px 22px;background:linear-gradient(110deg,rgba(19,152,210,.48),rgba(98,62,201,.54),rgba(255,79,165,.26));border-bottom:1px solid rgba(255,255,255,.16)}.storeHeader h2{margin:0;font-size:28px;letter-spacing:.035em}.storeHeader p{margin:6px 0 0;color:#c8d6f5;font-size:12px;font-weight:800}.storeClose{width:42px;height:42px;border:0;border-radius:12px;background:#ff5275;color:#fff;font-size:20px;font-weight:1000;cursor:pointer}
+    .storeTabs{display:flex;gap:8px;padding:13px 18px 0}.storeTab{min-width:150px;padding:11px 16px;border:1px solid rgba(255,255,255,.14);border-radius:12px 12px 0 0;background:#151f42;color:#b9c9ed;font-size:12px;font-weight:1000;cursor:pointer}.storeTab.active{background:linear-gradient(180deg,#2b5f9e,#253665);color:#fff;border-color:rgba(112,229,255,.5);box-shadow:inset 0 -3px 0 #65eaff}
+    .storeBody{padding:18px;overflow:auto;-webkit-overflow-scrolling:touch}.storePane{display:none}.storePane.active{display:block}.coinShopIntro,.storeSectionTitle{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:14px;padding:11px 13px;border-radius:13px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);font-size:11px;color:#aebfe4}.coinShopIntro b,.storeSectionTitle b{color:#fff;font-size:12px;letter-spacing:.06em}
+    .coinGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:13px}.coinCard{position:relative;min-height:310px;display:flex;flex-direction:column;align-items:center;text-align:center;padding:48px 14px 15px;border-radius:20px;background:linear-gradient(155deg,rgba(27,45,82,.98),rgba(15,22,49,.98));border:2px solid rgba(255,255,255,.1);box-shadow:0 16px 35px rgba(0,0,0,.28);overflow:hidden}.coinCard.popular{border-color:rgba(255,213,75,.52)}.coinCard.best{border-color:#8af4ff;background:linear-gradient(155deg,rgba(36,70,114,.98),rgba(63,26,101,.98));box-shadow:0 18px 44px rgba(34,190,255,.16)}
+    .coinSaving{position:absolute;left:0;right:0;top:0;padding:9px 6px;background:linear-gradient(90deg,#56e9bd,#38b884);color:#05251b;font-size:10px;font-weight:1000;letter-spacing:.02em}.coinSaving.base{background:linear-gradient(90deg,#526681,#37455f);color:#dce8ff}.coinBestBadge{position:absolute;right:-35px;top:54px;transform:rotate(38deg);width:150px;padding:5px;background:#ffcf43;color:#281600;font-size:8px;font-weight:1000}.coinIcon{font-size:50px;filter:drop-shadow(0 8px 15px rgba(255,202,45,.25))}.coinAmount{margin-top:8px;font-size:32px;line-height:1;color:#ffe16d}.coinLabel{margin-top:4px;font-size:10px;font-weight:1000;letter-spacing:.14em;color:#aebfe2}.coinPrice{margin-top:16px;font-size:25px;font-weight:1000;color:#fff}.coinCompare{min-height:34px;margin-top:6px;font-size:9px;line-height:1.35;color:#9fb0d2}.coinCompare s{color:#ff9cae}.coinBuyBtn{width:100%;margin-top:auto;padding:12px;border:0;border-radius:12px;background:linear-gradient(180deg,#ffe96b,#ffad2d);color:#281400;font-size:12px;font-weight:1000;cursor:pointer;box-shadow:0 5px 0 #a85b13}.coinBuyBtn:hover{filter:brightness(1.07)}.coinBuyBtn:active{transform:translateY(3px);box-shadow:0 2px 0 #a85b13}.coinBuyBtn.unconfigured{background:linear-gradient(180deg,#65738d,#424e66);color:#d5dded;box-shadow:0 4px 0 #283243}
+    .storeMessage{min-height:24px;margin-top:12px;color:#ffdf83;font-size:11px;font-weight:900;text-align:center}.storeMessage.good{color:#78efad}.storePaymentNote{margin:2px auto 0;max-width:780px;text-align:center;color:#8496bc;font-size:9px;line-height:1.45}.storeSkinList{grid-template-columns:repeat(3,minmax(0,1fr));gap:13px}.storeSkinList .skinCard{grid-template-columns:64px 1fr;min-height:105px;padding:13px}.storeSkinList .skinPreview{height:64px;font-size:32px}.storeSkinList .skinName{font-size:14px}.storeSkinList .skinDesc{font-size:10px}
+    body.mobile-device.arena-playing #storeOverlay{display:none!important}
+    @media(max-width:850px){.coinGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.storeSkinList{grid-template-columns:1fr}.storePanel{max-height:96vh}.storeHeader h2{font-size:23px}}
+    @media(pointer:coarse) and (orientation:landscape){body.mobile-device.lobby-mode #skinDock{left:max(7px,env(safe-area-inset-left))!important;top:max(61px,calc(env(safe-area-inset-top) + 54px))!important;bottom:auto!important;width:146px!important;height:auto!important;padding:0!important;overflow:visible!important}body.mobile-device.lobby-mode #storeOpenBtn{min-height:54px!important;grid-template-columns:35px 1fr 12px;gap:5px;padding:6px;border-radius:11px}body.mobile-device.lobby-mode .storeDockIcon{width:34px;height:34px;border-radius:9px;font-size:18px}body.mobile-device.lobby-mode .storeDockText b{font-size:11px}body.mobile-device.lobby-mode .storeDockText small{font-size:6px;margin-top:2px}body.mobile-device.lobby-mode .storeDockArrow{font-size:18px}body.mobile-device #storeOverlay{height:var(--arena-visual-height,100dvh);padding:6px;overscroll-behavior:contain}body.mobile-device .storePanel{width:calc(100vw - 12px);max-height:calc(var(--arena-visual-height,100dvh) - 12px);border-radius:14px}body.mobile-device .storeHeader{padding:9px 11px}body.mobile-device .storeHeader h2{font-size:16px}body.mobile-device .storeHeader p{font-size:8px;margin-top:2px}body.mobile-device .storeClose{width:32px;height:32px;font-size:15px}body.mobile-device .storeTabs{padding:7px 8px 0}body.mobile-device .storeTab{min-width:100px;padding:7px;font-size:8px}body.mobile-device .storeBody{padding:8px}body.mobile-device .coinShopIntro,body.mobile-device .storeSectionTitle{margin-bottom:7px;padding:6px;font-size:7px}body.mobile-device .coinShopIntro b,body.mobile-device .storeSectionTitle b{font-size:8px}body.mobile-device .coinGrid{grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}body.mobile-device .coinCard{min-height:190px;padding:29px 6px 7px;border-radius:11px}body.mobile-device .coinSaving{padding:5px 2px;font-size:6px}body.mobile-device .coinBestBadge{display:none}body.mobile-device .coinIcon{font-size:27px}body.mobile-device .coinAmount{font-size:18px;margin-top:3px}body.mobile-device .coinLabel{font-size:6px}body.mobile-device .coinPrice{font-size:15px;margin-top:7px}body.mobile-device .coinCompare{font-size:6px;min-height:26px}body.mobile-device .coinBuyBtn{padding:7px 3px;font-size:7px;border-radius:7px;box-shadow:0 3px 0 #a85b13}body.mobile-device .storeMessage{font-size:7px;margin-top:5px;min-height:12px}body.mobile-device .storePaymentNote{font-size:6px}body.mobile-device .storeSkinList{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}body.mobile-device .storeSkinList .skinCard{grid-template-columns:37px 1fr;min-height:58px;padding:6px}body.mobile-device .storeSkinList .skinPreview{height:37px;font-size:19px}body.mobile-device .storeSkinList .skinName{font-size:8px}body.mobile-device .storeSkinList .skinDesc{font-size:6px;display:block}body.mobile-device .storeSkinList .skinState{font-size:6px}}
+
   </style>
 </head>
 <body class="lobby-mode">
@@ -759,13 +779,11 @@
       <div id="accountBox"><div class="accountStat">PUNKTY ⭐<strong id="savedPoints">0</strong></div><div class="accountStat">MONETY 🪙<strong id="savedCoins">0</strong></div><div id="ownerFreeBadge" class="accountStat" style="display:none;border-color:#ffe36b;color:#fff2a8">WŁAŚCICIEL<strong style="font-size:11px">WSZYSTKO ZA DARMO</strong></div></div><div id="accountUser"><span id="accountUsername">—</span><button id="accountLogoutBtn">WYLOGUJ</button></div>
       <div class="lobbyLogo">ARENA<br>STARS 3D<small>ONLINE • TRYBY GRY</small></div>
       <aside id="skinDock">
-        <div id="skinShopTitle">PRZEBRANIA</div>
-        <div class="skinList">
-          <div class="skinCard" data-skin="classic" role="button" tabindex="0"><div class="skinPreview">💧</div><div><div class="skinName">Błękitny Bohater</div><div class="skinDesc">Klasyczny wygląd wojownika.</div><span class="skinState">WYBIERZ</span></div></div>
-          <div class="skinCard" data-skin="cosmic" role="button" tabindex="0"><div class="skinPreview">🪐</div><div><div class="skinName">Kosmiczny Strażnik</div><div class="skinDesc">Pancerz, wizjer i orbitujące gwiazdy. <span class="skinPrice">Cena: 1250 monet</span></div><span class="skinState">🔒 1250 🪙</span></div></div>
-          <div class="skinCard" data-skin="arena_vip_plus" role="button" tabindex="0"><div class="skinPreview">🔥</div><div><div class="skinName">Neonowy Władca Areny</div><div class="skinDesc">Ekskluzywna ognisto-neonowa skórka z 20. poziomu Arena Karnetu VIP+.</div><span class="skinState">🔒 VIP+ POZIOM 20</span></div></div>
-        </div>
-        <div id="skinNotice" aria-live="polite"></div>
+        <button id="storeOpenBtn" type="button" aria-haspopup="dialog" aria-controls="storeOverlay">
+          <span class="storeDockIcon">🛒</span>
+          <span class="storeDockText"><b>SKLEP</b><small>MONETY • SKINY</small></span>
+          <span class="storeDockArrow">›</span>
+        </button>
       </aside>
       <aside id="versionDock">
         <div id="versionTitle">LEPSZE WERSJE</div>
@@ -859,6 +877,50 @@
       <div id="authMsg" class="authMsg" aria-live="polite"></div>
     </section>
     <section id="banCard" class="authCard banCard" style="display:none"><div class="banIcon">⛔</div><h2>Konto zablokowane</h2><strong id="banReason"></strong><div id="banUntil"></div><small>Po wygaśnięciu blokady odśwież stronę.</small></section>
+  </div>
+
+
+  <div id="storeOverlay" aria-hidden="true">
+    <section class="storePanel" role="dialog" aria-modal="true" aria-label="Sklep Arena Stars">
+      <header class="storeHeader">
+        <div><h2>🛒 SKLEP ARENA STARS</h2><p>Pakiety monet i wszystkie skiny w jednym miejscu.</p></div>
+        <button id="storeCloseBtn" class="storeClose" type="button" aria-label="Zamknij sklep">✕</button>
+      </header>
+      <div class="storeTabs" role="tablist" aria-label="Kategorie sklepu">
+        <button class="storeTab active" data-store-tab="coins" type="button" role="tab" aria-selected="true">🪙 MONETY</button>
+        <button class="storeTab" data-store-tab="skins" type="button" role="tab" aria-selected="false">🎨 SKINY</button>
+      </div>
+      <div class="storeBody">
+        <section class="storePane active" data-store-pane="coins">
+          <div class="coinShopIntro"><b>WIĘKSZY PAKIET = WIĘCEJ OSZCZĘDNOŚCI</b><span>Oszczędność jest liczona względem pakietu 5000 monet za 4 zł.</span></div>
+          <div class="coinGrid">
+            <article class="coinCard" data-coin-card="coins_5000">
+              <div class="coinSaving base">PAKIET PODSTAWOWY</div><div class="coinIcon">🪙</div><strong class="coinAmount">5 000</strong><span class="coinLabel">MONET</span><div class="coinPrice">4 ZŁ</div><div class="coinCompare">Cena bazowa</div><button class="coinBuyBtn" data-coin-pack="coins_5000" type="button">KUP ZA 4 ZŁ</button>
+            </article>
+            <article class="coinCard" data-coin-card="coins_10000">
+              <div class="coinSaving">OSZCZĘDZASZ 1 ZŁ • 13%</div><div class="coinIcon">🪙</div><strong class="coinAmount">10 000</strong><span class="coinLabel">MONET</span><div class="coinPrice">7 ZŁ</div><div class="coinCompare"><s>8 zł</s> przy dwóch małych pakietach</div><button class="coinBuyBtn" data-coin-pack="coins_10000" type="button">KUP ZA 7 ZŁ</button>
+            </article>
+            <article class="coinCard popular" data-coin-card="coins_20000">
+              <div class="coinSaving">OSZCZĘDZASZ 3 ZŁ • 19%</div><div class="coinIcon">🪙</div><strong class="coinAmount">20 000</strong><span class="coinLabel">MONET</span><div class="coinPrice">13 ZŁ</div><div class="coinCompare"><s>16 zł</s> przy czterech małych pakietach</div><button class="coinBuyBtn" data-coin-pack="coins_20000" type="button">KUP ZA 13 ZŁ</button>
+            </article>
+            <article class="coinCard best" data-coin-card="coins_40000">
+              <div class="coinSaving">OSZCZĘDZASZ 7 ZŁ • 22%</div><div class="coinBestBadge">NAJLEPSZA OFERTA</div><div class="coinIcon">💰</div><strong class="coinAmount">40 000</strong><span class="coinLabel">MONET</span><div class="coinPrice">25 ZŁ</div><div class="coinCompare"><s>32 zł</s> przy ośmiu małych pakietach</div><button class="coinBuyBtn" data-coin-pack="coins_40000" type="button">KUP ZA 25 ZŁ</button>
+            </article>
+          </div>
+          <div id="coinShopMessage" class="storeMessage" aria-live="polite"></div>
+          <p class="storePaymentNote">Płatność otwiera się w bezpiecznej stronie operatora. Monety są przypisywane do zalogowanego konta po potwierdzeniu płatności przez administratora.</p>
+        </section>
+        <section class="storePane" data-store-pane="skins">
+          <div class="storeSectionTitle"><b>SKINY BOHATERA</b><span>Odblokuj lub wybierz wygląd używany w grze.</span></div>
+          <div class="skinList storeSkinList">
+            <div class="skinCard" data-skin="classic" role="button" tabindex="0"><div class="skinPreview">💧</div><div><div class="skinName">Błękitny Bohater</div><div class="skinDesc">Klasyczny wygląd wojownika.</div><span class="skinState">WYBIERZ</span></div></div>
+            <div class="skinCard" data-skin="cosmic" role="button" tabindex="0"><div class="skinPreview">🪐</div><div><div class="skinName">Kosmiczny Strażnik</div><div class="skinDesc">Pancerz, wizjer i orbitujące gwiazdy. <span class="skinPrice">Cena: 1250 monet</span></div><span class="skinState">🔒 1250 🪙</span></div></div>
+            <div class="skinCard" data-skin="arena_vip_plus" role="button" tabindex="0"><div class="skinPreview">🔥</div><div><div class="skinName">Neonowy Władca Areny</div><div class="skinDesc">Ekskluzywna ognisto-neonowa skórka z 20. poziomu Arena Karnetu VIP+.</div><span class="skinState">🔒 VIP+ POZIOM 20</span></div></div>
+          </div>
+          <div id="skinNotice" class="storeMessage" aria-live="polite"></div>
+        </section>
+      </div>
+    </section>
   </div>
 
   <div id="passOverlay" aria-hidden="true">
@@ -1217,6 +1279,6 @@
 </script>
 
 
-<script src="game.js?v=email-password-reset-v18"></script>
+<script src="game.js?v=arena-shop-coins-v19"></script>
 </body>
 </html>

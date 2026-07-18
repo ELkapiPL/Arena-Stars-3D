@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-window.__arenaBuild='chat-render-fixed-v17';
+window.__arenaBuild='arena-shop-coins-v19';
 
 const canvas = document.getElementById('game');
 const earlyMobileHint=((navigator.maxTouchPoints||0)>0&&matchMedia('(pointer: coarse)').matches)||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
@@ -18,10 +18,13 @@ const ui = {
   score:$('score'), wave:$('wave'), kills:$('kills'), coins:$('coins'), trophies:$('trophies'), healthText:$('healthText'), healthFill:$('healthFill'), ammoText:$('ammoText'), ammoFill:$('ammoFill'),
   superText:$('superText'), superFill:$('superFill'), hyperText:$('hyperText'), hyperFill:$('hyperFill'), finalScore:$('finalScore'), finalKills:$('finalKills'), finalCoins:$('finalCoins'), finalTrophies:$('finalTrophies'),
   savedTrophies:$('savedTrophies'), savedPoints:$('savedPoints'), savedCoins:$('savedCoins'), skinNotice:$('skinNotice'), versionOneBtn:$('versionOneBtn'), versionNotice:$('versionNotice'), rankingBody:$('rankingBody'), rankingPosition:$('rankingPosition'), rankingLive:$('rankingLive'), rankingTotal:$('rankingTotal'), nicknameInput:$('nicknameInput'), saveNameBtn:$('saveNameBtn'), onlineStatus:$('onlineStatus'), onlineHudCount:$('onlineHudCount'), modeBtn:$('modeBtn'), modeMenu:$('modeMenu'), soloModeOption:$('soloModeOption'), duelModeOption:$('duelModeOption'), duelQueueView:$('duelQueueView'), duelQueueText:$('duelQueueText'), duelCancelBtn:$('duelCancelBtn'), duelOpponentName:$('duelOpponentName'), duelOpponentHp:$('duelOpponentHp'), hudModeText:$('hudModeText'), gameOverTitle:$('gameOverTitle'), gameOverBadge:$('gameOverBadge'), endStats:$('endStats'),
-  crosshair:$('crosshair'), centerMsg:$('centerMsg'), mobileControls:$('mobileControls'), mobileMoveStick:$('mobileMoveStick'), mobileMoveKnob:$('mobileMoveKnob'), mobileAttackStick:$('mobileAttackStick'), mobileAttackKnob:$('mobileAttackKnob'), mobileSuperBtn:$('mobileSuperBtn'), mobileHyperBtn:$('mobileHyperBtn'), rotatePhoneOverlay:$('rotatePhoneOverlay'), rotateLockBtn:$('rotateLockBtn'), mobileFullscreenGate:$('mobileFullscreenGate'), mobileFullscreenStartBtn:$('mobileFullscreenStartBtn'), mobileFullscreenTitle:$('mobileFullscreenTitle'), mobileFullscreenText:$('mobileFullscreenText'), lobbyFullscreenBtn:$('lobbyFullscreenBtn'), passOpenBtn:$('passOpenBtn'), passOverlay:$('passOverlay'), passCloseBtn:$('passCloseBtn'), passGrid:$('passGrid'), passPointsText:$('passPointsText'), passTierBadge:$('passTierBadge'), passProgressFill:$('passProgressFill'), passNextText:$('passNextText'), passBuyVipBtn:$('passBuyVipBtn'), passBuyVipPlusBtn:$('passBuyVipPlusBtn'), passClaimAllBtn:$('passClaimAllBtn'), passMessage:$('passMessage'),
+  crosshair:$('crosshair'), centerMsg:$('centerMsg'), mobileControls:$('mobileControls'), mobileMoveStick:$('mobileMoveStick'), mobileMoveKnob:$('mobileMoveKnob'), mobileAttackStick:$('mobileAttackStick'), mobileAttackKnob:$('mobileAttackKnob'), mobileSuperBtn:$('mobileSuperBtn'), mobileHyperBtn:$('mobileHyperBtn'), rotatePhoneOverlay:$('rotatePhoneOverlay'), rotateLockBtn:$('rotateLockBtn'), mobileFullscreenGate:$('mobileFullscreenGate'), mobileFullscreenStartBtn:$('mobileFullscreenStartBtn'), mobileFullscreenTitle:$('mobileFullscreenTitle'), mobileFullscreenText:$('mobileFullscreenText'), lobbyFullscreenBtn:$('lobbyFullscreenBtn'), passOpenBtn:$('passOpenBtn'), passOverlay:$('passOverlay'), passCloseBtn:$('passCloseBtn'), passGrid:$('passGrid'), passPointsText:$('passPointsText'), passTierBadge:$('passTierBadge'), passProgressFill:$('passProgressFill'), passNextText:$('passNextText'), passBuyVipBtn:$('passBuyVipBtn'), passBuyVipPlusBtn:$('passBuyVipPlusBtn'), passClaimAllBtn:$('passClaimAllBtn'), passMessage:$('passMessage'), storeOpenBtn:$('storeOpenBtn'), storeOverlay:$('storeOverlay'), storeCloseBtn:$('storeCloseBtn'), coinShopMessage:$('coinShopMessage'),
   upgradeButtons:[...document.querySelectorAll('[data-upgrade]')],
   persistentLevelEls:[...document.querySelectorAll('[data-persistent-level]')],
-  skinCards:[...document.querySelectorAll('[data-skin]')]
+  skinCards:[...document.querySelectorAll('[data-skin]')],
+  storeTabs:[...document.querySelectorAll('[data-store-tab]')],
+  storePanes:[...document.querySelectorAll('[data-store-pane]')],
+  coinPackButtons:[...document.querySelectorAll('[data-coin-pack]')]
 };
 
 // ---------- Minimalna matematyka 3D ----------
@@ -1167,6 +1170,58 @@ ui.lobbyBtn?.addEventListener('click',showLobby);
 for(const button of ui.upgradeButtons)button.addEventListener('click',()=>buyUpgrade(button.dataset.upgrade));
 for(const card of ui.skinCards){card.addEventListener('click',()=>selectSkin(card.dataset.skin));card.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();selectSkin(card.dataset.skin);}});}
 
+
+
+
+
+// ---------- Sklep: pakiety monet i skiny ----------
+let coinShopCatalog=null;
+function setCoinShopMessage(text='',bad=false){
+  if(!ui.coinShopMessage)return;
+  ui.coinShopMessage.textContent=text;
+  ui.coinShopMessage.classList.toggle('good',!bad&&!!text);
+  ui.coinShopMessage.style.color=bad?'#ff9aac':'';
+}
+function switchStoreTab(tab='coins'){
+  const wanted=tab==='skins'?'skins':'coins';
+  for(const button of ui.storeTabs){const active=button.dataset.storeTab===wanted;button.classList.toggle('active',active);button.setAttribute('aria-selected',active?'true':'false');}
+  for(const pane of ui.storePanes)pane.classList.toggle('active',pane.dataset.storePane===wanted);
+}
+function storeOpen(open=true,tab='coins'){
+  if(!ui.storeOverlay)return;
+  ui.storeOverlay.classList.toggle('open',open);
+  ui.storeOverlay.setAttribute('aria-hidden',open?'false':'true');
+  if(open){switchStoreTab(tab);setCoinShopMessage('');loadCoinShopCatalog();}
+}
+function renderCoinShopCatalog(catalog){
+  coinShopCatalog=catalog;
+  const products=new Map((catalog?.packages||[]).map(product=>[product.id,product]));
+  for(const button of ui.coinPackButtons){
+    const product=products.get(button.dataset.coinPack);
+    if(!product)continue;
+    button.textContent=`KUP ZA ${product.pricePln} ZŁ`;
+    button.classList.toggle('unconfigured',!product.paymentConfigured);
+    button.dataset.paymentUrl=product.paymentUrl||'';
+    button.setAttribute('aria-label',`${Number(product.coins).toLocaleString('pl-PL')} monet za ${product.pricePln} zł`);
+  }
+}
+async function loadCoinShopCatalog(){
+  try{renderCoinShopCatalog(await api('/api/shop/catalog'));}
+  catch(e){setCoinShopMessage(e?.message||'Nie udało się wczytać sklepu.',true);}
+}
+function buyCoinPackage(packageId){
+  const product=(coinShopCatalog?.packages||[]).find(item=>item.id===packageId);
+  if(!product){setCoinShopMessage('Oferta nie została jeszcze wczytana.',true);loadCoinShopCatalog();return;}
+  if(!product.paymentUrl){setCoinShopMessage('Ta płatność nie jest jeszcze podłączona. Administrator musi dodać link płatniczy w Renderze.',true);return;}
+  window.open(product.paymentUrl,'_blank','noopener,noreferrer');
+  setCoinShopMessage(`Otwarto płatność: ${Number(product.coins).toLocaleString('pl-PL')} monet za ${product.pricePln} zł.`,false);
+}
+ui.storeOpenBtn?.addEventListener('click',()=>storeOpen(true,'coins'));
+ui.storeCloseBtn?.addEventListener('click',()=>storeOpen(false));
+ui.storeOverlay?.addEventListener('click',event=>{if(event.target===ui.storeOverlay)storeOpen(false);});
+for(const tab of ui.storeTabs)tab.addEventListener('click',()=>switchStoreTab(tab.dataset.storeTab));
+for(const button of ui.coinPackButtons)button.addEventListener('click',()=>buyCoinPackage(button.dataset.coinPack));
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&ui.storeOverlay?.classList.contains('open'))storeOpen(false);});
 
 
 // ---------- Konta użytkowników, sesje i czat ----------

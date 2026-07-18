@@ -90,6 +90,12 @@ ARENA_VIP_PRICE_PLN = 13
 ARENA_VIP_PLUS_PRICE_PLN = 21
 ARENA_VIP_PAYMENT_URL = os.environ.get("ARENA_VIP_PAYMENT_URL", "").strip()
 ARENA_VIP_PLUS_PAYMENT_URL = os.environ.get("ARENA_VIP_PLUS_PAYMENT_URL", "").strip()
+COIN_PACKAGES = (
+    {"id": "coins_5000", "coins": 5000, "pricePln": 4, "paymentUrl": os.environ.get("COIN_PACK_5000_URL", "").strip()},
+    {"id": "coins_10000", "coins": 10000, "pricePln": 7, "paymentUrl": os.environ.get("COIN_PACK_10000_URL", "").strip()},
+    {"id": "coins_20000", "coins": 20000, "pricePln": 13, "paymentUrl": os.environ.get("COIN_PACK_20000_URL", "").strip()},
+    {"id": "coins_40000", "coins": 40000, "pricePln": 25, "paymentUrl": os.environ.get("COIN_PACK_40000_URL", "").strip()},
+)
 DUEL_PLAYER_TIMEOUT = 12.0
 DUEL_WAIT_TIMEOUT = 45.0
 DUEL_BOT_WAIT = 30.0
@@ -223,7 +229,7 @@ def persistent_storage_public_status() -> dict[str, Any]:
         "schemaVersion": DB_SCHEMA_VERSION if DB_READY else 0,
         "emailResetConfigured": bool(RESEND_API_KEY and PASSWORD_RESET_FROM),
         "passwordResetTtlMinutes": PASSWORD_RESET_TTL // 60,
-        "build": "email-password-reset-v18",
+        "build": "arena-shop-coins-v19",
     }
     if DB_READY:
         payload["connectedAt"] = DB_CONNECTED_AT
@@ -589,7 +595,7 @@ def db_schema_status() -> dict[str, Any]:
         "connectedAt": DB_CONNECTED_AT,
         "emailResetConfigured": bool(RESEND_API_KEY and PASSWORD_RESET_FROM),
         "passwordResetTtlMinutes": PASSWORD_RESET_TTL // 60,
-        "build": "email-password-reset-v18",
+        "build": "arena-shop-coins-v19",
     }
 
 
@@ -2009,6 +2015,38 @@ def arena_pass_effective_tier(account_id: str, data: dict[str, Any]) -> str:
     return clean_pass_tier(data.get("arenaPassTier"))
 
 
+
+
+def coin_shop_catalog() -> dict[str, Any]:
+    """Publiczny katalog pakietów. Oszczędność liczona względem 5000 monet za 4 zł."""
+    base_coins = 5000
+    base_price = 4
+    packages: list[dict[str, Any]] = []
+    for source in COIN_PACKAGES:
+        coins = int(source["coins"])
+        price = int(source["pricePln"])
+        comparison_price = (coins / base_coins) * base_price
+        savings = max(0.0, comparison_price - price)
+        savings_percent = int(math.floor(((savings / comparison_price) * 100) + 0.5)) if comparison_price else 0
+        packages.append({
+            "id": source["id"],
+            "coins": coins,
+            "pricePln": price,
+            "comparisonPricePln": int(comparison_price),
+            "savingsPln": int(savings),
+            "savingsPercent": int(savings_percent),
+            "paymentUrl": source["paymentUrl"],
+            "paymentConfigured": bool(source["paymentUrl"]),
+        })
+    return {
+        "ok": True,
+        "currency": "PLN",
+        "baseline": {"coins": base_coins, "pricePln": base_price},
+        "packages": packages,
+        "fulfillment": "admin-confirmed",
+    }
+
+
 def arena_pass_status(account_id: str) -> dict[str, Any]:
     account_id = clean_id(account_id)
     profile = db_get_profile(account_id) if DATABASE_URL else profile_full_row(profiles.get(account_id, {}))
@@ -2904,7 +2942,7 @@ def duel_tick_loop() -> None:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "ArenaStarsSQL/5.2-chat-render-fixed"
+    server_version = "ArenaStarsSQL/5.3-shop-coins"
     protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt: str, *args: Any) -> None:
@@ -3074,6 +3112,11 @@ class Handler(BaseHTTPRequestHandler):
             account_id = clean_id(account.get("account_id"))
             profile = db_get_profile(account_id) if DATABASE_URL else profile_full_row(profiles.get(account_id, {}))
             self.send_json({"ok":True,"authenticated":True,"account":account_public(account),"profile":profile}); return
+        if parsed.path == "/api/shop/catalog":
+            account = self.require_account()
+            if not account: return
+            self.send_json(coin_shop_catalog())
+            return
         if parsed.path == "/api/pass/status":
             account = self.require_account()
             if not account: return
