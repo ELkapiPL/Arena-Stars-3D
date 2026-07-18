@@ -109,8 +109,10 @@ DEFAULT_GAME_CONFIG: dict[str, Any] = {
     "duelWinsToTakeMatch": 2,
     "duelWinCoins": 25,
     "duelWinTrophies": 10,
+    "duelWinPoints": 2000,
     "duelDrawCoins": 5,
     "duelDrawTrophies": 4,
+    "duelDrawPoints": 500,
     "soloEnabled": True,
     "duelEnabled": True,
     "announcement": "",
@@ -225,8 +227,10 @@ def sanitize_game_config(value: Any) -> dict[str, Any]:
     result["duelWinsToTakeMatch"] = clamp_int(source.get("duelWinsToTakeMatch"), 1, result["duelMaxRounds"], 2)
     result["duelWinCoins"] = clamp_int(source.get("duelWinCoins"), 0, 1_000_000, 25)
     result["duelWinTrophies"] = clamp_int(source.get("duelWinTrophies"), 0, 1_000_000, 10)
+    result["duelWinPoints"] = clamp_int(source.get("duelWinPoints"), 0, 100_000_000, 2000)
     result["duelDrawCoins"] = clamp_int(source.get("duelDrawCoins"), 0, 1_000_000, 5)
     result["duelDrawTrophies"] = clamp_int(source.get("duelDrawTrophies"), 0, 1_000_000, 4)
+    result["duelDrawPoints"] = clamp_int(source.get("duelDrawPoints"), 0, 100_000_000, 500)
     result["soloEnabled"] = bool(source.get("soloEnabled", True))
     result["duelEnabled"] = bool(source.get("duelEnabled", True))
     result["announcement"] = clean_mode_text(source.get("announcement"), 180)
@@ -531,10 +535,14 @@ def account_ban_payload(row: dict[str, Any]) -> dict[str, Any]:
 
 def account_public(row: dict[str, Any]) -> dict[str, Any]:
     ban = account_ban_payload(row)
+    account_id = clean_id(row.get("account_id") or row.get("id"))
     return {
-        "id": clean_id(row.get("account_id") or row.get("id")),
-        "playerId": clean_id(row.get("account_id") or row.get("id")),
+        "id": account_id,
+        "playerId": account_id,
         "username": str(row.get("username") or ""),
+        # Flaga jest wyliczana wyłącznie na serwerze. Tylko konto właściciela
+        # otrzymuje ceny 0 w sklepie klienta.
+        "ownerBenefits": bool(account_id and account_id == clean_id(ADMIN_PLAYER_ID)),
         **ban,
     }
 

@@ -130,7 +130,7 @@ function loadProgress(){
 let profile=loadProgress();
 profile.name=persistNickname(profile.name);
 let profileDirty=false,profileSyncBusy=false,profileChangeSeq=0,lastConfigRevision=0,backgroundSyncBusy=false;
-const CLIENT_VERSION='central-sql-live-sync-v4';
+const CLIENT_VERSION='duel-points-owner-free-v5';
 function saveProgress(markDirty=true){try{profile.name=persistNickname(profile.name);localStorage.setItem(SAVE_KEY,JSON.stringify(profile));if(markDirty){profileDirty=true;profileChangeSeq++;}}catch(_){} }
 function getPlayerId(){
   try{let id=localStorage.getItem(PLAYER_ID_KEY);if(!id){id=(crypto.randomUUID?crypto.randomUUID():`gracz-${Date.now()}-${Math.random().toString(16).slice(2)}`);localStorage.setItem(PLAYER_ID_KEY,id);}return id;}
@@ -138,8 +138,10 @@ function getPlayerId(){
 }
 const playerId=getPlayerId();
 window.__arenaPlayerId=playerId;
+let ownerFreeShop=false;
+function shopCost(value){return ownerFreeShop?0:Math.max(0,Number(value)||0);}
 
-const DEFAULT_CLIENT_CONFIG={survivalBotLevel:5,duelBotLevel:5,duelBotWaitSeconds:30,duelHpMultiplier:3.5,duelMaxRounds:3,duelWinsToTakeMatch:2,duelWinCoins:25,duelWinTrophies:10,duelDrawCoins:5,duelDrawTrophies:4,soloEnabled:true,duelEnabled:true,announcement:'',profanityBanHours:2,customModes:[]};
+const DEFAULT_CLIENT_CONFIG={survivalBotLevel:5,duelBotLevel:5,duelBotWaitSeconds:30,duelHpMultiplier:3.5,duelMaxRounds:3,duelWinsToTakeMatch:2,duelWinCoins:25,duelWinTrophies:10,duelWinPoints:2000,duelDrawCoins:5,duelDrawTrophies:4,duelDrawPoints:500,soloEnabled:true,duelEnabled:true,announcement:'',profanityBanHours:2,customModes:[]};
 let gameConfig={...DEFAULT_CLIENT_CONFIG};
 function modeDefinition(id){if(id==='solo')return {id:'solo',name:'PRZETRWANIE',base:'solo',enabled:gameConfig.soloEnabled!==false};if(id==='duel')return {id:'duel',name:'POJEDYNKI',base:'duel',enabled:gameConfig.duelEnabled!==false};return (gameConfig.customModes||[]).find(m=>m.id===id&&m.enabled!==false)||null;}
 function selectedModeBase(){return modeDefinition(selectedMode)?.base||'solo';}
@@ -640,13 +642,13 @@ function finishDuel(data){
   if(endedMatchId){api('/api/duel/leave',{method:'POST',body:JSON.stringify({playerId,matchId:endedMatchId})}).catch(()=>{});}duelMatchId='';duelLocalBotMode=false;duelBotBullets=[];
   duelYourWins=Math.max(0,Number(data.yourWins??duelYourWins)||0);duelOpponentWins=Math.max(0,Number(data.opponentWins??duelOpponentWins)||0);duelRoundDraws=Math.max(0,Number(data.roundDraws??duelRoundDraws)||0);
   const won=data.winnerId===playerId,lost=!!data.winnerId&&data.winnerId!==playerId,draw=!data.winnerId;
-  const rewardCoins=won?Number(gameConfig.duelWinCoins||25):(draw?Number(gameConfig.duelDrawCoins||5):0),rewardTrophies=won?Number(gameConfig.duelWinTrophies||10):(draw?Number(gameConfig.duelDrawTrophies||4):0);
-  if(rewardCoins||rewardTrophies){profile.coins=Math.max(0,Math.floor(profile.coins+rewardCoins));profile.trophies=Math.max(0,Math.floor(profile.trophies+rewardTrophies));walletCoins=profile.coins;saveProgress();updateLobby();syncProfile().catch(()=>{});}recordMatchResult({mode:'duel',result:won?'win':(lost?'loss':'draw'),pointsDelta:0,trophiesDelta:rewardTrophies,coinsDelta:rewardCoins,durationSeconds:0,details:{yourWins:duelYourWins,opponentWins:duelOpponentWins,roundDraws:duelRoundDraws,opponent:duelOpponent?.name||'Przeciwnik'}});
+  const rewardCoins=won?Number(gameConfig.duelWinCoins||25):(draw?Number(gameConfig.duelDrawCoins||5):0),rewardTrophies=won?Number(gameConfig.duelWinTrophies||10):(draw?Number(gameConfig.duelDrawTrophies||4):0),rewardPoints=won?Number(gameConfig.duelWinPoints??2000):(draw?Number(gameConfig.duelDrawPoints??500):0);
+  if(rewardCoins||rewardTrophies||rewardPoints){profile.coins=Math.max(0,Math.floor(profile.coins+rewardCoins));profile.trophies=Math.max(0,Math.floor(profile.trophies+rewardTrophies));profile.points=Math.max(0,Math.floor(profile.points+rewardPoints));walletCoins=profile.coins;saveProgress();updateLobby();syncProfile().catch(()=>{});}recordMatchResult({mode:'duel',result:won?'win':(lost?'loss':'draw'),pointsDelta:rewardPoints,trophiesDelta:rewardTrophies,coinsDelta:rewardCoins,durationSeconds:0,details:{yourWins:duelYourWins,opponentWins:duelOpponentWins,roundDraws:duelRoundDraws,opponent:duelOpponent?.name||'Przeciwnik'}});
   if(ui.gameOverBadge)ui.gameOverBadge.textContent='KONIEC POJEDYNKU • NAJLEPSZY Z 3 RUND';
   if(ui.gameOverTitle)ui.gameOverTitle.innerHTML=won?'ZWYCIĘSTWO!':(lost?'PRZEGRANA':'REMIS!');
   const opponentName=duelOpponent?.name||'Przeciwnik';
-  if(ui.endStats)ui.endStats.innerHTML=`<div class="endStat">Rundy<span>${duelYourWins}:${duelOpponentWins}</span></div><div class="endStat">Remisy rund<span>${duelRoundDraws}</span></div><div class="endStat">Przeciwnik<span>${escapeRankingName(opponentName)}</span></div><div class="endStat">Nagroda<span>${rewardCoins} 🪙 • ${rewardTrophies} 🏆</span></div>`;
-  const reason=data.reason||'Pojedynek został zakończony.';ui.gameOverView.querySelector('p').textContent=`${reason} ${won?`Otrzymujesz ${rewardCoins} monet i ${rewardTrophies} pucharków.`:(draw?`Otrzymujesz ${rewardCoins} monet i ${rewardTrophies} pucharki.`:'')}`.trim();
+  if(ui.endStats)ui.endStats.innerHTML=`<div class="endStat">Rundy<span>${duelYourWins}:${duelOpponentWins}</span></div><div class="endStat">Remisy rund<span>${duelRoundDraws}</span></div><div class="endStat">Przeciwnik<span>${escapeRankingName(opponentName)}</span></div><div class="endStat">Nagroda<span>${rewardPoints} ⭐ • ${rewardCoins} 🪙 • ${rewardTrophies} 🏆</span></div>`;
+  const reason=data.reason||'Pojedynek został zakończony.';ui.gameOverView.querySelector('p').textContent=`${reason} ${won?`Otrzymujesz ${rewardPoints} punktów, ${rewardCoins} monet i ${rewardTrophies} pucharków.`:(draw?`Otrzymujesz ${rewardPoints} punktów, ${rewardCoins} monet i ${rewardTrophies} pucharki.`:'')}`.trim();
   ui.duelQueueView.style.display='none';ui.lobbyView.style.display='none';ui.gameOverView.style.display='grid';document.body.classList.add('lobby-mode');document.body.classList.remove('duel-mode');ui.overlay.style.display='block';
 }
 
@@ -657,20 +659,24 @@ function updateLobby(){
   if(isLobbyVisible())renderRanking();updateModeUI();
   if(ui.nicknameInput&&document.activeElement!==ui.nicknameInput)ui.nicknameInput.value=profile.name;
   if(ui.versionOneBtn){
-    const owned=profile.heroVersion1===true;
-    ui.versionOneBtn.textContent=owned?'AKTYWNA ✓':'ODBLOKUJ ZA 150 🪙';
+    const owned=profile.heroVersion1===true,cost=shopCost(VERSION_ONE_COST);
+    ui.versionOneBtn.textContent=owned?'AKTYWNA ✓':(cost===0?'ODBLOKUJ ZA DARMO':'ODBLOKUJ ZA 150 🪙');
     ui.versionOneBtn.disabled=owned;
-    ui.versionOneBtn.classList.toggle('affordable',!owned&&profile.coins>=VERSION_ONE_COST);
+    ui.versionOneBtn.classList.toggle('affordable',!owned&&(cost===0||profile.coins>=cost));
+    const priceLabel=document.querySelector('.versionPrice');if(priceLabel)priceLabel.textContent=cost===0?'Cena dla właściciela: ZA DARMO':'Cena: 150 monet 🪙';
   }
+  const ownerBadge=document.getElementById('ownerFreeBadge');if(ownerBadge)ownerBadge.style.display=ownerFreeShop?'block':'none';
   for(const el of ui.persistentLevelEls){const type=el.dataset.persistentLevel;el.textContent=`Poziom ${profile.upgrades[type]||0}/5`;}
   for(const card of ui.skinCards){
     const skin=card.dataset.skin,owned=skin==='classic'||profile.ownedSkins?.[skin]===true,selected=owned&&skin===profile.skin;
-    card.classList.toggle('selected',selected);card.classList.toggle('locked',!owned);card.classList.toggle('affordable',!owned&&skin==='cosmic'&&profile.coins>=COSMIC_SKIN_COST);
+    const cosmicCost=shopCost(COSMIC_SKIN_COST);card.classList.toggle('selected',selected);card.classList.toggle('locked',!owned);card.classList.toggle('affordable',!owned&&skin==='cosmic'&&(cosmicCost===0||profile.coins>=cosmicCost));
     const state=card.querySelector('.skinState');
     if(selected)state.textContent='WYBRANO';
     else if(owned)state.textContent='WYBIERZ';
+    else if(skin==='cosmic'&&shopCost(COSMIC_SKIN_COST)===0)state.textContent='ODBLOKUJ • ZA DARMO';
     else if(skin==='cosmic'&&profile.coins>=COSMIC_SKIN_COST)state.textContent='ODBLOKUJ • 1250 🪙';
     else state.textContent='🔒 1250 🪙';
+    if(skin==='cosmic'){const price=card.querySelector('.skinPrice');if(price)price.textContent=shopCost(COSMIC_SKIN_COST)===0?'Cena dla właściciela: ZA DARMO':'Cena: 1250 monet';}
   }
 }
 let skinNoticeTimer=0;
@@ -681,8 +687,8 @@ function setSkinNotice(text,good=false){
 function selectSkin(skin){
   if(!['classic','cosmic'].includes(skin))return;
   if(skin==='cosmic'&&profile.ownedSkins?.cosmic!==true){
-    if(profile.coins<COSMIC_SKIN_COST){setSkinNotice(`Brakuje ${(COSMIC_SKIN_COST-profile.coins).toLocaleString('pl-PL')} monet.`);return;}
-    profile.coins-=COSMIC_SKIN_COST;walletCoins=profile.coins;profile.ownedSkins={...(profile.ownedSkins||{}),classic:true,cosmic:true};profile.skin='cosmic';saveProgress();updateLobby();setSkinNotice('Kosmiczny Strażnik odblokowany za 1250 monet!',true);return;
+    const cost=shopCost(COSMIC_SKIN_COST);if(profile.coins<cost){setSkinNotice(`Brakuje ${(cost-profile.coins).toLocaleString('pl-PL')} monet.`);return;}
+    profile.coins-=cost;walletCoins=profile.coins;profile.ownedSkins={...(profile.ownedSkins||{}),classic:true,cosmic:true};profile.skin='cosmic';saveProgress();updateLobby();setSkinNotice(cost===0?'Kosmiczny Strażnik odblokowany za darmo!':'Kosmiczny Strażnik odblokowany za 1250 monet!',true);return;
   }
   profile.skin=skin;saveProgress();updateLobby();setSkinNotice(skin==='cosmic'?'Wybrano Kosmicznego Strażnika.':'Wybrano Błękitnego Bohatera.',true);
 }
@@ -693,8 +699,8 @@ function setVersionNotice(text,good=false){
 }
 function buyVersionOne(){
   if(profile.heroVersion1===true){setVersionNotice('Lepsza wersja I jest już aktywna.',true);return;}
-  if(profile.coins<VERSION_ONE_COST){setVersionNotice(`Brakuje ${VERSION_ONE_COST-profile.coins} monet.`);return;}
-  profile.coins-=VERSION_ONE_COST;walletCoins=profile.coins;profile.heroVersion1=true;saveProgress();updateLobby();setVersionNotice('Lepsza wersja I odblokowana! Kolor bez zmian.',true);
+  const cost=shopCost(VERSION_ONE_COST);if(profile.coins<cost){setVersionNotice(`Brakuje ${cost-profile.coins} monet.`);return;}
+  profile.coins-=cost;walletCoins=profile.coins;profile.heroVersion1=true;saveProgress();updateLobby();setVersionNotice(cost===0?'Lepsza wersja I odblokowana za darmo!':'Lepsza wersja I odblokowana! Kolor bez zmian.',true);
 }
 let upgrades={...profile.upgrades};
 let running=false,runCommitted=false,last=performance.now(),score=0,wave=1,kills=0,walletCoins=profile.coins,runCoins=0,trophies=0,survivalTime=0,waveClock=0,spawnClock=0,shake=0,messageClock=0;
@@ -798,12 +804,12 @@ function updateUI(){
   ui.hyperFill.style.width=hyperActive?`${player.hyperActive/HYPER_DURATION*100}%`:`${Math.min(100,hyperValue)}%`;
   ui.hyperFill.classList.toggle('active',hyperActive);
   for(const button of ui.upgradeButtons){
-    const type=button.dataset.upgrade,level=upgrades[type]||0,cost=UPGRADE_COSTS[level];
+    const type=button.dataset.upgrade,level=upgrades[type]||0,cost=shopCost(UPGRADE_COSTS[level]);
     const levelEl=button.querySelector('[data-level]'),costEl=button.querySelector('[data-cost]');
     levelEl.textContent=`${level}/5`;
-    costEl.textContent=level>=UPGRADE_COSTS.length?'MAX':`${cost} 🪙`;
+    costEl.textContent=level>=UPGRADE_COSTS.length?'MAX':(cost===0?'ZA DARMO':`${cost} 🪙`);
     button.disabled=!running||level>=UPGRADE_COSTS.length;
-    button.classList.toggle('affordable',running&&level<UPGRADE_COSTS.length&&walletCoins>=cost);
+    button.classList.toggle('affordable',running&&level<UPGRADE_COSTS.length&&(cost===0||walletCoins>=cost));
   }
 }
 function buyUpgrade(type){
@@ -811,7 +817,7 @@ function buyUpgrade(type){
   if(!running||!(type in upgrades))return;
   const level=upgrades[type];
   if(level>=UPGRADE_COSTS.length){showMessage('MAKSYMALNY POZIOM');return;}
-  const cost=UPGRADE_COSTS[level];
+  const cost=shopCost(UPGRADE_COSTS[level]);
   if(walletCoins<cost){showMessage(`BRAKUJE ${cost-walletCoins} MONET`);return;}
   walletCoins-=cost;upgrades[type]++;profile.coins=walletCoins;profile.upgrades[type]=upgrades[type];saveProgress();updateLobby();
   if(type==='move'){
@@ -974,7 +980,7 @@ function authMessage(text,bad=false){if(authUI.msg){authUI.msg.textContent=text|
 function showAccountBan(data){if(!authUI.overlay)return;authUI.overlay.classList.remove('hidden');authUI.card.style.display='none';authUI.banCard.style.display='block';authUI.banReason.textContent=data.banReason||'Blokada konta';const until=Number(data.bannedUntil)||0;authUI.banUntil.textContent=until?`Koniec blokady: ${new Date(until*1000).toLocaleString('pl-PL')}`:'Blokada aktywna';}
 function setAuthPane(name){document.querySelectorAll('.authTab').forEach(x=>x.classList.toggle('active',x.dataset.authTab===name));document.querySelectorAll('.authPane').forEach(x=>x.classList.toggle('active',x.dataset.authPane===name));authMessage('');}
 function applyServerProfile(serverProfile){if(!serverProfile)return;profile={...profile,...serverProfile,data:{...(profile.data||{}),...(serverProfile.data||{})},ownedSkins:{classic:true,cosmic:serverProfile.cosmicOwned===true},heroVersion1:serverProfile.heroVersion1===true,upgrades:{...profile.upgrades,...(serverProfile.upgrades||{})}};if(serverProfile.data?.mode)profile.mode=serverProfile.data.mode;walletCoins=profile.coins||0;saveProgress(false);}
-async function completeAccountLogin(data){currentAccount=data.account;if(!currentAccount)return;const accountId=currentAccount.playerId||currentAccount.id;if(accountId&&accountId!==playerId){localStorage.setItem(PLAYER_ID_KEY,accountId);location.reload();return;}profile.name=safePlayerName(currentAccount.username);persistNickname(profile.name);applyServerProfile(data.profile);if(ui.nicknameInput){ui.nicknameInput.value=profile.name;ui.nicknameInput.disabled=true;}if(ui.saveNameBtn){ui.saveNameBtn.disabled=true;ui.saveNameBtn.textContent='NAZWA KONTA';}if(authUI.accountUsername)authUI.accountUsername.textContent=currentAccount.username;authUI.overlay.classList.add('hidden');authUI.card.style.display='block';authUI.banCard.style.display='none';authFinished=true;syncProfile().then(fetchRanking);startChatPolling();}
+async function completeAccountLogin(data){currentAccount=data.account;if(!currentAccount)return;const accountId=currentAccount.playerId||currentAccount.id;if(accountId&&accountId!==playerId){localStorage.setItem(PLAYER_ID_KEY,accountId);location.reload();return;}ownerFreeShop=currentAccount.ownerBenefits===true;profile.name=safePlayerName(currentAccount.username);persistNickname(profile.name);applyServerProfile(data.profile);if(ui.nicknameInput){ui.nicknameInput.value=profile.name;ui.nicknameInput.disabled=true;}if(ui.saveNameBtn){ui.saveNameBtn.disabled=true;ui.saveNameBtn.textContent='NAZWA KONTA';}if(authUI.accountUsername)authUI.accountUsername.textContent=currentAccount.username;authUI.overlay.classList.add('hidden');authUI.card.style.display='block';authUI.banCard.style.display='none';authFinished=true;updateLobby();syncProfile().then(fetchRanking);startChatPolling();}
 async function authBootstrap(){try{const data=await api('/api/auth/status');if(data.authenticated){if(data.account?.banned){showAccountBan(data.account);return;}await completeAccountLogin(data);}else{authUI.overlay.classList.remove('hidden');}}catch(e){authMessage('Serwer kont nie odpowiada. Odśwież stronę za chwilę.',true);}}
 async function authSubmit(kind){authMessage('Łączenie z serwerem…');const register=kind==='register',username=(register?authUI.registerUser:authUI.loginUser).value,password=(register?authUI.registerPassword:authUI.loginPassword).value;try{const data=await api(register?'/api/auth/register':'/api/auth/login',{method:'POST',body:JSON.stringify({username,password,playerId})});await completeAccountLogin(data);}catch(e){authMessage(e.message||'Nie udało się zalogować.',true);}}
 document.querySelectorAll('.authTab').forEach(x=>x.addEventListener('click',()=>setAuthPane(x.dataset.authTab)));authUI.registerBtn?.addEventListener('click',()=>authSubmit('register'));authUI.loginBtn?.addEventListener('click',()=>authSubmit('login'));authUI.logout?.addEventListener('click',async()=>{await api('/api/auth/logout',{method:'POST',body:'{}'}).catch(()=>{});location.reload();});
@@ -1080,9 +1086,9 @@ async function adminCheckStatus(){try{const s=await api(`/api/admin/status?playe
 async function adminAuth(kind){const path=kind==='recovery'?'/api/admin/recover':'/api/admin/login',body={playerId,[kind==='recovery'?'code':'password']:kind==='recovery'?adminUI.recovery.value:adminUI.password.value};try{const r=await api(path,{method:'POST',body:JSON.stringify(body)});if(r.ok)await adminShowDashboard();}catch(e){adminMsg(adminUI.loginMsg,'Nieprawidłowe dane albo konto nie ma dostępu.',true);}}
 async function adminShowDashboard(){adminUI.loginCard.style.display='none';adminUI.dashboard.style.display='block';await adminLoadConfig();await adminSearchPlayers('');await adminSearchAccounts('');}
 function n(id){return Number($(id)?.value)||0;}function c(id){return !!$(id)?.checked;}
-function fillAdminConfig(cfg){adminConfig=cfg;const map={cfgSurvivalBot:'survivalBotLevel',cfgDuelBot:'duelBotLevel',cfgBotWait:'duelBotWaitSeconds',cfgHpMultiplier:'duelHpMultiplier',cfgRounds:'duelMaxRounds',cfgWins:'duelWinsToTakeMatch',cfgWinCoins:'duelWinCoins',cfgWinTrophies:'duelWinTrophies',cfgDrawCoins:'duelDrawCoins',cfgDrawTrophies:'duelDrawTrophies',cfgProfanityBanHours:'profanityBanHours'};for(const [id,key] of Object.entries(map))if($(id))$(id).value=cfg[key];$('cfgSoloEnabled').checked=cfg.soloEnabled!==false;$('cfgDuelEnabled').checked=cfg.duelEnabled!==false;$('cfgAnnouncement').value=cfg.announcement||'';renderAdminModes();}
+function fillAdminConfig(cfg){adminConfig=cfg;const map={cfgSurvivalBot:'survivalBotLevel',cfgDuelBot:'duelBotLevel',cfgBotWait:'duelBotWaitSeconds',cfgHpMultiplier:'duelHpMultiplier',cfgRounds:'duelMaxRounds',cfgWins:'duelWinsToTakeMatch',cfgWinCoins:'duelWinCoins',cfgWinTrophies:'duelWinTrophies',cfgWinPoints:'duelWinPoints',cfgDrawCoins:'duelDrawCoins',cfgDrawTrophies:'duelDrawTrophies',cfgDrawPoints:'duelDrawPoints',cfgProfanityBanHours:'profanityBanHours'};for(const [id,key] of Object.entries(map))if($(id))$(id).value=cfg[key];$('cfgSoloEnabled').checked=cfg.soloEnabled!==false;$('cfgDuelEnabled').checked=cfg.duelEnabled!==false;$('cfgAnnouncement').value=cfg.announcement||'';renderAdminModes();}
 async function adminLoadConfig(){try{const r=await api('/api/admin/config');fillAdminConfig(r.config);}catch(e){adminMsg(adminUI.settingsMsg,'Nie udało się pobrać ustawień.',true);}}
-function collectAdminConfig(){return {...adminConfig,survivalBotLevel:n('cfgSurvivalBot'),duelBotLevel:n('cfgDuelBot'),duelBotWaitSeconds:n('cfgBotWait'),duelHpMultiplier:n('cfgHpMultiplier'),duelMaxRounds:n('cfgRounds'),duelWinsToTakeMatch:n('cfgWins'),duelWinCoins:n('cfgWinCoins'),duelWinTrophies:n('cfgWinTrophies'),duelDrawCoins:n('cfgDrawCoins'),duelDrawTrophies:n('cfgDrawTrophies'),profanityBanHours:n('cfgProfanityBanHours'),soloEnabled:c('cfgSoloEnabled'),duelEnabled:c('cfgDuelEnabled'),announcement:$('cfgAnnouncement').value,customModes:adminConfig?.customModes||[]};}
+function collectAdminConfig(){return {...adminConfig,survivalBotLevel:n('cfgSurvivalBot'),duelBotLevel:n('cfgDuelBot'),duelBotWaitSeconds:n('cfgBotWait'),duelHpMultiplier:n('cfgHpMultiplier'),duelMaxRounds:n('cfgRounds'),duelWinsToTakeMatch:n('cfgWins'),duelWinCoins:n('cfgWinCoins'),duelWinTrophies:n('cfgWinTrophies'),duelWinPoints:n('cfgWinPoints'),duelDrawCoins:n('cfgDrawCoins'),duelDrawTrophies:n('cfgDrawTrophies'),duelDrawPoints:n('cfgDrawPoints'),profanityBanHours:n('cfgProfanityBanHours'),soloEnabled:c('cfgSoloEnabled'),duelEnabled:c('cfgDuelEnabled'),announcement:$('cfgAnnouncement').value,customModes:adminConfig?.customModes||[]};}
 async function adminSaveConfig(){try{const r=await api('/api/admin/config',{method:'POST',body:JSON.stringify({config:collectAdminConfig()})});fillAdminConfig(r.config);applyGameConfig(r.config);adminMsg(adminUI.settingsMsg,'Ustawienia zapisane dla wszystkich graczy.');}catch(e){adminMsg(adminUI.settingsMsg,'Nie udało się zapisać ustawień.',true);}}
 async function adminSearchPlayers(q){try{const r=await api(`/api/admin/players?q=${encodeURIComponent(q||'')}`),box=$('adminPlayerList');box.innerHTML=(r.players||[]).map(p=>`<div class="adminPlayerRow" data-player="${p.id}"><span><b>${escapeRankingName(p.name)}</b><small>${p.id}</small></span><span>${p.points.toLocaleString('pl-PL')} ⭐<br>${p.trophies.toLocaleString('pl-PL')} 🏆</span></div>`).join('')||'<div class="adminHint">Brak wyników.</div>';box.querySelectorAll('[data-player]').forEach(el=>el.onclick=()=>adminSelectPlayer((r.players||[]).find(p=>p.id===el.dataset.player)));}catch(e){adminMsg(adminUI.playerMsg,'Nie udało się pobrać graczy.',true);}}
 function adminSelectPlayer(p){if(!p)return;adminSelectedPlayer=p;$('editPlayerId').value=p.id;$('editPlayerName').value=p.name;$('editPoints').value=p.points;$('editTrophies').value=p.trophies;$('editCoins').value=p.coins;$('editMove').value=p.upgrades?.move||0;$('editFire').value=p.upgrades?.fire||0;$('editHp').value=p.upgrades?.hp||0;$('editSkin').value=p.skin||'classic';$('editCosmic').checked=p.cosmicOwned===true;$('editVersion').checked=p.heroVersion1===true;}

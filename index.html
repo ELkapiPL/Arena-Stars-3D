@@ -271,7 +271,7 @@
   <div id="overlay">
     <div id="lobbyView">
       <div id="lobbyTrophies"><div class="trophyIcon">🏆</div><div class="trophyText">PUCHARKI<strong id="savedTrophies">0</strong></div></div>
-      <div id="accountBox"><div class="accountStat">PUNKTY ⭐<strong id="savedPoints">0</strong></div><div class="accountStat">MONETY 🪙<strong id="savedCoins">0</strong></div></div><div id="accountUser"><span id="accountUsername">—</span><button id="accountLogoutBtn">WYLOGUJ</button></div>
+      <div id="accountBox"><div class="accountStat">PUNKTY ⭐<strong id="savedPoints">0</strong></div><div class="accountStat">MONETY 🪙<strong id="savedCoins">0</strong></div><div id="ownerFreeBadge" class="accountStat" style="display:none;border-color:#ffe36b;color:#fff2a8">WŁAŚCICIEL<strong style="font-size:11px">WSZYSTKO ZA DARMO</strong></div></div><div id="accountUser"><span id="accountUsername">—</span><button id="accountLogoutBtn">WYLOGUJ</button></div>
       <div class="lobbyLogo">ARENA<br>STARS 3D<small>ONLINE • TRYBY GRY</small></div>
       <aside id="skinDock">
         <div id="skinShopTitle">PRZEBRANIA</div>
@@ -403,7 +403,7 @@
             <div class="adminField"><label>WYGRANE RUNDY POTRZEBNE DO ZWYCIĘSTWA</label><input id="cfgWins" type="number" min="1" max="9"></div>
           </div>
           <div class="adminSection"><h3>Nagrody i dostępność</h3>
-            <div class="adminGrid"><div class="adminField"><label>MONETY ZA WYGRANĄ</label><input id="cfgWinCoins" type="number" min="0"></div><div class="adminField"><label>PUCHARKI ZA WYGRANĄ</label><input id="cfgWinTrophies" type="number" min="0"></div><div class="adminField"><label>MONETY ZA REMIS</label><input id="cfgDrawCoins" type="number" min="0"></div><div class="adminField"><label>PUCHARKI ZA REMIS</label><input id="cfgDrawTrophies" type="number" min="0"></div></div>
+            <div class="adminGrid"><div class="adminField"><label>MONETY ZA WYGRANĄ</label><input id="cfgWinCoins" type="number" min="0"></div><div class="adminField"><label>PUCHARKI ZA WYGRANĄ</label><input id="cfgWinTrophies" type="number" min="0"></div><div class="adminField"><label>PUNKTY ZA WYGRANĄ</label><input id="cfgWinPoints" type="number" min="0" value="2000"></div><div class="adminField"><label>MONETY ZA REMIS</label><input id="cfgDrawCoins" type="number" min="0"></div><div class="adminField"><label>PUCHARKI ZA REMIS</label><input id="cfgDrawTrophies" type="number" min="0"></div><div class="adminField"><label>PUNKTY ZA REMIS</label><input id="cfgDrawPoints" type="number" min="0" value="500"></div></div>
             <label class="adminCheck"><input id="cfgSoloEnabled" type="checkbox"> Przetrwanie dostępne</label><label class="adminCheck"><input id="cfgDuelEnabled" type="checkbox"> Pojedynki dostępne</label>
             <div class="adminField"><label>AUTOMATYCZNY BAN ZA PRZEKLINANIE (GODZINY)</label><input id="cfgProfanityBanHours" type="number" min="0.25" max="168" step="0.25"></div><div class="adminField"><label>WIADOMOŚĆ W LOBBY</label><textarea id="cfgAnnouncement" maxlength="180"></textarea></div>
           </div>
@@ -430,6 +430,6 @@
   </div>
 
   <div id="error"></div>
-  <script src="game.js?v=central-sql-live-sync-v4"></script>
+  <script src="game.js?v=duel-points-owner-free-v5"></script>
 </body>
 </html>
