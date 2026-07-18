@@ -443,10 +443,10 @@
   <div id="authOverlay">
     <section id="authCard" class="authCard">
       <h2>Konto Arena Stars</h2><p class="authLead">Przy pierwszym wejściu utwórz konto. Nazwa jest unikatowa, a postęp zostaje zapisany na serwerze.</p>
-      <div class="authTabs"><button type="button" class="authTab active" data-auth-tab="register">UTWÓRZ KONTO</button><button type="button" class="authTab" data-auth-tab="login">ZALOGUJ SIĘ</button></div>
-      <div class="authPane active" data-auth-pane="register"><div class="authField"><label>UNIKATOWA NAZWA KONTA</label><input id="registerUsername" maxlength="20" autocomplete="username"></div><div class="authField"><label>HASŁO — MINIMUM 6 ZNAKÓW</label><input id="registerPassword" type="password" autocomplete="new-password"></div><button type="button" id="registerBtn" class="authPrimary">UTWÓRZ KONTO</button></div>
-      <div class="authPane" data-auth-pane="login"><div class="authField"><label>NAZWA KONTA</label><input id="loginUsername" maxlength="20" autocomplete="username"></div><div class="authField"><label>HASŁO</label><input id="loginPassword" type="password" autocomplete="current-password"></div><button type="button" id="loginBtn" class="authPrimary">ZALOGUJ SIĘ</button></div>
-      <div id="authMsg" class="authMsg"></div>
+      <div class="authTabs"><button type="button" class="authTab active" data-auth-tab="register" onclick="return ArenaAccountUI.switchPane('register', event)">UTWÓRZ KONTO</button><button type="button" class="authTab" data-auth-tab="login" onclick="return ArenaAccountUI.switchPane('login', event)">ZALOGUJ SIĘ</button></div>
+      <form class="authPane active" data-auth-pane="register" onsubmit="return ArenaAccountUI.submit('register', event)"><div class="authField"><label>UNIKATOWA NAZWA KONTA</label><input id="registerUsername" maxlength="20" autocomplete="username"></div><div class="authField"><label>HASŁO — MINIMUM 6 ZNAKÓW</label><input id="registerPassword" type="password" autocomplete="new-password"></div><button type="submit" id="registerBtn" class="authPrimary" onclick="return ArenaAccountUI.submit('register', event)">UTWÓRZ KONTO</button></form>
+      <form class="authPane" data-auth-pane="login" onsubmit="return ArenaAccountUI.submit('login', event)"><div class="authField"><label>NAZWA KONTA</label><input id="loginUsername" maxlength="20" autocomplete="username"></div><div class="authField"><label>HASŁO</label><input id="loginPassword" type="password" autocomplete="current-password"></div><button type="submit" id="loginBtn" class="authPrimary" onclick="return ArenaAccountUI.submit('login', event)">ZALOGUJ SIĘ</button></form>
+      <div id="authMsg" class="authMsg" aria-live="polite"></div>
     </section>
     <section id="banCard" class="authCard banCard" style="display:none"><div class="banIcon">⛔</div><h2>Konto zablokowane</h2><strong id="banReason"></strong><div id="banUntil"></div><small>Po wygaśnięciu blokady odśwież stronę.</small></section>
   </div>
@@ -541,6 +541,119 @@
   </div>
 
   <div id="error"></div>
-<script src="game.js?v=login-final-neon-v4"></script>
+
+<script id="arenaIndependentAccountLogin">
+(() => {
+  'use strict';
+  const PLAYER_KEY = 'arenaStars3D_online_player_id_v1';
+  let busy = false;
+
+  const byId = id => document.getElementById(id);
+  const message = (text, bad = false) => {
+    const box = byId('authMsg');
+    if (!box) return;
+    box.textContent = text || '';
+    box.style.color = bad ? '#ff9aac' : '#ffe08a';
+  };
+  const stop = event => {
+    if (!event) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation();
+  };
+  const playerId = () => {
+    let id = '';
+    try { id = localStorage.getItem(PLAYER_KEY) || ''; } catch (_) {}
+    if (!id) {
+      id = globalThis.crypto?.randomUUID?.() || `gracz-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      try { localStorage.setItem(PLAYER_KEY, id); } catch (_) {}
+    }
+    return id;
+  };
+  const switchPane = (name, event) => {
+    stop(event);
+    const wanted = name === 'login' ? 'login' : 'register';
+    document.querySelectorAll('[data-auth-tab]').forEach(el => {
+      el.classList.toggle('active', el.dataset.authTab === wanted);
+      el.setAttribute('aria-selected', el.dataset.authTab === wanted ? 'true' : 'false');
+    });
+    document.querySelectorAll('[data-auth-pane]').forEach(el => {
+      el.classList.toggle('active', el.dataset.authPane === wanted);
+    });
+    message('');
+    requestAnimationFrame(() => byId(wanted === 'login' ? 'loginUsername' : 'registerUsername')?.focus());
+    return false;
+  };
+  const setBusy = (kind, active) => {
+    const button = byId(kind === 'register' ? 'registerBtn' : 'loginBtn');
+    if (!button) return;
+    button.disabled = active;
+    button.textContent = active ? (kind === 'register' ? 'TWORZENIE…' : 'LOGOWANIE…') : (kind === 'register' ? 'UTWÓRZ KONTO' : 'ZALOGUJ SIĘ');
+  };
+  const submit = async (kind, event) => {
+    stop(event);
+    if (busy) return false;
+    const register = kind === 'register';
+    const username = (byId(register ? 'registerUsername' : 'loginUsername')?.value || '').trim();
+    const password = byId(register ? 'registerPassword' : 'loginPassword')?.value || '';
+    if (!username) { message('Wpisz nazwę konta.', true); return false; }
+    if (!password) { message('Wpisz hasło.', true); return false; }
+    if (register && password.length < 6) { message('Hasło musi mieć minimum 6 znaków.', true); return false; }
+
+    busy = true;
+    setBusy(kind, true);
+    message(register ? 'Tworzenie konta…' : 'Logowanie…');
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 40000);
+    try {
+      const response = await fetch(register ? '/api/auth/register' : '/api/auth/login', {
+        method: 'POST',
+        credentials: 'same-origin',
+        cache: 'no-store',
+        headers: {'Content-Type': 'application/json'},
+        signal: controller.signal,
+        body: JSON.stringify({username, password, playerId: playerId()})
+      });
+      let data = {};
+      try { data = await response.json(); } catch (_) {}
+      if (!response.ok) {
+        const error = new Error(data.error || `Błąd serwera ${response.status}`);
+        error.status = response.status;
+        error.data = data;
+        throw error;
+      }
+      const id = data?.account?.playerId || data?.account?.id;
+      if (id) try { localStorage.setItem(PLAYER_KEY, id); } catch (_) {}
+      message('Zalogowano. Wczytywanie gry…');
+      location.reload();
+    } catch (error) {
+      let text = error?.message || 'Nie udało się połączyć z serwerem kont.';
+      if (error?.name === 'AbortError') text = 'Serwer odpowiada zbyt długo. Poczekaj chwilę i spróbuj ponownie.';
+      else if (error?.status === 404) text = 'Takie konto nie istnieje. Użyj opcji UTWÓRZ KONTO.';
+      else if (error?.status === 401) text = 'Nieprawidłowe hasło do konta.';
+      else if (error?.status === 409) text = error?.message || 'Ta nazwa konta jest już zajęta.';
+      else if (error?.status === 423) text = error?.data?.banReason ? `Konto zablokowane: ${error.data.banReason}` : 'Konto jest zablokowane.';
+      message(text, true);
+    } finally {
+      clearTimeout(timer);
+      busy = false;
+      setBusy(kind, false);
+    }
+    return false;
+  };
+
+  window.ArenaAccountUI = {switchPane, submit};
+
+  // Capturing fallback for browsers/extensions that suppress inline button handlers.
+  document.addEventListener('click', event => {
+    const tab = event.target.closest?.('[data-auth-tab]');
+    if (tab) return switchPane(tab.dataset.authTab, event);
+    if (event.target.closest?.('#registerBtn')) return submit('register', event);
+    if (event.target.closest?.('#loginBtn')) return submit('login', event);
+  }, true);
+})();
+</script>
+
+<script src="game.js?v=independent-auth-v7"></script>
 </body>
 </html>
