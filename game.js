@@ -1,5 +1,6 @@
 (() => {
 'use strict';
+window.__arenaBuild='lobby-controls-runtime-fix-v7';
 
 const canvas = document.getElementById('game');
 const gl = canvas.getContext('webgl2', {antialias:true, alpha:false});
@@ -193,7 +194,7 @@ function loadProgress(){
 let profile=loadProgress();
 profile.name=persistNickname(profile.name);
 let profileDirty=false,profileSyncBusy=false,profileChangeSeq=0,lastConfigRevision=0,backgroundSyncBusy=false;
-const CLIENT_VERSION='auth-zip-sql-fix-v6';
+const CLIENT_VERSION='lobby-controls-runtime-fix-v7';
 function saveProgress(markDirty=true){try{profile.name=persistNickname(profile.name);localStorage.setItem(SAVE_KEY,JSON.stringify(profile));if(markDirty){profileDirty=true;profileChangeSeq++;}}catch(_){} }
 function getPlayerId(){
   try{let id=localStorage.getItem(PLAYER_ID_KEY);if(!id){id=(crypto.randomUUID?crypto.randomUUID():`gracz-${Date.now()}-${Math.random().toString(16).slice(2)}`);localStorage.setItem(PLAYER_ID_KEY,id);}return id;}
@@ -321,7 +322,6 @@ function scheduleSqlSync(immediate=false){
 }
 addEventListener('online',()=>{sqlSyncFailures=0;scheduleSqlSync(true);syncProfile(false);});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)scheduleSqlSync(true);});
-scheduleSqlSync(false);
 
 function updateModeUI(){
   if(!ui.modeBtn)return;const def=modeDefinition(selectedMode);const solo=selectedMode==='solo',duel=selectedMode==='duel';ui.modeBtn.textContent=def?`${def.name} ${def.base==='duel'?'⚔':'🤖'}`:'TRYBY ▾';ui.modeBtn.classList.toggle('selected',!!def);ui.soloModeOption?.classList.toggle('selected',solo);ui.duelModeOption?.classList.toggle('selected',duel);ui.modeMenu?.querySelectorAll('[data-custom-mode]').forEach(el=>el.classList.toggle('selected',el.dataset.customMode===selectedMode));
@@ -780,6 +780,7 @@ let upgrades={...profile.upgrades};
 let running=false,runCommitted=false,last=performance.now(),score=0,wave=1,kills=0,walletCoins=profile.coins,runCoins=0,trophies=0,survivalTime=0,waveClock=0,spawnClock=0,shake=0,messageClock=0;
 let player,enemies=[],bullets=[],particles=[],stars=[],pickups=[],coins=[];
 let selectedMode=profile.mode||'solo',duelSearching=false,duelActive=false,duelEnded=false,duelMatchId='',duelOpponent=null,duelServerBullets=[],duelPredictedBullets=[],duelShotQueue=[],duelVisualHitSeqs=new Set(),duelLocalShotSeq=0,duelNetworkBusy=false,duelNetworkTimer=0,duelJoinTimer=0,duelNetworkFailures=0,duelMatchStatus='',duelStartIn=0,duelStartDeadline=0,duelLastStateAt=performance.now(),duelRtt=0,duelFrameSeq=0,duelLocalBotMode=false,duelBotBullets=[],duelBotTurnTimer=0,duelBotShotTimer=.8,duelBotStrafe=1,duelBotStuck=0,duelBotReveal=0,duelRound=1,duelYourWins=0,duelOpponentWins=0,duelRoundDraws=0,duelRoundEventSeq=0,duelRoundResolving=false,duelMirrorView=false,duelShotFlushBusy=false,duelShotFlushTimer=0;
+queueMicrotask(()=>{try{scheduleSqlSync(false);}catch(error){console.error('SQL sync startup error',error);}});
 window.__arenaDebug=()=>({duelActive,duelLocalBotMode,duelMatchStatus,duelRound,duelYourWins,duelOpponentWins,duelRoundDraws,player:player?{x:player.x,z:player.z,hp:player.hp}:null,opponent:duelOpponent?{x:duelOpponent.renderX??duelOpponent.x,z:duelOpponent.renderZ??duelOpponent.z,hp:duelOpponent.hp,hidden:duelOpponent.hidden,isBot:duelOpponent.isBot}:null,playerBullets:duelPredictedBullets.length,botBullets:duelBotBullets.length,botAmmo:duelOpponent?.ammo,botReload:duelOpponent?.reload,botSuper:duelOpponent?.super,botHyper:duelOpponent?.hyper,botHyperActive:duelOpponent?.hyperActive,mirrorView:duelMirrorView,shotQueue:duelShotQueue.length,shotFlushBusy:duelShotFlushBusy});
 
 const obstacles=[
@@ -1043,9 +1044,9 @@ if(ui.soloModeOption)ui.soloModeOption.addEventListener('click',chooseSoloMode);
 if(ui.duelModeOption)ui.duelModeOption.addEventListener('click',chooseDuelMode);
 if(ui.duelCancelBtn)ui.duelCancelBtn.addEventListener('click',cancelDuelQueue);
 document.addEventListener('click',e=>{if(ui.modeMenu&&!ui.modeMenu.contains(e.target)&&e.target!==ui.modeBtn)toggleModeMenu(false);});
-ui.playBtn.addEventListener('click',startGame);
-ui.retryBtn.addEventListener('click',startGame);
-ui.lobbyBtn.addEventListener('click',showLobby);
+ui.playBtn?.addEventListener('click',startGame);
+ui.retryBtn?.addEventListener('click',startGame);
+ui.lobbyBtn?.addEventListener('click',showLobby);
 for(const button of ui.upgradeButtons)button.addEventListener('click',()=>buyUpgrade(button.dataset.upgrade));
 for(const card of ui.skinCards){card.addEventListener('click',()=>selectSkin(card.dataset.skin));card.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();selectSkin(card.dataset.skin);}});}
 
@@ -1301,7 +1302,7 @@ adminUI.open?.addEventListener('click',()=>adminOpen(true));adminUI.loginClose?.
 document.querySelectorAll('.adminTab').forEach(tab=>tab.addEventListener('click',()=>{document.querySelectorAll('.adminTab').forEach(x=>x.classList.toggle('active',x===tab));document.querySelectorAll('.adminPane').forEach(p=>p.classList.toggle('active',p.dataset.adminPane===tab.dataset.adminTab));}));
 $('adminSaveSettings')?.addEventListener('click',adminSaveConfig);$('adminSearchBtn')?.addEventListener('click',()=>adminSearchPlayers($('adminPlayerSearch').value));$('adminSavePlayer')?.addEventListener('click',adminSavePlayer);$('adminAddMode')?.addEventListener('click',adminAddMode);$('adminSaveModes')?.addEventListener('click',adminSaveModes);$('adminFiles')?.addEventListener('change',adminFilesChanged);$('adminDeployBtn')?.addEventListener('click',adminDeploy);
 
-ui.crosshair.style.left=mouse.x+'px';ui.crosshair.style.top=mouse.y+'px';
+if(ui.crosshair){ui.crosshair.style.left=mouse.x+'px';ui.crosshair.style.top=mouse.y+'px';}
 addEventListener('beforeunload',()=>{if(duelActive||duelSearching||duelMatchId)stopDuelSession(true);else if(running)commitRun();else{profile.coins=walletCoins;saveProgress();}});
 fetchGameConfig();setInterval(()=>{if(!document.hidden)fetchGameConfig();},15000);updateModeUI();reset();showLobby();authBootstrap();
 })();
