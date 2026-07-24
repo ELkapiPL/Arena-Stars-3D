@@ -1379,6 +1379,94 @@
       body.lobby-mode #playBtn{width:108px!important;font-size:14px!important}
     }
 
+
+    /* ===== ARENA BALL 3V3 ===== */
+    #arenaBallHud{
+      display:none;
+      position:absolute;
+      z-index:8;
+      left:50%;
+      top:14px;
+      transform:translateX(-50%);
+      align-items:center;
+      gap:10px;
+      padding:8px 12px;
+      border-radius:18px;
+      background:linear-gradient(180deg,rgba(10,18,45,.90),rgba(7,12,31,.88));
+      border:1px solid rgba(255,255,255,.18);
+      box-shadow:0 12px 30px rgba(0,0,0,.34),0 0 26px rgba(78,199,255,.12);
+      backdrop-filter:blur(9px);
+      pointer-events:none;
+      text-align:center;
+      min-width:230px;
+    }
+    body.arena-ball-mode #arenaBallHud{display:flex}
+    body.arena-ball-mode #stats,
+    body.arena-ball-mode #duelOpponentHud,
+    body.arena-ball-mode #shop{display:none!important}
+    .arenaBallTeam{
+      min-width:52px;
+      padding:7px 9px;
+      border-radius:12px;
+      font-size:10px;
+      font-weight:1000;
+      letter-spacing:.08em;
+    }
+    .arenaBallTeam.blue{color:#d9f8ff;background:linear-gradient(180deg,rgba(38,190,255,.42),rgba(31,93,186,.36));border:1px solid rgba(90,224,255,.38)}
+    .arenaBallTeam.red{color:#ffe2ea;background:linear-gradient(180deg,rgba(255,69,112,.42),rgba(169,34,75,.36));border:1px solid rgba(255,110,144,.38)}
+    #arenaBallScore{
+      min-width:70px;
+      font-size:25px;
+      line-height:1;
+      font-weight:1000;
+      color:#fff;
+      letter-spacing:.08em;
+      text-shadow:0 0 16px rgba(255,255,255,.22);
+    }
+    #arenaBallClock{
+      min-width:76px;
+      padding:6px 8px;
+      border-radius:11px;
+      background:rgba(255,255,255,.07);
+      border:1px solid rgba(255,255,255,.10);
+      color:#cfeaff;
+      font-size:12px;
+      font-weight:1000;
+      letter-spacing:.04em;
+    }
+    #arenaBallClock.overtime{
+      color:#fff1a6;
+      border-color:rgba(255,214,75,.42);
+      background:rgba(255,170,30,.15);
+      box-shadow:0 0 18px rgba(255,184,45,.18);
+      animation:arenaBallClockPulse .8s ease-in-out infinite alternate;
+    }
+    @keyframes arenaBallClockPulse{to{filter:brightness(1.25);transform:scale(1.03)}}
+    body.arena-ball-mode #controls{
+      max-width:235px;
+      font-size:11px;
+    }
+    body.arena-ball-mode #controls::after{
+      content:'PIŁKA: podejdź, aby ją przejąć • strzał = podanie/kopnięcie • Q = superkop';
+      display:block;
+      margin-top:7px;
+      color:#ffe278;
+      font-weight:900;
+      line-height:1.35;
+    }
+    @media(max-width:800px), (pointer:coarse){
+      #arenaBallHud{
+        top:max(6px,env(safe-area-inset-top));
+        min-width:190px;
+        gap:6px;
+        padding:5px 7px;
+        border-radius:12px;
+      }
+      .arenaBallTeam{min-width:38px;padding:5px 6px;border-radius:8px;font-size:7px}
+      #arenaBallScore{min-width:50px;font-size:18px}
+      #arenaBallClock{min-width:58px;padding:4px 5px;border-radius:8px;font-size:8px}
+    }
+
   </style>
 </head>
 <body class="lobby-mode">
@@ -1388,6 +1476,7 @@
       <div id="stats" class="card">Punkty: <span id="score">0</span><br>Monety: <span id="coins">0</span> 🪙<br>Pucharki: <span id="trophies">0</span> 🏆<br>Fala: <span id="wave">1</span><br><span class="small">Pokonani: <span id="kills">0</span></span></div>
       <div id="duelOpponentHud" class="card"><div class="duelHudName" id="duelOpponentName">SZUKANIE PRZECIWNIKA</div><div class="duelHudHp" id="duelOpponentHp">—</div></div><div class="card"><b>Arena Stars 3D</b><div class="small"><span id="hudModeText">Online</span> • <span id="onlineHudCount">0</span> online</div></div>
     </div>
+    <div id="arenaBallHud" aria-label="Wynik Arena Ball"><span class="arenaBallTeam blue">NIEBIESCY</span><span id="arenaBallScore">0 : 0</span><span class="arenaBallTeam red">CZERWONI</span><span id="arenaBallClock">02:00</span></div>
     <div id="crosshair"></div>
     <div id="shop" class="card">
       <div id="shopTitle">STAŁE ULEPSZENIA ZA MONETY</div>
@@ -1456,7 +1545,7 @@
         <div id="rankingTotal" class="rankingTotal">Wszystkich graczy: 0</div>
         <div class="rankingColumns"><span>MIEJSCE</span><span>GRACZ</span><span>PUNKTY</span></div>
         <div id="rankingBody" class="rankingBody"></div>
-        <div class="rankingFoot">Widocznych jest 200 najlepszych. Liczba zapisanych profili nie ma limitu 200. Tabela pokazuje TOP 200. W Pojedynkach najpierw czekasz 30 sekund na prawdziwego gracza. Jeśli nikt nie dołączy, walczysz z botem.</div>
+        <div class="rankingFoot">Widocznych jest 200 najlepszych. Liczba zapisanych profili nie ma limitu 200. Tabela pokazuje TOP 200. W trybach online czekasz maksymalnie 30 sekund. W Arena Ball gracze są losowani do drużyn 3v3, a wolne miejsca zajmują boty.</div>
       </aside>
       <div id="heroStage"><div class="heroGlow"></div><div class="heroBody"></div><i class="heroOrb"></i><i class="heroOrb o2"></i><i class="heroOrb o3"></i></div>
       <div id="savedUpgrades">
@@ -1464,8 +1553,8 @@
         <div class="savedUpgrade">STRZAŁ <span>+7% / poziom</span><strong data-persistent-level="fire">Poziom 0/5</strong></div>
         <div class="savedUpgrade">ŻYCIE <span>+20 / poziom</span><strong data-persistent-level="hp">Poziom 0/5</strong></div>
       </div>
-      <div class="saveNote">Postęp zapisuje się w przeglądarce. Wybierz Przetrwanie z botami albo Pojedynki 1v1.</div>
-      <div id="modeMenu" aria-label="Wybór trybu gry"><div class="modeMenuTitle">WYBIERZ TRYB</div><button id="soloModeOption" class="modeOption"><span class="modeIcon">🤖</span><span><span class="modeName">Przetrwanie z botami</span><span class="modeDesc">Klasyczny tryb z falami robotów, monetami, pucharkami i ulepszeniami.</span></span></button><button id="duelModeOption" class="modeOption"><span class="modeIcon">⚔️</span><span><span class="modeName">Pojedynki 1v1</span><span class="modeDesc">Szybka arena z 2 ścianami i 4 polami krzaków. Czekaj do 30 sekund na gracza albo walcz z botem.</span></span></button></div>
+      <div class="saveNote">Postęp zapisuje się w przeglądarce. Wybierz Przetrwanie, Pojedynki 1v1 albo Arena Ball 3v3.</div>
+      <div id="modeMenu" aria-label="Wybór trybu gry"><div class="modeMenuTitle">WYBIERZ TRYB</div><button id="soloModeOption" class="modeOption"><span class="modeIcon">🤖</span><span><span class="modeName">Przetrwanie z botami</span><span class="modeDesc">Klasyczny tryb z falami robotów, monetami, pucharkami i ulepszeniami.</span></span></button><button id="duelModeOption" class="modeOption"><span class="modeIcon">⚔️</span><span><span class="modeName">Pojedynki 1v1</span><span class="modeDesc">Szybka arena z 2 ścianami i 4 polami krzaków. Czekaj do 30 sekund na gracza albo walcz z botem.</span></span></button><button id="ballModeOption" class="modeOption"><span class="modeIcon">⚽</span><span><span class="modeName">Arena Ball 3v3</span><span class="modeDesc">Losowe drużyny 3 na 3. Mecz trwa 2 minuty i kończy się po 2 golach. Po remisie jest 30 sekund dogrywki. Po 30 sekundach oczekiwania wolne miejsca zajmują boty.</span></span></button></div>
       <button id="chatOpenBtn">💬 CZAT <span id="chatBadge" class="chatBadge" style="display:none">0</span></button><button id="passOpenBtn">🎟️ ARENA KARNET</button><button id="lobbyFullscreenBtn" type="button">⛶ PEŁNY EKRAN</button><button id="adminOpenBtn" hidden style="display:none">⚙ PANEL ADMINISTRACYJNY</button>
       <button id="modeBtn">TRYBY ▾</button>
       <button id="playBtn">GRAJ ▶</button>
@@ -1948,6 +2037,6 @@
 </script>
 
 
-<script src="game.js?v=arena-mobile-fullscreen-layout-v25"></script>
+<script src="game.js?v=arena-ball-3v3-v26"></script>
 </body>
 </html>

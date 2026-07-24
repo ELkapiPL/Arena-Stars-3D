@@ -229,7 +229,7 @@ def persistent_storage_public_status() -> dict[str, Any]:
         "schemaVersion": DB_SCHEMA_VERSION if DB_READY else 0,
         "emailResetConfigured": bool(RESEND_API_KEY and PASSWORD_RESET_FROM),
         "passwordResetTtlMinutes": PASSWORD_RESET_TTL // 60,
-        "build": "arena-mobile-fullscreen-layout-v20",
+        "build": "arena-ball-3v3-v26",
     }
     if DB_READY:
         payload["connectedAt"] = DB_CONNECTED_AT
@@ -595,7 +595,7 @@ def db_schema_status() -> dict[str, Any]:
         "connectedAt": DB_CONNECTED_AT,
         "emailResetConfigured": bool(RESEND_API_KEY and PASSWORD_RESET_FROM),
         "passwordResetTtlMinutes": PASSWORD_RESET_TTL // 60,
-        "build": "arena-mobile-fullscreen-layout-v20",
+        "build": "arena-ball-3v3-v26",
     }
 
 
@@ -2927,6 +2927,604 @@ def leave_duel(payload: dict[str, Any]) -> dict[str, Any]:
     return {"ok": True}
 
 
+# ----------------------------- Arena Ball 3v3 -----------------------------
+
+ARENA_BALL_WAIT_SECONDS = 30.0
+ARENA_BALL_MATCH_SECONDS = 120.0
+ARENA_BALL_OVERTIME_SECONDS = 30.0
+ARENA_BALL_RESPAWN_SECONDS = 3.0
+ARENA_BALL_FINISH_TTL = 35.0
+ARENA_BALL_PLAYER_TIMEOUT = 9.0
+ARENA_BALL_ARENA_X = 18.0
+ARENA_BALL_ARENA_Z = 20.0
+ARENA_BALL_GOAL_HALF_WIDTH = 4.8
+ARENA_BALL_GOAL_LINE = 19.0
+ARENA_BALL_RADIUS = 0.75
+ARENA_BALL_BALL_RADIUS = 0.58
+ARENA_BALL_BULLET_SPEED = 18.0
+ARENA_BALL_BULLET_DAMAGE = 22
+ARENA_BALL_KICK_SPEED = 19.5
+ARENA_BALL_SUPER_KICK_SPEED = 25.0
+ARENA_BALL_TICK_RATE = 20.0
+
+# Symetryczna, gęsta mapa. W dogrywce wszystkie przeszkody i krzaki znikają.
+ARENA_BALL_WALLS = (
+    (-11.8, -12.0, 4.2, 1.8), (11.8, -12.0, 4.2, 1.8),
+    (-11.8, 12.0, 4.2, 1.8), (11.8, 12.0, 4.2, 1.8),
+    (-6.0, -6.2, 1.8, 4.8), (6.0, -6.2, 1.8, 4.8),
+    (-6.0, 6.2, 1.8, 4.8), (6.0, 6.2, 1.8, 4.8),
+    (0.0, -9.0, 4.0, 1.6), (0.0, 9.0, 4.0, 1.6),
+    (-11.4, 0.0, 3.4, 1.7), (11.4, 0.0, 3.4, 1.7),
+    (0.0, 0.0, 2.8, 2.8),
+)
+ARENA_BALL_BUSHES = (
+    (-14.2, -7.4, 2.0), (-10.5, -5.4, 1.8), (-3.0, -12.6, 1.9), (3.0, -12.6, 1.9),
+    (14.2, -7.4, 2.0), (10.5, -5.4, 1.8), (-14.2, 7.4, 2.0), (-10.5, 5.4, 1.8),
+    (-3.0, 12.6, 1.9), (3.0, 12.6, 1.9), (14.2, 7.4, 2.0), (10.5, 5.4, 1.8),
+    (-8.6, 0.0, 1.7), (8.6, 0.0, 1.7), (0.0, -4.6, 1.65), (0.0, 4.6, 1.65),
+)
+
+arena_ball_waiting: dict[str, dict[str, Any]] = {}
+arena_ball_player_match: dict[str, str] = {}
+arena_ball_matches: dict[str, dict[str, Any]] = {}
+arena_ball_counter = 0
+
+
+def arena_ball_active_walls(match: dict[str, Any]) -> tuple[tuple[float, float, float, float], ...]:
+    return () if match.get("overtime") else ARENA_BALL_WALLS
+
+
+def arena_ball_point_in_bush(match: dict[str, Any], x: float, z: float) -> bool:
+    if match.get("overtime"):
+        return False
+    return any((x - bx) ** 2 + (z - bz) ** 2 < radius ** 2 for bx, bz, radius in ARENA_BALL_BUSHES)
+
+
+def arena_ball_hits_wall(match: dict[str, Any], x: float, z: float, radius: float = 0.12) -> bool:
+    if abs(x) > ARENA_BALL_ARENA_X - radius or abs(z) > ARENA_BALL_ARENA_Z - radius:
+        # Otwory bramek są jedynym wyjątkiem od górnej/dolnej granicy.
+        if abs(z) > ARENA_BALL_ARENA_Z - radius and abs(x) <= ARENA_BALL_GOAL_HALF_WIDTH - radius:
+            return False
+        return True
+    for wx, wz, width, depth in arena_ball_active_walls(match):
+        if wx - width / 2 - radius < x < wx + width / 2 + radius and wz - depth / 2 - radius < z < wz + depth / 2 + radius:
+            return True
+    return False
+
+
+def arena_ball_move_position(match: dict[str, Any], x: float, z: float, dx: float, dz: float, radius: float = ARENA_BALL_RADIUS) -> tuple[float, float]:
+    next_x = max(-ARENA_BALL_ARENA_X + radius, min(ARENA_BALL_ARENA_X - radius, x + dx))
+    if not arena_ball_hits_wall(match, next_x, z, radius):
+        x = next_x
+    next_z = max(-ARENA_BALL_ARENA_Z + radius, min(ARENA_BALL_ARENA_Z - radius, z + dz))
+    if not arena_ball_hits_wall(match, x, next_z, radius):
+        z = next_z
+    return x, z
+
+
+def arena_ball_line_blocked(match: dict[str, Any], x0: float, z0: float, x1: float, z1: float, radius: float = 0.12) -> bool:
+    for wx, wz, width, depth in arena_ball_active_walls(match):
+        if segment_aabb_hit_t(
+            x0, z0, x1, z1,
+            wx - width / 2 - radius, wx + width / 2 + radius,
+            wz - depth / 2 - radius, wz + depth / 2 + radius,
+        ) is not None:
+            return True
+    return False
+
+
+def arena_ball_spawn(team: int, slot: int) -> tuple[float, float, float]:
+    x_positions = (-6.2, 0.0, 6.2)
+    x = x_positions[max(0, min(2, slot))]
+    if team == 0:
+        return x, 14.6, math.pi
+    return x, -14.6, 0.0
+
+
+def create_arena_ball_player(payload: dict[str, Any], player_id: str, team: int, slot: int, is_bot: bool = False, bot_number: int = 1) -> dict[str, Any]:
+    x, z, angle = arena_ball_spawn(team, slot)
+    base_hp = clean_float(payload.get("maxHp"), 100, 500, 150)
+    max_hp = int(round(base_hp * float(game_config.get("duelHpMultiplier", DUEL_HP_MULTIPLIER))))
+    name = clean_name(payload.get("name"))
+    if is_bot:
+        name = f"Bot Arena {bot_number}"
+    return {
+        "id": player_id, "name": name, "skin": clean_skin(payload.get("skin")),
+        "team": int(team), "slot": int(slot), "is_bot": bool(is_bot),
+        "x": x, "z": z, "angle": angle, "spawn_x": x, "spawn_z": z, "spawn_angle": angle,
+        "hp": max_hp, "max_hp": max_hp,
+        "speed": clean_float(payload.get("speed"), 3.0, 12.0, 6.3),
+        "fire_cooldown": clean_float(payload.get("fireCooldown"), 0.08, 0.9, 0.25),
+        "last_shot": 0.0, "last_seen": now(), "last_move": now(),
+        "vx": 0.0, "vz": 0.0, "revealed_until": 0.0,
+        "respawn_at": 0.0, "last_action_seq": 0,
+        "bot_turn_at": now() + random.uniform(.5, 1.2), "bot_strafe": random.choice((-1.0, 1.0)),
+    }
+
+
+def arena_ball_reset_positions(match: dict[str, Any]) -> None:
+    team_slots = {0: 0, 1: 0}
+    for player in match["players"].values():
+        slot = team_slots[player["team"]]
+        team_slots[player["team"]] += 1
+        x, z, angle = arena_ball_spawn(player["team"], slot)
+        player.update({
+            "slot": slot, "x": x, "z": z, "angle": angle,
+            "spawn_x": x, "spawn_z": z, "spawn_angle": angle,
+            "hp": player["max_hp"], "respawn_at": 0.0,
+            "vx": 0.0, "vz": 0.0,
+        })
+    match["ball"] = {"x": 0.0, "z": 0.0, "vx": 0.0, "vz": 0.0, "carrier_id": None, "last_touch_team": None, "pickup_block_until": 0.0, "last_kicker_id": None}
+    match["bullets"] = []
+
+
+def create_arena_ball_match(entries: list[tuple[str, dict[str, Any], bool]]) -> dict[str, Any]:
+    global arena_ball_counter
+    arena_ball_counter += 1
+    random.shuffle(entries)
+    match_id = f"ball-{int(now() * 1000)}-{arena_ball_counter}"
+    players: dict[str, dict[str, Any]] = {}
+    team_slots = {0: 0, 1: 0}
+    for index, (pid, payload, is_bot) in enumerate(entries[:6]):
+        team = 0 if index < 3 else 1
+        slot = team_slots[team]
+        team_slots[team] += 1
+        players[pid] = create_arena_ball_player(payload, pid, team, slot, is_bot=is_bot, bot_number=index + 1)
+    current = now()
+    match = {
+        "id": match_id, "status": "countdown", "created_at": current,
+        "start_at": current + 3.0, "phase_end_at": 0.0, "last_tick": current,
+        "players": players, "bullets": [], "bullet_seq": 0,
+        "ball": {"x": 0.0, "z": 0.0, "vx": 0.0, "vz": 0.0, "carrier_id": None, "last_touch_team": None, "pickup_block_until": 0.0, "last_kicker_id": None},
+        "scores": [0, 0], "overtime": False, "winner_team": None,
+        "reason": "", "finished_at": 0.0, "resume_at": 0.0,
+        "state_seq": 0, "goal_event_seq": 0, "last_goal_team": None,
+    }
+    arena_ball_matches[match_id] = match
+    for pid, player in players.items():
+        if not player.get("is_bot"):
+            arena_ball_player_match[pid] = match_id
+    return match
+
+
+def arena_ball_drop_ball(match: dict[str, Any], player: dict[str, Any], impulse: float = 4.0) -> None:
+    ball = match["ball"]
+    if ball.get("carrier_id") != player["id"]:
+        return
+    angle = normalize_duel_angle(player.get("angle", 0.0))
+    ball.update({
+        "carrier_id": None,
+        "x": float(player["x"]) + math.sin(angle) * 1.0,
+        "z": float(player["z"]) + math.cos(angle) * 1.0,
+        "vx": math.sin(angle) * impulse,
+        "vz": math.cos(angle) * impulse,
+        "last_touch_team": player["team"],
+    })
+
+
+def arena_ball_kick(match: dict[str, Any], player: dict[str, Any], angle: float, super_kick: bool = False) -> bool:
+    ball = match["ball"]
+    if ball.get("carrier_id") != player["id"]:
+        return False
+    angle = normalize_duel_angle(angle, player.get("angle", 0.0))
+    speed = ARENA_BALL_SUPER_KICK_SPEED if super_kick else ARENA_BALL_KICK_SPEED
+    ball.update({
+        "carrier_id": None,
+        "x": float(player["x"]) + math.sin(angle) * 1.25,
+        "z": float(player["z"]) + math.cos(angle) * 1.25,
+        "vx": math.sin(angle) * speed,
+        "vz": math.cos(angle) * speed,
+        "last_touch_team": player["team"],
+        "pickup_block_until": now() + .28,
+        "last_kicker_id": player["id"],
+    })
+    player["revealed_until"] = now() + .8
+    return True
+
+
+def spawn_arena_ball_bullet(match: dict[str, Any], owner: dict[str, Any], angle: float) -> bool:
+    current = now()
+    if owner.get("hp", 0) <= 0 or current < float(owner.get("respawn_at", 0.0)):
+        return False
+    if current - float(owner.get("last_shot", 0.0)) < float(owner.get("fire_cooldown", .25)):
+        return False
+    owner["last_shot"] = current
+    owner["revealed_until"] = current + .85
+    angle = normalize_duel_angle(angle, owner.get("angle", 0.0))
+    match["bullet_seq"] += 1
+    match["bullets"].append({
+        "id": f'{match["id"]}-b{match["bullet_seq"]}', "owner_id": owner["id"], "team": owner["team"],
+        "x": owner["x"] + math.sin(angle) * 1.05, "z": owner["z"] + math.cos(angle) * 1.05,
+        "vx": math.sin(angle) * ARENA_BALL_BULLET_SPEED, "vz": math.cos(angle) * ARENA_BALL_BULLET_SPEED,
+        "life": 2.4, "damage": ARENA_BALL_BULLET_DAMAGE, "radius": DUEL_BULLET_RADIUS,
+    })
+    return True
+
+
+def finish_arena_ball(match: dict[str, Any], winner_team: int | None, reason: str) -> None:
+    if match.get("status") == "finished":
+        return
+    match["status"] = "finished"
+    match["winner_team"] = winner_team
+    match["reason"] = reason
+    match["finished_at"] = now()
+    match["state_seq"] = int(match.get("state_seq", 0)) + 1
+
+
+def arena_ball_goal(match: dict[str, Any], scoring_team: int) -> None:
+    match["scores"][scoring_team] += 1
+    match["last_goal_team"] = scoring_team
+    match["goal_event_seq"] = int(match.get("goal_event_seq", 0)) + 1
+    # W dogrywce obowiązuje złoty gol: pierwszy gol natychmiast kończy mecz.
+    if match.get("overtime"):
+        finish_arena_ball(match, scoring_team, f"Złoty gol w dogrywce dla drużyny {'NIEBIESKIEJ' if scoring_team == 0 else 'CZERWONEJ'}.")
+        return
+    if match["scores"][scoring_team] >= 2:
+        finish_arena_ball(match, scoring_team, f"Drużyna {'NIEBIESKA' if scoring_team == 0 else 'CZERWONA'} zdobyła 2 gole.")
+        return
+    pause = 2.7
+    match["status"] = "goal_pause"
+    match["resume_at"] = now() + pause
+    if match.get("phase_end_at"):
+        match["phase_end_at"] += pause
+    arena_ball_reset_positions(match)
+    match["state_seq"] = int(match.get("state_seq", 0)) + 1
+
+
+def arena_ball_respawn_player(player: dict[str, Any]) -> None:
+    player.update({
+        "x": player["spawn_x"], "z": player["spawn_z"], "angle": player["spawn_angle"],
+        "hp": player["max_hp"], "respawn_at": 0.0, "vx": 0.0, "vz": 0.0,
+    })
+
+
+def update_arena_ball_bots(match: dict[str, Any], step: float, current: float) -> None:
+    players = list(match["players"].values())
+    ball = match["ball"]
+    carrier = match["players"].get(ball.get("carrier_id"))
+    for bot in players:
+        if not bot.get("is_bot") or bot.get("hp", 0) <= 0 or current < float(bot.get("respawn_at", 0.0)):
+            continue
+        team = int(bot["team"])
+        enemies = [p for p in players if p["team"] != team and p.get("hp", 0) > 0 and current >= float(p.get("respawn_at", 0.0))]
+        friends = [p for p in players if p["team"] == team and p.get("hp", 0) > 0 and current >= float(p.get("respawn_at", 0.0))]
+        target_x, target_z = 0.0, 0.0
+        if ball.get("carrier_id") == bot["id"]:
+            target_x = 0.0
+            target_z = -18.4 if team == 0 else 18.4
+            distance_goal = math.hypot(target_x - bot["x"], target_z - bot["z"])
+            aim = math.atan2(target_x - bot["x"], target_z - bot["z"])
+            bot["angle"] = aim
+            if distance_goal < 10.5 and not arena_ball_line_blocked(match, bot["x"], bot["z"], target_x, target_z, .28):
+                arena_ball_kick(match, bot, aim, super_kick=distance_goal > 7.0)
+        else:
+            bx = float(carrier["x"]) if carrier else float(ball["x"])
+            bz = float(carrier["z"]) if carrier else float(ball["z"])
+            team_distances = sorted((math.hypot(p["x"] - bx, p["z"] - bz), p["id"]) for p in friends)
+            chaser_id = team_distances[0][1] if team_distances else bot["id"]
+            if bot["id"] == chaser_id:
+                target_x, target_z = bx, bz
+            elif int(bot.get("slot", 0)) == 1:
+                target_x, target_z = (bx * .35, bz * .25)
+            else:
+                own_z = 13.5 if team == 0 else -13.5
+                target_x = max(-7.0, min(7.0, bx * .42))
+                target_z = own_z
+
+        dx, dz = target_x - bot["x"], target_z - bot["z"]
+        distance = math.hypot(dx, dz)
+        if distance > .25:
+            nx, nz = dx / distance, dz / distance
+            old_x, old_z = bot["x"], bot["z"]
+            bot["x"], bot["z"] = arena_ball_move_position(match, bot["x"], bot["z"], nx * bot["speed"] * step, nz * bot["speed"] * step)
+            bot["vx"] = (bot["x"] - old_x) / max(step, .001)
+            bot["vz"] = (bot["z"] - old_z) / max(step, .001)
+            if ball.get("carrier_id") != bot["id"]:
+                bot["angle"] = math.atan2(nx, nz)
+
+        if enemies and ball.get("carrier_id") != bot["id"]:
+            target = min(enemies, key=lambda p: math.hypot(p["x"] - bot["x"], p["z"] - bot["z"]))
+            dist = math.hypot(target["x"] - bot["x"], target["z"] - bot["z"])
+            if dist < 13.5 and not arena_ball_line_blocked(match, bot["x"], bot["z"], target["x"], target["z"], .10):
+                aim = math.atan2(target["x"] - bot["x"], target["z"] - bot["z"]) + random.uniform(-.07, .07)
+                spawn_arena_ball_bullet(match, bot, aim)
+
+
+def arena_ball_public_player(match: dict[str, Any], player: dict[str, Any], viewer: dict[str, Any]) -> dict[str, Any]:
+    in_bush = arena_ball_point_in_bush(match, float(player["x"]), float(player["z"]))
+    hidden = False
+    if viewer["id"] != player["id"] and viewer["team"] != player["team"] and in_bush:
+        distance = math.hypot(float(player["x"]) - float(viewer["x"]), float(player["z"]) - float(viewer["z"]))
+        hidden = distance > DUEL_BUSH_REVEAL_DISTANCE and now() >= float(player.get("revealed_until", 0.0))
+    row = {
+        "id": player["id"], "name": player["name"], "skin": player["skin"],
+        "team": int(player["team"]), "slot": int(player.get("slot", 0)),
+        "hp": max(0, int(round(player.get("hp", 0)))), "maxHp": int(player["max_hp"]),
+        "isBot": bool(player.get("is_bot")), "hidden": hidden, "inBush": in_bush,
+        "respawnIn": max(0.0, float(player.get("respawn_at", 0.0)) - now()),
+        "hasBall": match["ball"].get("carrier_id") == player["id"],
+    }
+    if not hidden:
+        row.update({
+            "x": round(float(player["x"]), 3), "z": round(float(player["z"]), 3),
+            "angle": round(normalize_duel_angle(player.get("angle", 0.0)), 4),
+            "vx": round(float(player.get("vx", 0.0)), 3), "vz": round(float(player.get("vz", 0.0)), 3),
+        })
+    return row
+
+
+def arena_ball_payload(match: dict[str, Any], player_id: str) -> dict[str, Any]:
+    current = now()
+    viewer = match["players"][player_id]
+    time_remaining = 0.0
+    if match["status"] in {"playing", "overtime"}:
+        time_remaining = max(0.0, float(match.get("phase_end_at", current)) - current)
+    return {
+        "ok": True, "matchId": match["id"], "status": match["status"],
+        "startIn": max(0.0, float(match.get("start_at", current)) - current) if match["status"] == "countdown" else 0.0,
+        "resumeIn": max(0.0, float(match.get("resume_at", current)) - current) if match["status"] == "goal_pause" else 0.0,
+        "timeRemaining": time_remaining, "overtime": bool(match.get("overtime")),
+        "scores": list(match["scores"]), "yourTeam": int(viewer["team"]),
+        "players": [arena_ball_public_player(match, player, viewer) for player in match["players"].values()],
+        "ball": {
+            "x": round(float(match["ball"]["x"]), 3), "z": round(float(match["ball"]["z"]), 3),
+            "vx": round(float(match["ball"]["vx"]), 3), "vz": round(float(match["ball"]["vz"]), 3),
+            "carrierId": match["ball"].get("carrier_id"),
+        },
+        "bullets": [{
+            "id": bullet["id"], "ownerId": bullet["owner_id"], "team": int(bullet["team"]),
+            "x": round(float(bullet["x"]), 3), "z": round(float(bullet["z"]), 3),
+            "vx": round(float(bullet["vx"]), 3), "vz": round(float(bullet["vz"]), 3),
+        } for bullet in match["bullets"]],
+        "winnerTeam": match.get("winner_team"), "reason": match.get("reason", ""),
+        "goalEventSeq": int(match.get("goal_event_seq", 0)), "lastGoalTeam": match.get("last_goal_team"),
+        "stateSeq": int(match.get("state_seq", 0)), "ackActionSeq": int(viewer.get("last_action_seq", 0)),
+        "wallsActive": not bool(match.get("overtime")), "serverTime": round(current, 4),
+    }
+
+
+def advance_arena_ball(match: dict[str, Any]) -> None:
+    current = now()
+    status = match.get("status")
+    if status == "countdown" and current >= float(match.get("start_at", current)):
+        match["status"] = "playing"
+        match["phase_end_at"] = current + ARENA_BALL_MATCH_SECONDS
+        match["last_tick"] = current
+        match["state_seq"] = int(match.get("state_seq", 0)) + 1
+        status = "playing"
+    if status == "goal_pause" and current >= float(match.get("resume_at", current)):
+        match["status"] = "overtime" if match.get("overtime") else "playing"
+        match["last_tick"] = current
+        match["state_seq"] = int(match.get("state_seq", 0)) + 1
+        status = match["status"]
+    if status not in {"playing", "overtime"}:
+        return
+
+    for player in match["players"].values():
+        if not player.get("is_bot") and current - float(player.get("last_seen", current)) > ARENA_BALL_PLAYER_TIMEOUT:
+            player["is_bot"] = True
+            player["name"] = f'{player["name"]} • BOT'
+        if player.get("hp", 0) <= 0 and current >= float(player.get("respawn_at", current + 1)):
+            arena_ball_respawn_player(player)
+
+    remaining = min(.30, max(0.0, current - float(match.get("last_tick", current))))
+    match["last_tick"] = current
+    players = list(match["players"].values())
+    changed = False
+    while remaining > 1e-7:
+        step = min(.025, remaining)
+        remaining -= step
+        update_arena_ball_bots(match, step, current)
+        ball = match["ball"]
+        carrier = match["players"].get(ball.get("carrier_id"))
+        if carrier and carrier.get("hp", 0) > 0:
+            angle = normalize_duel_angle(carrier.get("angle", 0.0))
+            ball["x"] = carrier["x"] + math.sin(angle) * 1.0
+            ball["z"] = carrier["z"] + math.cos(angle) * 1.0
+            ball["vx"] = 0.0; ball["vz"] = 0.0
+        else:
+            if carrier:
+                arena_ball_drop_ball(match, carrier, 2.0)
+            x0, z0 = float(ball["x"]), float(ball["z"])
+            vx, vz = float(ball["vx"]), float(ball["vz"])
+            x1, z1 = x0 + vx * step, z0 + vz * step
+            if arena_ball_hits_wall(match, x1, z0, ARENA_BALL_BALL_RADIUS):
+                vx *= -.72
+                x1 = x0 + vx * step
+            if arena_ball_hits_wall(match, x1, z1, ARENA_BALL_BALL_RADIUS):
+                vz *= -.72
+                z1 = z0 + vz * step
+            ball["x"], ball["z"] = x1, z1
+            drag = .985 ** (step / .025)
+            ball["vx"], ball["vz"] = vx * drag, vz * drag
+            if abs(ball["vx"]) < .06: ball["vx"] = 0.0
+            if abs(ball["vz"]) < .06: ball["vz"] = 0.0
+
+            # Podniesienie piłki przez najbliższego żywego gracza.
+            candidates = [p for p in players if p.get("hp", 0) > 0 and current >= float(p.get("respawn_at", 0.0)) and not (current < float(ball.get("pickup_block_until", 0.0)) and p["id"] == ball.get("last_kicker_id"))]
+            if candidates:
+                nearest = min(candidates, key=lambda p: math.hypot(p["x"] - ball["x"], p["z"] - ball["z"]))
+                if math.hypot(nearest["x"] - ball["x"], nearest["z"] - ball["z"]) <= 1.35:
+                    ball["carrier_id"] = nearest["id"]
+                    ball["last_touch_team"] = nearest["team"]
+                    ball["vx"] = ball["vz"] = 0.0
+                    ball["last_kicker_id"] = None
+
+        # Gol może paść zarówno po kopnięciu, jak i po wejściu z piłką.
+        if ball["z"] <= -ARENA_BALL_GOAL_LINE and abs(ball["x"]) <= ARENA_BALL_GOAL_HALF_WIDTH:
+            arena_ball_goal(match, 0); return
+        if ball["z"] >= ARENA_BALL_GOAL_LINE and abs(ball["x"]) <= ARENA_BALL_GOAL_HALF_WIDTH:
+            arena_ball_goal(match, 1); return
+
+        kept: list[dict[str, Any]] = []
+        for bullet in match["bullets"]:
+            x0, z0 = float(bullet["x"]), float(bullet["z"])
+            x1 = x0 + float(bullet["vx"]) * step
+            z1 = z0 + float(bullet["vz"]) * step
+            bullet["life"] -= step
+            if bullet["life"] <= 0 or arena_ball_line_blocked(match, x0, z0, x1, z1, float(bullet.get("radius", .19))):
+                changed = True
+                continue
+            targets = [p for p in players if p["team"] != bullet["team"] and p.get("hp", 0) > 0 and current >= float(p.get("respawn_at", 0.0))]
+            best_target = None; best_t = None
+            for target in targets:
+                hit_t = segment_circle_hit_t(x0, z0, x1, z1, target["x"], target["z"], ARENA_BALL_RADIUS + float(bullet.get("radius", .19)))
+                if hit_t is not None and (best_t is None or hit_t < best_t):
+                    best_t, best_target = hit_t, target
+            if best_target is not None:
+                best_target["hp"] = max(0, best_target["hp"] - bullet["damage"])
+                best_target["revealed_until"] = current + .8
+                if best_target["hp"] <= 0:
+                    arena_ball_drop_ball(match, best_target, 4.0)
+                    best_target["respawn_at"] = current + ARENA_BALL_RESPAWN_SECONDS
+                changed = True
+                continue
+            bullet["x"], bullet["z"] = x1, z1
+            kept.append(bullet)
+        match["bullets"] = kept
+        changed = True
+
+    if match.get("status") in {"playing", "overtime"} and current >= float(match.get("phase_end_at", current + 1)):
+        if match["scores"][0] != match["scores"][1]:
+            winner = 0 if match["scores"][0] > match["scores"][1] else 1
+            finish_arena_ball(match, winner, "Koniec czasu meczu.")
+            return
+        if not match.get("overtime"):
+            match["overtime"] = True
+            match["status"] = "overtime"
+            match["phase_end_at"] = current + ARENA_BALL_OVERTIME_SECONDS
+            match["bullets"] = []
+            match["state_seq"] = int(match.get("state_seq", 0)) + 1
+        else:
+            finish_arena_ball(match, None, "Remis po 30 sekundach dogrywki.")
+            return
+    if changed:
+        match["state_seq"] = int(match.get("state_seq", 0)) + 1
+
+
+def cleanup_arena_ball() -> None:
+    current = now()
+    for player_id, waiting in list(arena_ball_waiting.items()):
+        if current - float(waiting.get("last_seen", current)) > 50.0:
+            arena_ball_waiting.pop(player_id, None)
+    for match_id, match in list(arena_ball_matches.items()):
+        advance_arena_ball(match)
+        if match.get("status") == "finished" and current - float(match.get("finished_at", current)) > ARENA_BALL_FINISH_TTL:
+            arena_ball_matches.pop(match_id, None)
+            for player_id in list(match["players"]):
+                if arena_ball_player_match.get(player_id) == match_id:
+                    arena_ball_player_match.pop(player_id, None)
+
+
+def join_arena_ball(payload: dict[str, Any]) -> dict[str, Any]:
+    cleanup_arena_ball()
+    player_id = clean_id(payload.get("playerId"))
+    if not player_id:
+        return {"error": "Brak identyfikatora gracza."}
+    existing_id = arena_ball_player_match.get(player_id)
+    if existing_id and existing_id in arena_ball_matches:
+        match = arena_ball_matches[existing_id]
+        if match.get("status") == "finished":
+            arena_ball_player_match.pop(player_id, None)
+        else:
+            player = match["players"].get(player_id)
+            if player:
+                player["last_seen"] = now(); player["is_bot"] = False; player["name"] = clean_name(payload.get("name"))
+                return arena_ball_payload(match, player_id)
+
+    current = now()
+    waiting = arena_ball_waiting.get(player_id)
+    if waiting:
+        waiting.update({"last_seen": current, "payload": payload, "name": clean_name(payload.get("name"))})
+    else:
+        arena_ball_waiting[player_id] = {"created_at": current, "last_seen": current, "payload": payload, "name": clean_name(payload.get("name"))}
+
+    ordered = sorted(arena_ball_waiting.items(), key=lambda item: item[1]["created_at"])
+    oldest_at = ordered[0][1]["created_at"] if ordered else current
+    should_start = len(ordered) >= 6 or current - oldest_at >= ARENA_BALL_WAIT_SECONDS
+    if should_start:
+        chosen = ordered[:6]
+        entries: list[tuple[str, dict[str, Any], bool]] = []
+        for pid, row in chosen:
+            arena_ball_waiting.pop(pid, None)
+            entries.append((pid, row["payload"], False))
+        template = payload
+        while len(entries) < 6:
+            bot_id = f"ball-bot-{int(current*1000)}-{len(entries)+1}-{random.randint(100,999)}"
+            entries.append((bot_id, template, True))
+        match = create_arena_ball_match(entries)
+        if player_id in match["players"]:
+            return arena_ball_payload(match, player_id)
+        # Teoretycznie gracz może zostać w kolejnej grupie, gdy jednocześnie czeka >6 osób.
+
+    waiting = arena_ball_waiting[player_id]
+    elapsed = current - waiting["created_at"]
+    return {
+        "ok": True, "status": "waiting",
+        "playersFound": min(6, len(arena_ball_waiting)),
+        "waitRemaining": max(0.0, ARENA_BALL_WAIT_SECONDS - elapsed),
+    }
+
+
+def arena_ball_state(match_id: str, player_id: str) -> dict[str, Any] | None:
+    cleanup_arena_ball()
+    match = arena_ball_matches.get(match_id)
+    if not match or player_id not in match["players"]:
+        return None
+    player = match["players"][player_id]
+    player["last_seen"] = now(); player["is_bot"] = False
+    advance_arena_ball(match)
+    return arena_ball_payload(match, player_id)
+
+
+def arena_ball_action(payload: dict[str, Any]) -> dict[str, Any] | None:
+    cleanup_arena_ball()
+    match_id = clean_id(payload.get("matchId")); player_id = clean_id(payload.get("playerId"))
+    match = arena_ball_matches.get(match_id)
+    if not match or player_id not in match["players"]:
+        return None
+    advance_arena_ball(match)
+    player = match["players"][player_id]
+    current = now(); player["last_seen"] = current; player["is_bot"] = False
+    seq = clamp_int(payload.get("seq"), 0, 2_000_000_000, 0)
+    if seq > int(player.get("last_action_seq", 0)):
+        player["last_action_seq"] = seq
+        if match.get("status") in {"playing", "overtime"} and player.get("hp", 0) > 0 and current >= float(player.get("respawn_at", 0.0)):
+            requested_x = clean_float(payload.get("x"), -ARENA_BALL_ARENA_X, ARENA_BALL_ARENA_X, player["x"])
+            requested_z = clean_float(payload.get("z"), -ARENA_BALL_ARENA_Z, ARENA_BALL_ARENA_Z, player["z"])
+            elapsed = max(.02, min(.35, current - float(player.get("last_move", current))))
+            max_distance = float(player["speed"]) * elapsed * 1.42 + .18
+            dx, dz = requested_x - player["x"], requested_z - player["z"]
+            distance = math.hypot(dx, dz)
+            if distance > max_distance and distance > 1e-9:
+                scale = max_distance / distance; dx *= scale; dz *= scale
+            old_x, old_z = player["x"], player["z"]
+            player["x"], player["z"] = arena_ball_move_position(match, player["x"], player["z"], dx, dz)
+            player["vx"] = (player["x"] - old_x) / elapsed; player["vz"] = (player["z"] - old_z) / elapsed
+            player["last_move"] = current
+            player["angle"] = normalize_duel_angle(payload.get("angle"), player["angle"])
+            if payload.get("kick"):
+                if not arena_ball_kick(match, player, player["angle"], bool(payload.get("superKick"))):
+                    spawn_arena_ball_bullet(match, player, player["angle"])
+    advance_arena_ball(match)
+    return arena_ball_payload(match, player_id)
+
+
+def leave_arena_ball(payload: dict[str, Any]) -> dict[str, Any]:
+    player_id = clean_id(payload.get("playerId")); match_id = clean_id(payload.get("matchId"))
+    arena_ball_waiting.pop(player_id, None)
+    match = arena_ball_matches.get(match_id or arena_ball_player_match.get(player_id, ""))
+    if match and player_id in match["players"] and match.get("status") != "finished":
+        player = match["players"][player_id]
+        player["is_bot"] = True
+        player["last_seen"] = now() - ARENA_BALL_PLAYER_TIMEOUT - 1
+        player["name"] = f'{clean_name(player.get("name"))} • BOT'
+        arena_ball_drop_ball(match, player, 3.0)
+    arena_ball_player_match.pop(player_id, None)
+    return {"ok": True}
+
+
+
 def duel_tick_loop() -> None:
     """Symuluje boty i pociski niezależnie od częstotliwości zapytań przeglądarki."""
     interval = 1.0 / DUEL_TICK_RATE
@@ -2935,14 +3533,15 @@ def duel_tick_loop() -> None:
         try:
             with lock:
                 cleanup_duels()
+                cleanup_arena_ball()
         except Exception as exc:
-            print(f"Błąd pętli pojedynku: {exc}")
+            print(f"Błąd pętli pojedynku / Arena Ball: {exc}")
         elapsed = time.monotonic() - started
         time.sleep(max(0.005, interval - elapsed))
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "ArenaStarsSQL/5.3-shop-coins"
+    server_version = "ArenaStarsSQL/5.4-arena-ball-3v3"
     protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt: str, *args: Any) -> None:
@@ -3218,6 +3817,19 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 self.send_json(state)
             return
+        if parsed.path == "/api/arena-ball/state":
+            account=self.require_account()
+            if not account: return
+            query = parse_qs(parsed.query)
+            match_id = clean_id((query.get("matchId") or [""])[0])
+            player_id = clean_id(account.get("account_id"))
+            with lock:
+                state = arena_ball_state(match_id, player_id)
+            if state is None:
+                self.send_json({"error": "Nie znaleziono meczu Arena Ball."}, HTTPStatus.NOT_FOUND)
+            else:
+                self.send_json(state)
+            return
         self.serve_static(parsed.path)
 
     def do_POST(self) -> None:  # noqa: N802
@@ -3426,6 +4038,49 @@ class Handler(BaseHTTPRequestHandler):
                 print(f"Błąd zapisu profilu: {exc}")
                 self.send_json({"error": "Nie udało się zapisać profilu."}, HTTPStatus.SERVICE_UNAVAILABLE)
             return
+        if parsed.path == "/api/arena-ball/join":
+            account=self.require_account()
+            if not account: return
+            payload["playerId"]=account["account_id"]
+            payload["name"]=account["username"]
+            try:
+                with lock:
+                    result = join_arena_ball(payload)
+                status = HTTPStatus.BAD_REQUEST if "error" in result else HTTPStatus.OK
+                self.send_json(result, status)
+            except Exception as exc:
+                print(f"Błąd kolejki Arena Ball: {exc}")
+                self.send_json({"error": "Nie udało się uruchomić kolejki Arena Ball."}, HTTPStatus.INTERNAL_SERVER_ERROR)
+            return
+        if parsed.path == "/api/arena-ball/action":
+            account=self.require_account()
+            if not account: return
+            payload["playerId"]=account["account_id"]
+            payload["name"]=account["username"]
+            try:
+                with lock:
+                    result = arena_ball_action(payload)
+                if result is None:
+                    self.send_json({"error": "Nie znaleziono meczu Arena Ball."}, HTTPStatus.NOT_FOUND)
+                else:
+                    self.send_json(result)
+            except Exception as exc:
+                print(f"Błąd aktualizacji Arena Ball: {exc}")
+                self.send_json({"error": "Nie udało się zaktualizować meczu Arena Ball."}, HTTPStatus.INTERNAL_SERVER_ERROR)
+            return
+        if parsed.path == "/api/arena-ball/leave":
+            account=self.require_account()
+            if not account: return
+            payload["playerId"]=account["account_id"]
+            payload["name"]=account["username"]
+            try:
+                with lock:
+                    result = leave_arena_ball(payload)
+                self.send_json(result)
+            except Exception as exc:
+                print(f"Błąd opuszczania Arena Ball: {exc}")
+                self.send_json({"ok": True})
+            return
         if parsed.path == "/api/duel/join":
             account=self.require_account()
             if not account: return
@@ -3534,7 +4189,7 @@ if __name__ == "__main__":
         game_config = dict(DEFAULT_GAME_CONFIG)
     threading.Thread(target=duel_tick_loop, name="duel-tick", daemon=True).start()
     server = ThreadingHTTPServer((HOST, PORT), Handler)
-    print("\nArena Stars 3D — PRZETRWANIE + POJEDYNKI 1V1/BOT + TOP 200")
+    print("\nArena Stars 3D — PRZETRWANIE + POJEDYNKI 1V1/BOT + ARENA BALL 3V3 + TOP 200")
     print(f"Adres lokalny: http://localhost:{PORT}")
     print(f"Adres w tej samej sieci: http://{local_ip()}:{PORT}")
     if DB_READY:
