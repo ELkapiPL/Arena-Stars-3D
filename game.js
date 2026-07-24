@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-window.__arenaBuild='arena-ball-wide-teamplay-v34';
+window.__arenaBuild='arena-ball-wide-teamplay-calibration-v35';
 
 const canvas = document.getElementById('game');
 const earlyMobileHint=((navigator.maxTouchPoints||0)>0&&matchMedia('(pointer: coarse)').matches)||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
@@ -107,7 +107,8 @@ function setArenaVisualViewportVars(){
   document.documentElement.style.setProperty('--arena-visual-width',`${width}px`);
   document.documentElement.style.setProperty('--arena-visual-left',`${left}px`);
   document.documentElement.style.setProperty('--arena-visual-top',`${top}px`);
-  return {width,height,left,top};
+  const calibrated=window.ArenaScreenCalibration?.getViewport?.();
+  return calibrated&&calibrated.width>0?calibrated:{width,height,left,top};
 }
 function refreshMobileViewportLayout(){
   if(!isMobileDevice)return;
@@ -153,6 +154,7 @@ function scheduleMobileViewportRefresh(){
 function updateMobileOrientation(){
   if(!isMobileDevice)return;
   refreshMobileViewportLayout();
+  window.ArenaScreenCalibration?.schedule?.('game-orientation',20);
 }
 function mobileFullscreenActive(){return !!(document.fullscreenElement||document.webkitFullscreenElement);}
 function fullscreenSupported(){
@@ -247,11 +249,25 @@ function setStickPosition(stick,knob,clientX,clientY){
   if(strength<dead)return {x:0,y:0,strength:0};
   return {x:dx/max,y:dy/max,strength};
 }
+function currentArenaViewport(){
+  const calibrated=window.ArenaScreenCalibration?.getViewport?.();
+  if(calibrated&&calibrated.width>0&&calibrated.height>0)return calibrated;
+  const visual=window.visualViewport;
+  return {left:visual?.offsetLeft||0,top:visual?.offsetTop||0,width:visual?.width||innerWidth,height:visual?.height||innerHeight};
+}
+function positionCrosshair(clientX,clientY){
+  if(!ui.crosshair)return;
+  const hudRect=document.getElementById('hud')?.getBoundingClientRect();
+  ui.crosshair.style.left=`${clientX-(hudRect?.left||0)}px`;
+  ui.crosshair.style.top=`${clientY-(hudRect?.top||0)}px`;
+}
 function updateMobileAimScreen(){
   if(!isMobileDevice)return;
-  const reach=Math.max(130,Math.min(innerWidth*.34,innerHeight*.72));
-  mouse.x=innerWidth/2+mobileInput.aimX*reach;
-  mouse.y=innerHeight/2+mobileInput.aimY*reach;
+  const viewport=currentArenaViewport();
+  const reach=Math.max(130,Math.min(viewport.width*.34,viewport.height*.72));
+  mouse.x=viewport.left+viewport.width/2+mobileInput.aimX*reach;
+  mouse.y=viewport.top+viewport.height/2+mobileInput.aimY*reach;
+  positionCrosshair(mouse.x,mouse.y);
 }
 function setupMobileControls(){
   if(!isMobileDevice)return;
@@ -343,7 +359,7 @@ function loadProgress(){
 let profile=loadProgress();
 profile.name=persistNickname(profile.name);
 let profileDirty=false,profileSyncBusy=false,profileChangeSeq=0,lastConfigRevision=0,backgroundSyncBusy=false;
-const CLIENT_VERSION='arena-ball-wide-teamplay-v34';
+const CLIENT_VERSION='arena-ball-wide-teamplay-calibration-v35';
 function saveProgress(markDirty=true){try{profile.name=persistNickname(profile.name);localStorage.setItem(SAVE_KEY,JSON.stringify(profile));if(markDirty){profileDirty=true;profileChangeSeq++;}}catch(_){} }
 function getPlayerId(){
   try{let id=localStorage.getItem(PLAYER_ID_KEY);if(!id){id=(crypto.randomUUID?crypto.randomUUID():`gracz-${Date.now()}-${Math.random().toString(16).slice(2)}`);localStorage.setItem(PLAYER_ID_KEY,id);}return id;}
@@ -1339,7 +1355,7 @@ function update(dt){
 }
 
 function screenToGround(cx,cy){const r=canvas.getBoundingClientRect(),x=(cx-r.left)/r.width*2-1,y=1-(cy-r.top)/r.height*2;const near=M4.transformPoint(invVP,x,y,-1,1),far=M4.transformPoint(invVP,x,y,1,1);for(const p of [near,far]){p[0]/=p[3];p[1]/=p[3];p[2]/=p[3];}const dy=far[1]-near[1],t=Math.abs(dy)<1e-5?0:-near[1]/dy;mouse.worldX=near[0]+(far[0]-near[0])*t;mouse.worldZ=near[2]+(far[2]-near[2])*t;}
-function resize(){const dprLimit=isMobileDevice?1.22:1.75,dpr=Math.min(devicePixelRatio||1,dprLimit),w=Math.floor(innerWidth*dpr),h=Math.floor(innerHeight*dpr);if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;gl.viewport(0,0,w,h);}M4.perspective(proj,Math.PI/3,w/h,.1,100);}
+function resize(){const viewport=isMobileDevice?currentArenaViewport():{left:0,top:0,width:innerWidth,height:innerHeight};const cssW=Math.max(1,viewport.width),cssH=Math.max(1,viewport.height);if(isMobileDevice){canvas.style.position='fixed';canvas.style.left=viewport.left+'px';canvas.style.top=viewport.top+'px';canvas.style.width=cssW+'px';canvas.style.height=cssH+'px';}const dprLimit=isMobileDevice?1.22:1.75,dpr=Math.min(devicePixelRatio||1,dprLimit),w=Math.max(1,Math.floor(cssW*dpr)),h=Math.max(1,Math.floor(cssH*dpr));if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;gl.viewport(0,0,w,h);}M4.perspective(proj,Math.PI/3,w/h,.1,100);}
 function healthBar(x,z,hp,maxHp,y=2.2,width=1.25){draw(mesh.cube,x,y,z,width,.075,.08,0,[.16,.12,.16]);const f=Math.max(0,hp/maxHp);draw(mesh.cube,x-(width*(1-f)),y+.01,z,width*f,.08,.085,0,f>.45?[.2,.95,.35]:[1,.25,.18]);}
 function render(){
   resize();const sx=shake?rnd(-shake,shake)*.35:0,sz=shake?rnd(-shake,shake)*.35:0;const focusX=player?.x||0,focusZ=player?.z||0;
@@ -1428,7 +1444,7 @@ setupMobileControls();
 
 addEventListener('keydown',e=>{keys[e.code]=true;if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();if(e.code==='KeyQ'&&!e.repeat)superAttack();if(e.code==='KeyE'&&!e.repeat)activateHyper();if(e.code==='KeyR'&&!e.repeat&&running)startGame();if(e.code==='Digit1'&&!e.repeat)buyUpgrade('move');if(e.code==='Digit2'&&!e.repeat)buyUpgrade('fire');if(e.code==='Digit3'&&!e.repeat)buyUpgrade('hp');});
 addEventListener('keyup',e=>keys[e.code]=false);
-canvas.addEventListener('mousemove',e=>{mouse.x=e.clientX;mouse.y=e.clientY;ui.crosshair.style.left=e.clientX+'px';ui.crosshair.style.top=e.clientY+'px';});
+canvas.addEventListener('mousemove',e=>{mouse.x=e.clientX;mouse.y=e.clientY;positionCrosshair(e.clientX,e.clientY);});
 canvas.addEventListener('mousedown',e=>{if(e.button===0){mouse.down=true;playerShoot();}});addEventListener('mouseup',e=>{if(e.button===0)mouse.down=false;});canvas.addEventListener('contextmenu',e=>e.preventDefault());
 if(ui.versionOneBtn)ui.versionOneBtn.addEventListener('click',buyVersionOne);
 if(ui.saveNameBtn)ui.saveNameBtn.addEventListener('click',saveOnlineName);
@@ -1916,7 +1932,8 @@ adminUI.open?.addEventListener('click',()=>adminOpen(true));adminUI.loginClose?.
 document.querySelectorAll('.adminTab').forEach(tab=>tab.addEventListener('click',()=>{document.querySelectorAll('.adminTab').forEach(x=>x.classList.toggle('active',x===tab));document.querySelectorAll('.adminPane').forEach(p=>p.classList.toggle('active',p.dataset.adminPane===tab.dataset.adminTab));}));
 $('adminSaveSettings')?.addEventListener('click',adminSaveConfig);$('adminSearchBtn')?.addEventListener('click',()=>adminSearchPlayers($('adminPlayerSearch').value));$('adminSavePlayer')?.addEventListener('click',adminSavePlayer);$('adminAddMode')?.addEventListener('click',adminAddMode);$('adminSaveModes')?.addEventListener('click',adminSaveModes);$('adminFiles')?.addEventListener('change',adminFilesChanged);$('adminDeployBtn')?.addEventListener('click',adminDeploy);
 
-if(ui.crosshair){ui.crosshair.style.left=mouse.x+'px';ui.crosshair.style.top=mouse.y+'px';}
+if(ui.crosshair)positionCrosshair(mouse.x,mouse.y);
+window.addEventListener('arena-screen-calibrated',()=>{try{resize();positionCrosshair(mouse.x,mouse.y);}catch(_){}});
 addEventListener('beforeunload',()=>{if(ballActive||ballSearching||ballMatchId)stopBallSession(true);else if(duelActive||duelSearching||duelMatchId)stopDuelSession(true);else if(running)commitRun();else{profile.coins=walletCoins;saveProgress();}});
 fetchGameConfig();setInterval(()=>{if(!document.hidden)fetchGameConfig();},15000);updateModeUI();reset();showLobby();authBootstrap();
 })();

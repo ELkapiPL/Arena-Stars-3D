@@ -3896,7 +3896,7 @@ def duel_tick_loop() -> None:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "ArenaStarsSQL/5.8-arena-ball-wide-teamplay-v34"
+    server_version = "ArenaStarsSQL/5.9-arena-ball-wide-teamplay-calibration-v35"
     protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt: str, *args: Any) -> None:
