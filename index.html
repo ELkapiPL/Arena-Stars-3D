@@ -1427,6 +1427,58 @@
     }
 
 
+    /* ===== V32: mobilne lobby jeszcze niżej i lekko w lewo ===== */
+    @media (pointer:coarse) and (orientation:landscape){
+      body.mobile-device.lobby-mode .lobbyLogo{
+        top:max(24px,calc(env(safe-area-inset-top) + 22px))!important;
+        left:49.2%!important;
+        transform:translateX(-50%)!important;
+        font-size:clamp(21px,5.5vh,32px)!important;
+      }
+      body.mobile-device.lobby-mode #lobbyTrophies{
+        top:max(22px,calc(env(safe-area-inset-top) + 20px))!important;
+        left:max(6px,env(safe-area-inset-left))!important;
+      }
+      body.mobile-device.lobby-mode #accountBox{
+        top:max(22px,calc(env(safe-area-inset-top) + 20px))!important;
+        right:max(14px,calc(env(safe-area-inset-right) + 10px))!important;
+      }
+      body.mobile-device.lobby-mode #accountUser{
+        top:max(64px,calc(env(safe-area-inset-top) + 60px))!important;
+        right:max(14px,calc(env(safe-area-inset-right) + 10px))!important;
+      }
+      body.mobile-device.lobby-mode #skinDock{
+        left:max(6px,env(safe-area-inset-left))!important;
+        top:max(88px,calc(env(safe-area-inset-top) + 84px))!important;
+      }
+      body.mobile-device.lobby-mode #versionDock{
+        left:max(6px,env(safe-area-inset-left))!important;
+      }
+      body.mobile-device.lobby-mode #rankingDock{
+        top:max(88px,calc(env(safe-area-inset-top) + 84px))!important;
+        right:max(14px,calc(env(safe-area-inset-right) + 10px))!important;
+      }
+    }
+    @media (pointer:coarse) and (orientation:landscape) and (max-height:760px){
+      body.mobile-device.lobby-mode .lobbyLogo{
+        top:max(22px,calc(env(safe-area-inset-top) + 20px))!important;
+        left:49.0%!important;
+        font-size:clamp(20px,5.1vh,29px)!important;
+      }
+      body.mobile-device.lobby-mode #lobbyTrophies,
+      body.mobile-device.lobby-mode #accountBox{
+        top:max(20px,calc(env(safe-area-inset-top) + 18px))!important;
+      }
+      body.mobile-device.lobby-mode #accountUser{
+        top:max(61px,calc(env(safe-area-inset-top) + 57px))!important;
+      }
+      body.mobile-device.lobby-mode #skinDock,
+      body.mobile-device.lobby-mode #rankingDock{
+        top:max(84px,calc(env(safe-area-inset-top) + 80px))!important;
+      }
+    }
+
+
     /* ===== ARENA BALL 3V3 ===== */
     #arenaBallHud{
       display:none;
@@ -2084,6 +2136,6 @@
 </script>
 
 
-<script src="game.js?v=arena-ball-3v3-v31"></script>
+<script src="game.js?v=arena-ball-3v3-v32"></script>
 </body>
 </html>
