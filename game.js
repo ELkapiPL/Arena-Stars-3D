@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-window.__arenaBuild='arena-bot-view-natural-horizontal-v46';
+window.__arenaBuild='arena-bot-view-crosshair-fire-v47';
 
 const canvas = document.getElementById('game');
 const earlyMobileHint=((navigator.maxTouchPoints||0)>0&&matchMedia('(pointer: coarse)').matches)||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
@@ -367,7 +367,7 @@ function loadProgress(){
 let profile=loadProgress();
 profile.name=persistNickname(profile.name);
 let profileDirty=false,profileSyncBusy=false,profileChangeSeq=0,lastConfigRevision=0,backgroundSyncBusy=false;
-const CLIENT_VERSION='arena-bot-view-natural-horizontal-v46';
+const CLIENT_VERSION='arena-bot-view-crosshair-fire-v47';
 const CAMERA_MODE_KEY='arenaStars3D_camera_mode_v1';
 let botPerspectiveEnabled=false;
 try{botPerspectiveEnabled=localStorage.getItem(CAMERA_MODE_KEY)==='bot';}catch(_){}
@@ -407,6 +407,7 @@ const BOT_VIEW_DESKTOP_LOOK_SENSITIVITY=.00135;
 const BOT_VIEW_MOBILE_LOOK_SENSITIVITY=.00110;
 const BOT_VIEW_MIN_PITCH=-.48;
 const BOT_VIEW_MAX_PITCH=.34;
+const BOT_VIEW_PROJECTILE_SCALE=.30; // tylko wygląd: pociski gracza są o 70% mniejsze w widoku bota
 let botViewPitch=0;
 const botViewLook={pointerId:null,lastX:0,lastY:0,yawPixels:0,pitchPixels:0,desktopRightHeld:false};
 function resetBotViewLook(resetPitch=false){
@@ -432,6 +433,17 @@ function moveBotViewLook(e){
   botViewLook.lastX=e.clientX;botViewLook.lastY=e.clientY;
   if(Number.isFinite(dx))botViewLook.yawPixels+=Math.max(-90,Math.min(90,dx));
   if(Number.isFinite(dy))botViewLook.pitchPixels+=Math.max(-70,Math.min(70,dy));
+  // Obrót jest nanoszony od razu, więc strzał oddany podczas przeciągania
+  // używa aktualnego kierunku kamery, a nie kierunku z poprzedniej klatki.
+  updateBotPerspectiveAngle();
+  centerBotViewCrosshair();
+  // Przy chwycie prawego przycisku stan lewego przycisku odczytujemy także
+  // z maski buttons. Dzięki temu można obracać kamerę i prowadzić ogień naraz.
+  if(!isMobileDevice&&e.pointerType==='mouse'){
+    const leftHeld=(e.buttons&1)!==0;
+    if(leftHeld&&!mouse.down){mouse.down=true;playerShoot();}
+    else if(!leftHeld&&mouse.down)mouse.down=false;
+  }
   e.preventDefault();
   return true;
 }
@@ -457,6 +469,19 @@ function updateBotPerspectiveAngle(){
   }
   return true;
 }
+function centerBotViewCrosshair(){
+  if(!isBotPerspectiveActive()||!ui.crosshair)return;
+  const rect=canvas.getBoundingClientRect();
+  mouse.x=rect.left+rect.width/2;
+  mouse.y=rect.top+rect.height/2;
+  positionCrosshair(mouse.x,mouse.y);
+}
+function syncBotViewAimBeforeShot(){
+  if(!isBotPerspectiveActive())return;
+  updateBotPerspectiveAngle();
+  centerBotViewCrosshair();
+}
+function botViewProjectileScale(isMine){return isBotPerspectiveActive()&&isMine?BOT_VIEW_PROJECTILE_SCALE:1;}
 function saveProgress(markDirty=true){try{profile.name=persistNickname(profile.name);localStorage.setItem(SAVE_KEY,JSON.stringify(profile));if(markDirty){profileDirty=true;profileChangeSeq++;}}catch(_){} }
 function getPlayerId(){
   try{let id=localStorage.getItem(PLAYER_ID_KEY);if(!id){id=(crypto.randomUUID?crypto.randomUUID():`gracz-${Date.now()}-${Math.random().toString(16).slice(2)}`);localStorage.setItem(PLAYER_ID_KEY,id);}return id;}
@@ -818,6 +843,7 @@ function duelBulletColor(entity,isBot=false){
   return isBot?[1,.25,.48]:[.24,.85,1];
 }
 function duelPlayerShoot(){
+  syncBotViewAimBeforeShot();
   if(!duelActive||duelMatchStatus!=='playing'||!player||player.fire>0||player.reload>0)return;
   if(player.ammo<=0){startReload();return;}
   const hyper=(player.hyperActive||0)>0;
@@ -1267,6 +1293,7 @@ function arenaBallSuperKick(){
   return arenaBallShoot(true)!==false;
 }
 function arenaBallShoot(superKick=false){
+  syncBotViewAimBeforeShot();
   if(!ballActive||!['playing','overtime'].includes(ballStatus)||!player||player.hp<=0||player.respawnIn>0)return false;
   const hasBall=player.hasBall||ballVisual.carrierId===playerId;
   if(hasBall){
@@ -1442,7 +1469,7 @@ function spawnEnemy(){
 }
 function shoot(owner,x,z,angle,speed,damage,color,size=.18,spread=0){angle+=rnd(-spread,spread);bullets.push({owner,x,y:.72,z,vx:Math.sin(angle)*speed,vz:Math.cos(angle)*speed,life:2.2,damage,color,size});}
 function startReload(){if(!running||!player||player.reload>0||player.ammo>=MAG_SIZE)return;player.reload=RELOAD_TIME;player.fire=0;showMessage('PRZEŁADOWANIE...');updateUI();}
-function playerShoot(){if(ballActive){arenaBallShoot(false);return;}if(duelActive){duelPlayerShoot();return;}if(!running||player.fire>0||player.reload>0)return;if(player.ammo<=0){startReload();return;}const hyper=(player.hyperActive||0)>0;player.fire=player.fireCooldown/(hyper?HYPER_FIRE_MULT:1);player.ammo--;const cosmic=profile.skin==='cosmic',shotColor=hyper?[.35,1,.92]:(cosmic?[.78,.38,1]:[.24,.85,1]),flashColor=hyper?[1,.95,.35]:(cosmic?[.35,1,1]:[.35,.9,1]);shoot('player',player.x+Math.sin(player.angle)*1.05,player.z+Math.cos(player.angle)*1.05,player.angle,18,22,shotColor,.21,.025);burst(player.x+Math.sin(player.angle),player.z+Math.cos(player.angle),flashColor,4,2.5);if(player.ammo<=0)startReload();else updateUI();}
+function playerShoot(){syncBotViewAimBeforeShot();if(ballActive){arenaBallShoot(false);return;}if(duelActive){duelPlayerShoot();return;}if(!running||player.fire>0||player.reload>0)return;if(player.ammo<=0){startReload();return;}const hyper=(player.hyperActive||0)>0;player.fire=player.fireCooldown/(hyper?HYPER_FIRE_MULT:1);player.ammo--;const cosmic=profile.skin==='cosmic',shotColor=hyper?[.35,1,.92]:(cosmic?[.78,.38,1]:[.24,.85,1]),flashColor=hyper?[1,.95,.35]:(cosmic?[.35,1,1]:[.35,.9,1]);shoot('player',player.x+Math.sin(player.angle)*1.05,player.z+Math.cos(player.angle)*1.05,player.angle,18,22,shotColor,.21,.025);burst(player.x+Math.sin(player.angle),player.z+Math.cos(player.angle),flashColor,4,2.5);if(player.ammo<=0)startReload();else updateUI();}
 function addCharge(baseAmount){if(!player)return;const amount=Math.max(0,Number(baseAmount)||0)*SUPER_CHARGE_MULTIPLIER;player.super=Math.min(100,Math.max(0,Number(player.super)||0)+amount);if((player.hyperActive||0)<=0)player.hyper=Math.min(100,Math.max(0,Number(player.hyper)||0)+amount/HYPER_CHARGE_RATIO);updateUI();}
 function superPulse(pulse,total){if(!running||!player)return;const color=total>1?[.25,1,.88]:[1,.35,.93];for(let i=0;i<24;i++)shoot('player',player.x,player.z,i/24*Math.PI*2,14,28,color,.24,0);for(const e of enemies){const d=Math.hypot(e.x-player.x,e.z-player.z);if(d<5.5){e.hp-=45;const k=(5.5-d)/5.5;e.x+=(e.x-player.x)/(d||1)*k*3;e.z+=(e.z-player.z)/(d||1)*k*3;}}burst(player.x,player.z,color,32,9);shake=Math.max(shake,.55);if(total>1)showMessage(`HIPER SUPER ${pulse}/${total}!`);}
 function superAttack(){if(ballActive){arenaBallUseProjectileSuper();return;}if(duelActive){if(duelLocalBotMode&&duelMatchStatus==='playing'){duelUseSuper(player,false);updateUI();}else showMessage('SUPER ONLINE BĘDZIE DODANY PÓŹNIEJ');return;}if(!running||player.super<100)return;player.super=0;player.inv=.6;const pulses=(player.hyperActive||0)>0?3:1,caster=player;if(pulses===1){showMessage('SUPER!');superPulse(1,1);}else{/* Liczba fal jest ustalana w chwili użycia. Koniec hiperdoładowania nie anuluje fal 2 i 3. */superPulse(1,3);setTimeout(()=>{if(running&&player===caster)superPulse(2,3);},170);setTimeout(()=>{if(running&&player===caster)superPulse(3,3);},340);}updateUI();}
@@ -1532,7 +1559,7 @@ function render(){
     if((duelActive&&duelMirrorView)||(ballActive&&ballMirrorView))M4.lookAt(view,[focusX-sx,cameraHeight,focusZ-cameraOffset-sz],[focusX,0,focusZ+cameraLook],[0,1,0]);
     else M4.lookAt(view,[focusX+sx,cameraHeight,focusZ+cameraOffset+sz],[focusX,0,focusZ-cameraLook],[0,1,0]);
   }
-  M4.multiply(viewProj,proj,view);M4.invert(invVP,viewProj);if(isMobileDevice)updateMobileAimScreen();screenToGround(mouse.x,mouse.y);
+  M4.multiply(viewProj,proj,view);M4.invert(invVP,viewProj);if(isMobileDevice)updateMobileAimScreen();else if(botPerspective)centerBotViewCrosshair();screenToGround(mouse.x,mouse.y);
   gl.enable(gl.DEPTH_TEST);gl.enable(gl.CULL_FACE);gl.clearColor(.08,.14,.24,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.useProgram(program);gl.uniformMatrix4fv(loc.vp,false,viewProj);gl.uniform3f(loc.light,.45,-1,.35);
   // podłoże i delikatna kratka
   const floorX=ballActive?ARENA_BALL_X:20,floorZ=ballActive?ARENA_BALL_Z:20;
@@ -1605,7 +1632,22 @@ function render(){
     draw(mesh.sphere,bx,ballY+.83*ballScale,bz,.12*ballScale,.12*ballScale,.12*ballScale,0,[1,.92,.25],.72);
   }
   if(!duelActive&&!ballActive)for(const e of enemies){draw(mesh.cyl,e.x,.11,e.z,e.r*1.18,.04,e.r*1.18,0,e.color,.65);const c=e.hit>0?[1,1,1]:e.color;draw(mesh.sphere,e.x,e.r*.95,e.z,e.r,e.r*1.05,e.r,0,c);draw(mesh.sphere,e.x,e.r*1.14,e.z,e.r*.62,e.r*.63,e.r*.62,0,[Math.min(1,c[0]+.22),Math.min(1,c[1]+.22),Math.min(1,c[2]+.22)]);if(e.type==='shooter')draw(mesh.cube,e.x+Math.sin(e.angle)*e.r*.95,e.r*.95,e.z+Math.cos(e.angle)*e.r*.95,.16,.16,.58,e.angle,[.18,.16,.19]);if(e.type==='tank'){draw(mesh.cube,e.x,e.r*1.05,e.z,e.r*.95,.24,e.r*.95,0,[.25,.11,.31]);}for(let lv=0;lv<(e.level||1);lv++)draw(mesh.sphere,e.x+(lv-((e.level||1)-1)/2)*.24,e.r*2.28,e.z,.08,.08,.08,0,[1,.78,.12]);healthBar(e.x,e.z,e.hp,e.maxHp,e.r*2.35,e.r*.9);}
-  if(ballActive){for(const b of ballBullets){const c=Number(b.team)===0?[.20,.82,1]:[1,.24,.46];draw(mesh.sphere,b.renderX??b.x,.72,b.renderZ??b.z,.21,.21,.21,0,c);}}else if(duelActive){for(const b of duelServerBullets){const mine=b.ownerId===playerId,c=mine?(profile.skin==='arena_vip_plus'?[1,.35,.72]:(profile.skin==='cosmic'?[.78,.38,1]:[.24,.85,1])):[1,.25,.48];draw(mesh.sphere,b.renderX??b.x,.72,b.renderZ??b.z,.21,.21,.21,0,c);}for(const b of duelBotBullets)draw(mesh.sphere,b.x,.72,b.z,.21,.21,.21,0,b.color||[1,.25,.48]);const pc=profile.skin==='arena_vip_plus'?[1,.35,.72]:(profile.skin==='cosmic'?[.78,.38,1]:[.24,.85,1]);for(const b of duelPredictedBullets)draw(mesh.sphere,b.x,.72,b.z,.20,.20,.20,0,b.color||pc,.78);}else for(const b of bullets)draw(mesh.sphere,b.x,b.y,b.z,b.size,b.size,b.size,0,b.color);
+  if(ballActive){
+    for(const b of ballBullets){
+      const c=Number(b.team)===0?[.20,.82,1]:[1,.24,.46],scale=botViewProjectileScale(b.ownerId===playerId);
+      draw(mesh.sphere,b.renderX??b.x,.72,b.renderZ??b.z,.21*scale,.21*scale,.21*scale,0,c);
+    }
+  }else if(duelActive){
+    for(const b of duelServerBullets){
+      const mine=b.ownerId===playerId,c=mine?(profile.skin==='arena_vip_plus'?[1,.35,.72]:(profile.skin==='cosmic'?[.78,.38,1]:[.24,.85,1])):[1,.25,.48],scale=botViewProjectileScale(mine);
+      draw(mesh.sphere,b.renderX??b.x,.72,b.renderZ??b.z,.21*scale,.21*scale,.21*scale,0,c);
+    }
+    for(const b of duelBotBullets)draw(mesh.sphere,b.x,.72,b.z,.21,.21,.21,0,b.color||[1,.25,.48]);
+    const pc=profile.skin==='arena_vip_plus'?[1,.35,.72]:(profile.skin==='cosmic'?[.78,.38,1]:[.24,.85,1]),predictedScale=botViewProjectileScale(true);
+    for(const b of duelPredictedBullets)draw(mesh.sphere,b.x,.72,b.z,.20*predictedScale,.20*predictedScale,.20*predictedScale,0,b.color||pc,.78);
+  }else{
+    for(const b of bullets){const scale=botViewProjectileScale(b.owner==='player');draw(mesh.sphere,b.x,b.y,b.z,b.size*scale,b.size*scale,b.size*scale,0,b.color);}
+  }
   for(const p of particles)draw(mesh.cube,p.x,p.y,p.z,p.size,p.size,p.size,0,p.color,Math.max(0,p.life*2));
   updateWorldNameTags();
 }
@@ -1615,14 +1657,14 @@ setupMobileControls();
 
 addEventListener('keydown',e=>{keys[e.code]=true;if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();if(e.code==='KeyQ'&&!e.repeat)superAttack();if((e.code==='KeyF'||e.code==='Space')&&!e.repeat&&ballActive)arenaBallSuperKick();if(e.code==='KeyE'&&!e.repeat)activateHyper();if(e.code==='KeyC'&&!e.repeat)toggleBotPerspective();if(e.code==='KeyR'&&!e.repeat&&running)startGame();if(e.code==='Digit1'&&!e.repeat)buyUpgrade('move');if(e.code==='Digit2'&&!e.repeat)buyUpgrade('fire');if(e.code==='Digit3'&&!e.repeat)buyUpgrade('hp');});
 addEventListener('keyup',e=>keys[e.code]=false);
-canvas.addEventListener('mousemove',e=>{mouse.x=e.clientX;mouse.y=e.clientY;positionCrosshair(e.clientX,e.clientY);});
+canvas.addEventListener('mousemove',e=>{if(isBotPerspectiveActive()){centerBotViewCrosshair();return;}mouse.x=e.clientX;mouse.y=e.clientY;positionCrosshair(e.clientX,e.clientY);});
 canvas.addEventListener('pointerdown',e=>{beginBotViewLook(e);},{passive:false});
 canvas.addEventListener('pointermove',e=>{moveBotViewLook(e);},{passive:false});
 canvas.addEventListener('pointerup',e=>{endBotViewLook(e);},{passive:false});
 canvas.addEventListener('pointercancel',e=>{endBotViewLook(e);},{passive:false});
 canvas.addEventListener('lostpointercapture',e=>{if(e.pointerId===botViewLook.pointerId)resetBotViewLook(false);});
 canvas.addEventListener('mousedown',e=>{
-  if(e.button===0){mouse.down=true;playerShoot();}
+  if(e.button===0){const wasDown=mouse.down;mouse.down=true;syncBotViewAimBeforeShot();if(!wasDown)playerShoot();}
   else if(e.button===2){
     e.preventDefault();
     // W widoku bota prawy przycisk służy wyłącznie do obracania kamery.
@@ -1630,6 +1672,11 @@ canvas.addEventListener('mousedown',e=>{
     if(!isBotPerspectiveActive()&&ballActive)arenaBallSuperKick();
   }
 });
+addEventListener('mousedown',e=>{
+  if(!isMobileDevice&&isBotPerspectiveActive()&&e.button===0){
+    const wasDown=mouse.down;mouse.down=true;syncBotViewAimBeforeShot();if(!wasDown)playerShoot();
+  }
+},true);
 addEventListener('mouseup',e=>{if(e.button===0)mouse.down=false;if(e.button===2&&botViewLook.desktopRightHeld)resetBotViewLook(false);});
 canvas.addEventListener('contextmenu',e=>e.preventDefault());
 if(ui.cameraModeBtn)ui.cameraModeBtn.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();toggleBotPerspective();});
