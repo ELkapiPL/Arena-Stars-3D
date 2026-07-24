@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-window.__arenaBuild='arena-bot-perspective-slow-turn-v43';
+window.__arenaBuild='arena-bot-perspective-controls-ball-v44';
 
 const canvas = document.getElementById('game');
 const earlyMobileHint=((navigator.maxTouchPoints||0)>0&&matchMedia('(pointer: coarse)').matches)||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
@@ -289,7 +289,7 @@ function setupMobileControls(){
   const attackUpdate=e=>{if(e.pointerId!==mobileInput.attackPointer)return;const v=setStickPosition(attack,attackKnob,e.clientX,e.clientY);if(v.strength>.10){mobileInput.aimX=v.x;mobileInput.aimY=v.y;}mouse.down=true;updateMobileAimScreen();e.preventDefault();};
   attack?.addEventListener('pointerdown',e=>{if(mobileInput.attackPointer!==null)return;mobileInput.attackPointer=e.pointerId;attack.setPointerCapture(e.pointerId);attack.classList.add('firing');attackUpdate(e);playerShoot();e.preventDefault();});
   attack?.addEventListener('pointermove',attackUpdate);
-  const endAttack=e=>{if(e.pointerId!==mobileInput.attackPointer)return;mobileInput.attackPointer=null;mouse.down=false;attack.classList.remove('firing');attackKnob.style.transform='translate(-50%,-50%)';e.preventDefault();};
+  const endAttack=e=>{if(e.pointerId!==mobileInput.attackPointer)return;mobileInput.attackPointer=null;mobileInput.aimX=0;mobileInput.aimY=-1;mouse.down=false;attack.classList.remove('firing');attackKnob.style.transform='translate(-50%,-50%)';e.preventDefault();};
   attack?.addEventListener('pointerup',endAttack);attack?.addEventListener('pointercancel',endAttack);attack?.addEventListener('lostpointercapture',endAttack);
 
   const mobilePowerPress=(button,action,vibration)=>{
@@ -367,7 +367,7 @@ function loadProgress(){
 let profile=loadProgress();
 profile.name=persistNickname(profile.name);
 let profileDirty=false,profileSyncBusy=false,profileChangeSeq=0,lastConfigRevision=0,backgroundSyncBusy=false;
-const CLIENT_VERSION='arena-bot-perspective-slow-turn-v43';
+const CLIENT_VERSION='arena-bot-perspective-controls-ball-v44';
 const CAMERA_MODE_KEY='arenaStars3D_camera_mode_v1';
 let botPerspectiveEnabled=false;
 try{botPerspectiveEnabled=localStorage.getItem(CAMERA_MODE_KEY)==='bot';}catch(_){}
@@ -387,6 +387,7 @@ function toggleBotPerspective(){
   try{localStorage.setItem(CAMERA_MODE_KEY,botPerspectiveEnabled?'bot':'top');}catch(_){}
   updateCameraModeUI();
   const viewport=currentArenaViewport();
+  mobileInput.aimX=0;mobileInput.aimY=-1;
   mouse.x=viewport.left+viewport.width/2;
   mouse.y=viewport.top+viewport.height*.47;
   positionCrosshair(mouse.x,mouse.y);
@@ -394,17 +395,25 @@ function toggleBotPerspective(){
 }
 function movementFromBotPerspective(dx,dz){
   if(!isBotPerspectiveActive()||!player)return {x:dx,z:dz};
-  const forward=-dz,right=dx,a=Number(player.angle)||0;
+  // W widoku robota obie osie wejścia były odwrócone względem obrazu kamery.
+  // Odwracamy zarówno lewo/prawo, jak i przód/tył.
+  const forward=dz,right=-dx,a=Number(player.angle)||0;
   return {x:Math.sin(a)*forward+Math.cos(a)*right,z:Math.cos(a)*forward-Math.sin(a)*right};
 }
-const BOT_VIEW_MOBILE_TURN_SPEED=1.05;
-const BOT_VIEW_DESKTOP_TURN_SPEED=1.28;
-const BOT_VIEW_MOUSE_DEAD_ZONE=.10;
+const BOT_VIEW_MOBILE_TURN_SPEED=.22;
+const BOT_VIEW_DESKTOP_TURN_SPEED=.34;
+const BOT_VIEW_MOBILE_DEAD_ZONE=.20;
+const BOT_VIEW_MOUSE_DEAD_ZONE=.18;
 function updateBotPerspectiveAngle(dt){
   if(!isBotPerspectiveActive()||!player)return false;
   let turnInput=0;
   if(isMobileDevice){
-    turnInput=Math.max(-1,Math.min(1,Number(mobileInput.aimX)||0));
+    let normalized=Math.max(-1,Math.min(1,Number(mobileInput.aimX)||0));
+    const magnitude=Math.abs(normalized);
+    if(magnitude>BOT_VIEW_MOBILE_DEAD_ZONE){
+      const scaled=(magnitude-BOT_VIEW_MOBILE_DEAD_ZONE)/(1-BOT_VIEW_MOBILE_DEAD_ZONE);
+      turnInput=Math.sign(normalized)*Math.pow(scaled,2.15);
+    }
   }else{
     const viewport=currentArenaViewport(),half=Math.max(1,viewport.width*.5);
     let normalized=(mouse.x-(viewport.left+half))/half;
@@ -412,11 +421,11 @@ function updateBotPerspectiveAngle(dt){
     const magnitude=Math.abs(normalized);
     if(magnitude>BOT_VIEW_MOUSE_DEAD_ZONE){
       const scaled=(magnitude-BOT_VIEW_MOUSE_DEAD_ZONE)/(1-BOT_VIEW_MOUSE_DEAD_ZONE);
-      turnInput=Math.sign(normalized)*Math.pow(scaled,1.45);
+      turnInput=Math.sign(normalized)*Math.pow(scaled,2.0);
     }
   }
   const speed=isMobileDevice?BOT_VIEW_MOBILE_TURN_SPEED:BOT_VIEW_DESKTOP_TURN_SPEED;
-  player.angle=normalizeDuelAngle(player.angle+turnInput*speed*Math.min(.05,Math.max(0,dt)));
+  player.angle=normalizeDuelAngle(player.angle+turnInput*speed*Math.min(.04,Math.max(0,dt)));
   return true;
 }
 function saveProgress(markDirty=true){try{profile.name=persistNickname(profile.name);localStorage.setItem(SAVE_KEY,JSON.stringify(profile));if(markDirty){profileDirty=true;profileChangeSeq++;}}catch(_){} }
@@ -1552,15 +1561,18 @@ function render(){
     renderArenaBallAimGuide();
     for(const bp of ballPlayers){if(botPerspective&&bp.id===playerId)continue;renderArenaBallPlayer(bp);}
     const bx=ballVisual.x??ballVisual.targetX??0,bz=ballVisual.z??ballVisual.targetZ??0,t=performance.now()*.0024;
-    // Wyraźny znacznik pod piłką oraz jasna futbolówka z ciemnymi panelami.
-    draw(mesh.cyl,bx,.055,bz,.86,.035,.86,0,[.12,.86,1],.42);
-    draw(mesh.cyl,bx,.085,bz,.66,.025,.66,0,[1,.86,.18],.74);
-    draw(mesh.sphere,bx,.72,bz,.64,.64,.64,t,[1,.98,.86]);
-    draw(mesh.sphere,bx,.91,bz,.25,.18,.25,-t,[.06,.08,.14],.96);
-    draw(mesh.sphere,bx+Math.cos(t)*.43,.69,bz+Math.sin(t)*.43,.18,.18,.18,t,[.07,.09,.16],.94);
-    draw(mesh.sphere,bx+Math.cos(t+2.1)*.43,.69,bz+Math.sin(t+2.1)*.43,.18,.18,.18,t,[.07,.09,.16],.94);
-    draw(mesh.sphere,bx+Math.cos(t+4.2)*.43,.69,bz+Math.sin(t+4.2)*.43,.18,.18,.18,t,[.07,.09,.16],.94);
-    draw(mesh.sphere,bx,1.55,bz,.12,.12,.12,0,[1,.92,.25],.72);
+    const localHeldBall=botPerspective&&(player?.hasBall||ballVisual.carrierId===playerId);
+    const ballScale=localHeldBall?.30:1,ballY=localHeldBall?.46:.72;
+    // W widoku robota piłka trzymana przez gracza ma 30% zwykłego rozmiaru,
+    // czyli jest mniejsza o 70% i nie zasłania środka ekranu.
+    draw(mesh.cyl,bx,.055,bz,.86*ballScale,.035,.86*ballScale,0,[.12,.86,1],.42);
+    draw(mesh.cyl,bx,.085,bz,.66*ballScale,.025,.66*ballScale,0,[1,.86,.18],.74);
+    draw(mesh.sphere,bx,ballY,bz,.64*ballScale,.64*ballScale,.64*ballScale,t,[1,.98,.86]);
+    draw(mesh.sphere,bx,ballY+.19*ballScale,bz,.25*ballScale,.18*ballScale,.25*ballScale,-t,[.06,.08,.14],.96);
+    draw(mesh.sphere,bx+Math.cos(t)*.43*ballScale,ballY-.03*ballScale,bz+Math.sin(t)*.43*ballScale,.18*ballScale,.18*ballScale,.18*ballScale,t,[.07,.09,.16],.94);
+    draw(mesh.sphere,bx+Math.cos(t+2.1)*.43*ballScale,ballY-.03*ballScale,bz+Math.sin(t+2.1)*.43*ballScale,.18*ballScale,.18*ballScale,.18*ballScale,t,[.07,.09,.16],.94);
+    draw(mesh.sphere,bx+Math.cos(t+4.2)*.43*ballScale,ballY-.03*ballScale,bz+Math.sin(t+4.2)*.43*ballScale,.18*ballScale,.18*ballScale,.18*ballScale,t,[.07,.09,.16],.94);
+    draw(mesh.sphere,bx,ballY+.83*ballScale,bz,.12*ballScale,.12*ballScale,.12*ballScale,0,[1,.92,.25],.72);
   }
   if(!duelActive&&!ballActive)for(const e of enemies){draw(mesh.cyl,e.x,.11,e.z,e.r*1.18,.04,e.r*1.18,0,e.color,.65);const c=e.hit>0?[1,1,1]:e.color;draw(mesh.sphere,e.x,e.r*.95,e.z,e.r,e.r*1.05,e.r,0,c);draw(mesh.sphere,e.x,e.r*1.14,e.z,e.r*.62,e.r*.63,e.r*.62,0,[Math.min(1,c[0]+.22),Math.min(1,c[1]+.22),Math.min(1,c[2]+.22)]);if(e.type==='shooter')draw(mesh.cube,e.x+Math.sin(e.angle)*e.r*.95,e.r*.95,e.z+Math.cos(e.angle)*e.r*.95,.16,.16,.58,e.angle,[.18,.16,.19]);if(e.type==='tank'){draw(mesh.cube,e.x,e.r*1.05,e.z,e.r*.95,.24,e.r*.95,0,[.25,.11,.31]);}for(let lv=0;lv<(e.level||1);lv++)draw(mesh.sphere,e.x+(lv-((e.level||1)-1)/2)*.24,e.r*2.28,e.z,.08,.08,.08,0,[1,.78,.12]);healthBar(e.x,e.z,e.hp,e.maxHp,e.r*2.35,e.r*.9);}
   if(ballActive){for(const b of ballBullets){const c=Number(b.team)===0?[.20,.82,1]:[1,.24,.46];draw(mesh.sphere,b.renderX??b.x,.72,b.renderZ??b.z,.21,.21,.21,0,c);}}else if(duelActive){for(const b of duelServerBullets){const mine=b.ownerId===playerId,c=mine?(profile.skin==='arena_vip_plus'?[1,.35,.72]:(profile.skin==='cosmic'?[.78,.38,1]:[.24,.85,1])):[1,.25,.48];draw(mesh.sphere,b.renderX??b.x,.72,b.renderZ??b.z,.21,.21,.21,0,c);}for(const b of duelBotBullets)draw(mesh.sphere,b.x,.72,b.z,.21,.21,.21,0,b.color||[1,.25,.48]);const pc=profile.skin==='arena_vip_plus'?[1,.35,.72]:(profile.skin==='cosmic'?[.78,.38,1]:[.24,.85,1]);for(const b of duelPredictedBullets)draw(mesh.sphere,b.x,.72,b.z,.20,.20,.20,0,b.color||pc,.78);}else for(const b of bullets)draw(mesh.sphere,b.x,b.y,b.z,b.size,b.size,b.size,0,b.color);
