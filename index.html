@@ -1567,7 +1567,7 @@
     }
 
 
-    /* ===== V39: automatyczna kalibracja bez migania ekranu ===== */
+    /* ===== V35: automatyczna kalibracja po obrocie telefonu ===== */
     :root{
       --arena-visual-left:0px;
       --arena-visual-top:0px;
@@ -1701,6 +1701,25 @@
     }
     @media (pointer:coarse) and (orientation:landscape) and (max-height:520px){
       #mobileSuperKickBtn{right:max(184px,calc(env(safe-area-inset-right) + 176px));width:56px;height:56px;font-size:8px}
+    }
+
+    /* ===== V40: mniejsze nicki nad postaciami na telefonach ===== */
+    @media (pointer:coarse), (max-width:900px){
+      body.mobile-device .worldNameTag{
+        max-width:96px;
+        padding:2px 5px;
+        border-radius:7px;
+        border-width:1px;
+        font-size:7px;
+        line-height:1.05;
+        transform:translate(-50%,-112%);
+        text-shadow:0 1px 2px rgba(0,0,0,.95);
+        box-shadow:0 2px 7px rgba(0,0,0,.3);
+        backdrop-filter:none;
+      }
+      body.mobile-device .worldNameTag.blue{box-shadow:0 0 7px rgba(42,204,255,.16),0 2px 7px rgba(0,0,0,.3)}
+      body.mobile-device .worldNameTag.red{box-shadow:0 0 7px rgba(255,62,112,.16),0 2px 7px rgba(0,0,0,.3)}
+      body.mobile-device .worldNameTag.bot::before{font-size:6px}
     }
 
   </style>
@@ -2232,7 +2251,7 @@
 })();
 </script>
 
-<script id="arenaScreenCalibrationV39">
+<script id="arenaScreenCalibrationV35">
 (() => {
   'use strict';
 
@@ -2345,36 +2364,49 @@
   function lobbyBounds(){
     const stage = ensureLobbyStage();
     if (!stage) return null;
-    const selectors = [
-      '#lobbyTrophies','#accountBox','#accountUser','.lobbyLogo','#skinDock','#versionDock',
-      '#rankingDock','#heroStage','#savedUpgrades','#chatOpenBtn','#passOpenBtn',
-      '#lobbyFullscreenBtn','#adminOpenBtn','#modeBtn','#playBtn','#modeMenu'
-    ];
-    const elements = selectors.map(selector => stage.querySelector(selector)).filter(isVisible);
-    if (!elements.length) return null;
 
-    /* Mierzymy układ bez zdejmowania aktualnej transformacji.
-       Dzięki temu poprzednio skalibrowany obraz pozostaje cały czas na ekranie. */
-    const stageRect = stage.getBoundingClientRect();
-    const naturalWidth = Math.max(1, stage.offsetWidth || stageRect.width || 1);
-    const naturalHeight = Math.max(1, stage.offsetHeight || stageRect.height || 1);
-    const scaleX = Math.max(0.0001, stageRect.width / naturalWidth);
-    const scaleY = Math.max(0.0001, stageRect.height / naturalHeight);
-    const rects = elements.map(element => {
-      const rect = element.getBoundingClientRect();
-      return {
-        left:(rect.left - stageRect.left) / scaleX,
-        top:(rect.top - stageRect.top) / scaleY,
-        right:(rect.right - stageRect.left) / scaleX,
-        bottom:(rect.bottom - stageRect.top) / scaleY
-      };
+    /* V40: właściwy test kalibracyjny odbywa się na niewidocznej kopii lobby.
+       Widoczne lobby zachowuje poprzednią transformację aż do chwili, gdy nowy
+       wynik jest gotowy, dlatego ekran nie mruga, a pomiar nadal jest aktywny. */
+    const measure = stage.cloneNode(true);
+    measure.id = 'arenaCalibrationMeasureStage';
+    measure.removeAttribute('data-calibration-stage');
+    Object.assign(measure.style,{
+      position:'fixed',left:'-100000px',top:'0px',right:'auto',bottom:'auto',
+      width:`${Math.max(1,state.safe.width)}px`,height:`${Math.max(1,state.safe.height)}px`,
+      maxWidth:'none',maxHeight:'none',transform:'none',transformOrigin:'0 0',
+      opacity:'0',visibility:'visible',pointerEvents:'none',zIndex:'-10000',
+      contain:'layout style paint'
     });
-    return {
-      left:Math.min(...rects.map(r => r.left)),
-      top:Math.min(...rects.map(r => r.top)),
-      right:Math.max(...rects.map(r => r.right)),
-      bottom:Math.max(...rects.map(r => r.bottom))
-    };
+    body.appendChild(measure);
+
+    try {
+      const selectors = [
+        '#lobbyTrophies','#accountBox','#accountUser','.lobbyLogo','#skinDock','#versionDock',
+        '#rankingDock','#heroStage','#savedUpgrades','#chatOpenBtn','#passOpenBtn',
+        '#lobbyFullscreenBtn','#adminOpenBtn','#modeBtn','#playBtn','#modeMenu'
+      ];
+      const elements = selectors.map(selector => measure.querySelector(selector)).filter(isVisible);
+      if (!elements.length) return null;
+      const measureRect = measure.getBoundingClientRect();
+      const rects = elements.map(element => {
+        const rect = element.getBoundingClientRect();
+        return {
+          left:rect.left-measureRect.left,
+          top:rect.top-measureRect.top,
+          right:rect.right-measureRect.left,
+          bottom:rect.bottom-measureRect.top
+        };
+      });
+      return {
+        left:Math.min(...rects.map(r => r.left)),
+        top:Math.min(...rects.map(r => r.top)),
+        right:Math.max(...rects.map(r => r.right)),
+        bottom:Math.max(...rects.map(r => r.bottom))
+      };
+    } finally {
+      measure.remove();
+    }
   }
 
   function applyLobbyCalibration(){
@@ -2461,10 +2493,17 @@
     }, delay);
   }
 
+  let calibrationBurstToken = 0;
   function burst(reason){
-    /* Jedna, scalona kalibracja po ustabilizowaniu viewportu zamiast pięciu
-       kolejnych korekt widocznych wcześniej jako mruganie lobby. */
-    schedule(reason, 45);
+    /* Kilka niewidocznych pomiarów po obrocie telefonu. Pierwszy reaguje szybko,
+       a kolejne łapią końcowy rozmiar paska przeglądarki i visualViewport. */
+    const token = ++calibrationBurstToken;
+    [20,120,300,620].forEach((delay,index) => {
+      setTimeout(() => {
+        if (token !== calibrationBurstToken) return;
+        calibrate(`${reason}-${index+1}`, index === 3);
+      }, delay);
+    });
   }
 
   function getViewport(){ return {...state.safe}; }
@@ -2475,6 +2514,16 @@
   if (mobileLike) body.classList.add('mobile-device');
   ensureLobbyStage();
   ensureProbe();
+
+  if (typeof ResizeObserver === 'function') {
+    const calibrationResizeObserver = new ResizeObserver(() => {
+      if (body.classList.contains('lobby-mode')) schedule('lobby-layout-resize', 35);
+    });
+    const lobbyHost = document.getElementById('lobbyView');
+    if (lobbyHost) calibrationResizeObserver.observe(lobbyHost);
+    if (lobbyStage) calibrationResizeObserver.observe(lobbyStage);
+  }
+  document.fonts?.ready?.then(() => burst('fonts-ready')).catch(() => {});
 
   const observer = new MutationObserver(mutations => {
     if (mutations.some(m => m.type === 'attributes')) schedule('ui-change', 25);
@@ -2507,6 +2556,6 @@
 </script>
 
 
-<script src="game.js?v=arena-ball-silent-calibration-v39"></script>
+<script src="game.js?v=arena-ball-live-silent-calibration-v40"></script>
 </body>
 </html>
