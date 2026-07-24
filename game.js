@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-window.__arenaBuild='arena-ball-aim-guide-v33';
+window.__arenaBuild='arena-ball-wide-teamplay-v34';
 
 const canvas = document.getElementById('game');
 const earlyMobileHint=((navigator.maxTouchPoints||0)>0&&matchMedia('(pointer: coarse)').matches)||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
@@ -343,7 +343,7 @@ function loadProgress(){
 let profile=loadProgress();
 profile.name=persistNickname(profile.name);
 let profileDirty=false,profileSyncBusy=false,profileChangeSeq=0,lastConfigRevision=0,backgroundSyncBusy=false;
-const CLIENT_VERSION='arena-ball-aim-guide-v33';
+const CLIENT_VERSION='arena-ball-wide-teamplay-v34';
 function saveProgress(markDirty=true){try{profile.name=persistNickname(profile.name);localStorage.setItem(SAVE_KEY,JSON.stringify(profile));if(markDirty){profileDirty=true;profileChangeSeq++;}}catch(_){} }
 function getPlayerId(){
   try{let id=localStorage.getItem(PLAYER_ID_KEY);if(!id){id=(crypto.randomUUID?crypto.randomUUID():`gracz-${Date.now()}-${Math.random().toString(16).slice(2)}`);localStorage.setItem(PLAYER_ID_KEY,id);}return id;}
@@ -1008,22 +1008,22 @@ function moveDuelEntity(ent,dx,dz){
 }
 
 // ----------------------------- Arena Ball 3v3 -----------------------------
-const ARENA_BALL_X=27,ARENA_BALL_Z=30,ARENA_BALL_GOAL_HALF=7.2,ARENA_BALL_GOAL_LINE=28.5,ARENA_BALL_RADIUS=.75,ARENA_BALL_SPEED_MULTIPLIER=.44,ARENA_BALL_NORMAL_KICK_SPEED=14.625,ARENA_BALL_SUPER_KICK_SPEED=18.5;
-// Arena jest większa o 50%. Przeszkody zachowują swoje rozmiary, ale są
-// rozstawione szerzej, dzięki czemu powstają dłuższe i czytelniejsze korytarze.
+const ARENA_BALL_X=33.75,ARENA_BALL_Z=37.5,ARENA_BALL_GOAL_HALF=9,ARENA_BALL_GOAL_LINE=35.625,ARENA_BALL_RADIUS=.75,ARENA_BALL_SPEED_MULTIPLIER=.44,ARENA_BALL_NORMAL_KICK_SPEED=14.625,ARENA_BALL_SUPER_KICK_SPEED=23.125;
+// V34: Arena Ball jest większa o 25% względem v33. Przeszkody są
+// rozmieszczone szerzej, lecz zachowują dotychczasowe rozmiary.
 const arenaBallWalls=[
-  {x:-17.7,z:-18,w:4.2,d:1.8,h:1.45,c:[.29,.36,.52]},{x:17.7,z:-18,w:4.2,d:1.8,h:1.45,c:[.29,.36,.52]},
-  {x:-17.7,z:18,w:4.2,d:1.8,h:1.45,c:[.29,.36,.52]},{x:17.7,z:18,w:4.2,d:1.8,h:1.45,c:[.29,.36,.52]},
-  {x:-9,z:-9.3,w:1.8,d:4.8,h:1.55,c:[.34,.30,.52]},{x:9,z:-9.3,w:1.8,d:4.8,h:1.55,c:[.34,.30,.52]},
-  {x:-9,z:9.3,w:1.8,d:4.8,h:1.55,c:[.34,.30,.52]},{x:9,z:9.3,w:1.8,d:4.8,h:1.55,c:[.34,.30,.52]},
-  {x:0,z:-13.5,w:4,d:1.6,h:1.35,c:[.28,.42,.48]},{x:0,z:13.5,w:4,d:1.6,h:1.35,c:[.28,.42,.48]},
-  {x:-17.1,z:0,w:3.4,d:1.7,h:1.4,c:[.38,.31,.50]},{x:17.1,z:0,w:3.4,d:1.7,h:1.4,c:[.38,.31,.50]}
+  {x:-22.125,z:-22.5,w:4.2,d:1.8,h:1.45,c:[.29,.36,.52]},{x:22.125,z:-22.5,w:4.2,d:1.8,h:1.45,c:[.29,.36,.52]},
+  {x:-22.125,z:22.5,w:4.2,d:1.8,h:1.45,c:[.29,.36,.52]},{x:22.125,z:22.5,w:4.2,d:1.8,h:1.45,c:[.29,.36,.52]},
+  {x:-11.25,z:-11.625,w:1.8,d:4.8,h:1.55,c:[.34,.30,.52]},{x:11.25,z:-11.625,w:1.8,d:4.8,h:1.55,c:[.34,.30,.52]},
+  {x:-11.25,z:11.625,w:1.8,d:4.8,h:1.55,c:[.34,.30,.52]},{x:11.25,z:11.625,w:1.8,d:4.8,h:1.55,c:[.34,.30,.52]},
+  {x:0,z:-16.875,w:4,d:1.6,h:1.35,c:[.28,.42,.48]},{x:0,z:16.875,w:4,d:1.6,h:1.35,c:[.28,.42,.48]},
+  {x:-21.375,z:0,w:3.4,d:1.7,h:1.4,c:[.38,.31,.50]},{x:21.375,z:0,w:3.4,d:1.7,h:1.4,c:[.38,.31,.50]}
 ];
 const arenaBallBushes=[
-  {x:-21.3,z:-11.1,r:2},{x:-15.75,z:-8.1,r:1.8},{x:-4.5,z:-18.9,r:1.9},{x:4.5,z:-18.9,r:1.9},
-  {x:21.3,z:-11.1,r:2},{x:15.75,z:-8.1,r:1.8},{x:-21.3,z:11.1,r:2},{x:-15.75,z:8.1,r:1.8},
-  {x:-4.5,z:18.9,r:1.9},{x:4.5,z:18.9,r:1.9},{x:21.3,z:11.1,r:2},{x:15.75,z:8.1,r:1.8},
-  {x:-12.9,z:0,r:1.7},{x:12.9,z:0,r:1.7},{x:0,z:-6.9,r:1.65},{x:0,z:6.9,r:1.65}
+  {x:-26.625,z:-13.875,r:2},{x:-19.6875,z:-10.125,r:1.8},{x:-5.625,z:-23.625,r:1.9},{x:5.625,z:-23.625,r:1.9},
+  {x:26.625,z:-13.875,r:2},{x:19.6875,z:-10.125,r:1.8},{x:-26.625,z:13.875,r:2},{x:-19.6875,z:10.125,r:1.8},
+  {x:-5.625,z:23.625,r:1.9},{x:5.625,z:23.625,r:1.9},{x:26.625,z:13.875,r:2},{x:19.6875,z:10.125,r:1.8},
+  {x:-16.125,z:0,r:1.7},{x:16.125,z:0,r:1.7},{x:0,z:-8.625,r:1.65},{x:0,z:8.625,r:1.65}
 ];
 function arenaBallPointInBush(x,z){return !ballOvertime&&arenaBallBushes.some(b=>(x-b.x)*(x-b.x)+(z-b.z)*(z-b.z)<b.r*b.r);}
 function arenaBallHitsWall(x,z,r=.12){
@@ -1346,7 +1346,7 @@ function render(){
   // Każdy gracz widzi własną postać od dołu ekranu. Druga strona dostaje
   // lustrzany widok areny: kamera obraca się o 180 stopni, a sterowanie
   // jest odwracane w updateDuel, więc W zawsze oznacza ruch w górę ekranu.
-  const cameraHeight=ballActive?30:20,cameraOffset=ballActive?22.5:15,cameraLook=ballActive?1.5:1;
+  const cameraHeight=ballActive?34.5:20,cameraOffset=ballActive?25.8:15,cameraLook=ballActive?1.9:1;
   if((duelActive&&duelMirrorView)||(ballActive&&ballMirrorView))M4.lookAt(view,[focusX-sx,cameraHeight,focusZ-cameraOffset-sz],[focusX,0,focusZ+cameraLook],[0,1,0]);
   else M4.lookAt(view,[focusX+sx,cameraHeight,focusZ+cameraOffset+sz],[focusX,0,focusZ-cameraLook],[0,1,0]);
   M4.multiply(viewProj,proj,view);M4.invert(invVP,viewProj);if(isMobileDevice)updateMobileAimScreen();screenToGround(mouse.x,mouse.y);

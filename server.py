@@ -2935,33 +2935,36 @@ ARENA_BALL_OVERTIME_SECONDS = 30.0
 ARENA_BALL_RESPAWN_SECONDS = 3.0
 ARENA_BALL_FINISH_TTL = 35.0
 ARENA_BALL_PLAYER_TIMEOUT = 9.0
-ARENA_BALL_ARENA_X = 27.0
-ARENA_BALL_ARENA_Z = 30.0
-ARENA_BALL_GOAL_HALF_WIDTH = 7.2
-ARENA_BALL_GOAL_LINE = 28.5
+ARENA_BALL_ARENA_X = 33.75
+ARENA_BALL_ARENA_Z = 37.5
+ARENA_BALL_GOAL_HALF_WIDTH = 9.0
+ARENA_BALL_GOAL_LINE = 35.625
 ARENA_BALL_RADIUS = 0.75
 ARENA_BALL_BALL_RADIUS = 0.58
 ARENA_BALL_BULLET_SPEED = 18.0
 ARENA_BALL_BULLET_DAMAGE = 22
 ARENA_BALL_KICK_SPEED = 14.625
-ARENA_BALL_SUPER_KICK_SPEED = 18.5
+ARENA_BALL_SUPER_KICK_SPEED = 23.125
 ARENA_BALL_TICK_RATE = 20.0
 ARENA_BALL_SPEED_MULTIPLIER = 0.44  # o 10% szybciej niż v29; 44% zwykłej prędkości
 
 # Symetryczna, gęsta mapa. W dogrywce wszystkie przeszkody i krzaki znikają.
+# V34: boisko większe o 25% względem v33. Pozycje przeszkód zostały
+# rozsunięte proporcjonalnie, ale ich rozmiary pozostają bez zmian, aby
+# powstało więcej wolnych korytarzy do podań i gry skrzydłami.
 ARENA_BALL_WALLS = (
-    (-17.7, -18.0, 4.2, 1.8), (17.7, -18.0, 4.2, 1.8),
-    (-17.7, 18.0, 4.2, 1.8), (17.7, 18.0, 4.2, 1.8),
-    (-9.0, -9.3, 1.8, 4.8), (9.0, -9.3, 1.8, 4.8),
-    (-9.0, 9.3, 1.8, 4.8), (9.0, 9.3, 1.8, 4.8),
-    (0.0, -13.5, 4.0, 1.6), (0.0, 13.5, 4.0, 1.6),
-    (-17.1, 0.0, 3.4, 1.7), (17.1, 0.0, 3.4, 1.7),
+    (-22.125, -22.5, 4.2, 1.8), (22.125, -22.5, 4.2, 1.8),
+    (-22.125, 22.5, 4.2, 1.8), (22.125, 22.5, 4.2, 1.8),
+    (-11.25, -11.625, 1.8, 4.8), (11.25, -11.625, 1.8, 4.8),
+    (-11.25, 11.625, 1.8, 4.8), (11.25, 11.625, 1.8, 4.8),
+    (0.0, -16.875, 4.0, 1.6), (0.0, 16.875, 4.0, 1.6),
+    (-21.375, 0.0, 3.4, 1.7), (21.375, 0.0, 3.4, 1.7),
 )
 ARENA_BALL_BUSHES = (
-    (-21.3, -11.1, 2.0), (-15.75, -8.1, 1.8), (-4.5, -18.9, 1.9), (4.5, -18.9, 1.9),
-    (21.3, -11.1, 2.0), (15.75, -8.1, 1.8), (-21.3, 11.1, 2.0), (-15.75, 8.1, 1.8),
-    (-4.5, 18.9, 1.9), (4.5, 18.9, 1.9), (21.3, 11.1, 2.0), (15.75, 8.1, 1.8),
-    (-12.9, 0.0, 1.7), (12.9, 0.0, 1.7), (0.0, -6.9, 1.65), (0.0, 6.9, 1.65),
+    (-26.625, -13.875, 2.0), (-19.6875, -10.125, 1.8), (-5.625, -23.625, 1.9), (5.625, -23.625, 1.9),
+    (26.625, -13.875, 2.0), (19.6875, -10.125, 1.8), (-26.625, 13.875, 2.0), (-19.6875, 10.125, 1.8),
+    (-5.625, 23.625, 1.9), (5.625, 23.625, 1.9), (26.625, 13.875, 2.0), (19.6875, 10.125, 1.8),
+    (-16.125, 0.0, 1.7), (16.125, 0.0, 1.7), (0.0, -8.625, 1.65), (0.0, 8.625, 1.65),
 )
 
 arena_ball_waiting: dict[str, dict[str, Any]] = {}
@@ -3014,11 +3017,11 @@ def arena_ball_line_blocked(match: dict[str, Any], x0: float, z0: float, x1: flo
 
 
 def arena_ball_spawn(team: int, slot: int) -> tuple[float, float, float]:
-    x_positions = (-9.3, 0.0, 9.3)
+    x_positions = (-11.625, 0.0, 11.625)
     x = x_positions[max(0, min(2, slot))]
     if team == 0:
-        return x, 21.9, math.pi
-    return x, -21.9, 0.0
+        return x, 27.375, math.pi
+    return x, -27.375, 0.0
 
 
 def create_arena_ball_player(payload: dict[str, Any], player_id: str, team: int, slot: int, is_bot: bool = False, bot_number: int = 1) -> dict[str, Any]:
@@ -3042,6 +3045,8 @@ def create_arena_ball_player(payload: dict[str, Any], player_id: str, team: int,
         "bot_turn_at": now() + random.uniform(.5, 1.2), "bot_strafe": random.choice((-1.0, 1.0)),
         "bot_stuck_for": 0.0, "bot_last_progress_x": x, "bot_last_progress_z": z,
         "bot_last_progress_at": now(),
+        "bot_next_pass_at": 0.0, "bot_last_pass_at": 0.0,
+        "receive_pass_until": 0.0, "receive_pass_x": x, "receive_pass_z": z,
     }
 
 
@@ -3352,6 +3357,91 @@ def arena_ball_open_goal_target(match: dict[str, Any], bot: dict[str, Any], goal
     return goal_x, angle, not blocked
 
 
+def arena_ball_enemy_clearance(enemies: list[dict[str, Any]], x: float, z: float) -> float:
+    if not enemies:
+        return 99.0
+    return min(math.hypot(float(enemy["x"]) - x, float(enemy["z"]) - z) for enemy in enemies)
+
+
+def arena_ball_point_segment_distance(px: float, pz: float, x0: float, z0: float, x1: float, z1: float) -> float:
+    dx, dz = x1 - x0, z1 - z0
+    denom = dx * dx + dz * dz
+    if denom <= 1e-8:
+        return math.hypot(px - x0, pz - z0)
+    t = max(0.0, min(1.0, ((px - x0) * dx + (pz - z0) * dz) / denom))
+    return math.hypot(px - (x0 + dx * t), pz - (z0 + dz * t))
+
+
+def arena_ball_best_pass_target(
+    match: dict[str, Any],
+    bot: dict[str, Any],
+    friends: list[dict[str, Any]],
+    enemies: list[dict[str, Any]],
+    attack_dir: float,
+    current: float,
+) -> tuple[dict[str, Any], float, float] | None:
+    """Wybiera partnera ustawionego w wolnej przestrzeni i na otwartej linii podania."""
+    if current < float(bot.get("bot_next_pass_at", 0.0)):
+        return None
+    bx, bz = float(bot["x"]), float(bot["z"])
+    rows: list[tuple[float, dict[str, Any], float, float]] = []
+    for mate in friends:
+        if mate["id"] == bot["id"] or mate.get("hp", 0) <= 0:
+            continue
+        raw_mx, raw_mz = float(mate["x"]), float(mate["z"])
+        base_distance = math.hypot(raw_mx - bx, raw_mz - bz)
+        lead = min(.60, base_distance / 24.0)
+        mx = max(-ARENA_BALL_ARENA_X + 2.0, min(ARENA_BALL_ARENA_X - 2.0, raw_mx + float(mate.get("vx", 0.0)) * lead))
+        mz = max(-ARENA_BALL_ARENA_Z + 2.5, min(ARENA_BALL_ARENA_Z - 2.5, raw_mz + float(mate.get("vz", 0.0)) * lead))
+        distance = math.hypot(mx - bx, mz - bz)
+        if distance < 4.0 or distance > 27.0:
+            continue
+        if arena_ball_line_blocked(match, bx, bz, mx, mz, ARENA_BALL_BALL_RADIUS * .72):
+            continue
+        forward_gain = (mz - bz) * attack_dir
+        if forward_gain < -7.0:
+            continue
+        clearance = arena_ball_enemy_clearance(enemies, mx, mz)
+        lane_clearance = min((arena_ball_point_segment_distance(float(enemy["x"]), float(enemy["z"]), bx, bz, mx, mz) for enemy in enemies), default=99.0)
+        required_lane = 1.45 + min(.45, distance / 42.0)
+        if clearance < 2.35 or lane_clearance < required_lane:
+            continue
+        passer_pressure = arena_ball_enemy_clearance(enemies, bx, bz)
+        width_bonus = min(abs(mx) / max(1.0, ARENA_BALL_ARENA_X), 1.0) * 3.1
+        continuation = 2.6 if not arena_ball_line_blocked(
+            match, mx, mz, 0.0, attack_dir * (ARENA_BALL_GOAL_LINE + .4), .20
+        ) else 0.0
+        score = forward_gain * 1.55 + min(clearance, 10.0) * .75 + lane_clearance * .55 + width_bonus + continuation - distance * .16
+        if passer_pressure < 5.0:
+            score += 2.0
+        rows.append((score, mate, distance, clearance))
+    if not rows:
+        return None
+    score, mate, distance, _ = max(rows, key=lambda row: row[0])
+    if score < 3.8:
+        return None
+    angle = math.atan2(float(mate["x"]) - bx, float(mate["z"]) - bz)
+    return mate, angle, distance
+
+
+def arena_ball_make_bot_pass(
+    match: dict[str, Any], bot: dict[str, Any], mate: dict[str, Any], angle: float, distance: float, current: float
+) -> bool:
+    # Zwykłe podanie wystarcza na większość boiska; dłuższe przerzuty używają mocniejszego kopnięcia.
+    kicked = arena_ball_kick(match, bot, angle, super_kick=distance > 20.0)
+    if not kicked:
+        return False
+    bot["bot_last_pass_at"] = current
+    bot["bot_next_pass_at"] = current + 2.0
+    mate["receive_pass_until"] = current + min(2.2, .55 + distance / 12.0)
+    mate["receive_pass_x"] = float(mate["x"]) + math.sin(angle) * min(2.8, distance * .12)
+    mate["receive_pass_z"] = float(mate["z"]) + math.cos(angle) * min(2.8, distance * .12)
+    match["bot_pass_count"] = int(match.get("bot_pass_count", 0)) + 1
+    bot["bot_stuck_for"] = 0.0
+    bot.pop("nav_x", None); bot.pop("nav_z", None)
+    return True
+
+
 def update_arena_ball_bots(match: dict[str, Any], step: float, current: float) -> None:
     players = list(match["players"].values())
     ball = match["ball"]
@@ -3367,75 +3457,131 @@ def update_arena_ball_bots(match: dict[str, Any], step: float, current: float) -
         opponent_goal_z = attack_dir * (ARENA_BALL_GOAL_LINE + .55)
         own_goal_z = -attack_dir * (ARENA_BALL_GOAL_LINE - 2.0)
         has_ball = ball.get("carrier_id") == bot["id"]
+        if has_ball:
+            if not bot.get("bot_ball_since"):
+                bot["bot_ball_since"] = current
+        else:
+            bot["bot_ball_since"] = 0.0
+        slot = int(bot.get("slot", 0))
+        sway = math.sin(current * .68 + slot * 2.1 + team * 1.4)
+        sway_z = math.cos(current * .61 + slot * 1.8) * .9
 
         if has_ball:
-            goal_x, aim, clear_shot = arena_ball_open_goal_target(match, bot, opponent_goal_z)
+            goal_x, goal_aim, clear_shot = arena_ball_open_goal_target(match, bot, opponent_goal_z)
             distance_goal = math.hypot(goal_x - float(bot["x"]), opponent_goal_z - float(bot["z"]))
             attack_progress = float(bot["z"]) * attack_dir
-            deep_attack = attack_progress >= 2.0
-            very_close = attack_progress >= ARENA_BALL_GOAL_LINE - 4.0
-            stuck = float(bot.get("bot_stuck_for", 0.0))
+            pressure = arena_ball_enemy_clearance(enemies, float(bot["x"]), float(bot["z"]))
+            pass_choice = arena_ball_best_pass_target(match, bot, friends, enemies, attack_dir, current)
 
-            # Bot z piłką strzela wcześniej i nie próbuje wejść fizycznie w
-            # linię bramkową. Jeżeli utknął, wymusza strzał zamiast stać.
-            if (clear_shot and (deep_attack or distance_goal < 25.0)) or very_close or stuck > .52:
-                kicked = arena_ball_kick(match, bot, aim, super_kick=distance_goal > 8.5)
-                if kicked:
+            # Podanie ma pierwszeństwo, gdy partner jest wyraźnie lepiej ustawiony,
+            # przewożący piłkę jest naciskany albo bezpośrednia droga do bramki jest zamknięta.
+            if pass_choice:
+                mate, pass_angle, pass_distance = pass_choice
+                mate_gain = (float(mate["z"]) - float(bot["z"])) * attack_dir
+                held_for = current - float(bot.get("bot_ball_since", current))
+                should_pass = pressure < 5.4 or not clear_shot or (held_for > .78 and attack_progress < ARENA_BALL_GOAL_LINE * .48 and mate_gain > 3.5)
+                if should_pass and arena_ball_make_bot_pass(match, bot, mate, pass_angle, pass_distance, current):
+                    continue
+
+            very_close = attack_progress >= ARENA_BALL_GOAL_LINE - 5.2
+            shooting_zone = attack_progress >= ARENA_BALL_GOAL_LINE * .42
+            stuck = float(bot.get("bot_stuck_for", 0.0))
+            if (clear_shot and (shooting_zone or distance_goal < 19.0)) or very_close or stuck > .62:
+                if arena_ball_kick(match, bot, goal_aim, super_kick=distance_goal > 11.0):
                     bot["bot_stuck_for"] = 0.0
                     bot.pop("nav_x", None); bot.pop("nav_z", None)
                     continue
 
-            if clear_shot:
+            # Prowadzenie piłki wybiera szeroki, wolny korytarz zamiast środka boiska.
+            lane_sign = -1.0 if slot == 0 else (1.0 if slot == 2 else (1.0 if sway >= 0 else -1.0))
+            lane_x = lane_sign * ARENA_BALL_ARENA_X * .48
+            target_x = lane_x + sway * 1.4
+            target_z = max(-ARENA_BALL_ARENA_Z + 4.0, min(ARENA_BALL_ARENA_Z - 4.0, float(bot["z"]) + attack_dir * 8.5))
+            if clear_shot and abs(float(bot["x"])) < ARENA_BALL_GOAL_HALF_WIDTH * 1.35:
                 target_x = goal_x
-                target_z = attack_dir * (ARENA_BALL_GOAL_LINE - 3.2)
-            else:
-                lane_sign = 1.0 if float(bot.get("bot_strafe", 1.0)) >= 0 else -1.0
-                target_x = lane_sign * ARENA_BALL_GOAL_HALF_WIDTH * .70
-                target_z = attack_dir * (ARENA_BALL_GOAL_LINE - 7.0)
         else:
             bx = float(carrier["x"]) if carrier else float(ball["x"])
             bz = float(carrier["z"]) if carrier else float(ball["z"])
-            team_distances = sorted((math.hypot(p["x"] - bx, p["z"] - bz), p["id"]) for p in friends)
+            team_distances = sorted((math.hypot(float(p["x"]) - bx, float(p["z"]) - bz), p["id"]) for p in friends)
             chaser_id = team_distances[0][1] if team_distances else bot["id"]
-            slot = int(bot.get("slot", 0))
             enemy_has_ball = carrier is not None and int(carrier.get("team", -1)) != team
+            friendly_has_ball = carrier is not None and int(carrier.get("team", -1)) == team
             defense_dir = -attack_dir
-            ball_near_own_goal = bz * defense_dir >= ARENA_BALL_GOAL_LINE - 13.0
-            sway = math.sin(current * .85 + slot * 2.0 + team * 1.3)
-            sway_z = math.cos(current * .72 + slot * 1.7) * .65
+            ball_near_own_goal = bz * defense_dir >= ARENA_BALL_GOAL_LINE - 16.0
 
-            if bot["id"] == chaser_id:
-                target_x, target_z = bx, bz
-            elif enemy_has_ball and ball_near_own_goal and slot != 1:
-                side = -1.0 if slot == 0 else 1.0
-                target_x = max(-ARENA_BALL_ARENA_X + 4.0, min(ARENA_BALL_ARENA_X - 4.0, bx + side * 2.4 + sway))
-                target_z = bz - attack_dir * 1.8 + sway_z
-            elif slot == 1:
-                target_x = max(-ARENA_BALL_ARENA_X + 5.0, min(ARENA_BALL_ARENA_X - 5.0, bx * .55 + sway * 1.2))
-                target_z = max(-ARENA_BALL_ARENA_Z + 5.0, min(ARENA_BALL_ARENA_Z - 5.0, bz - attack_dir * 5.0 + sway_z))
+            if current < float(bot.get("receive_pass_until", 0.0)):
+                target_x = float(bot.get("receive_pass_x", bot["x"]))
+                target_z = float(bot.get("receive_pass_z", bot["z"]))
+            elif friendly_has_ball:
+                # Pełne rozstawienie 3v3: dwa skrzydła szeroko, trzeci zawodnik
+                # daje opcję podania przed lub za posiadaczem piłki.
+                if slot == 0:
+                    target_x = -ARENA_BALL_ARENA_X * .66 + sway * 1.5
+                    target_z = bz + attack_dir * 8.5 + sway_z
+                elif slot == 2:
+                    target_x = ARENA_BALL_ARENA_X * .66 + sway * 1.5
+                    target_z = bz + attack_dir * 8.5 + sway_z
+                else:
+                    target_x = max(-ARENA_BALL_ARENA_X * .34, min(ARENA_BALL_ARENA_X * .34, bx * .30 + sway * 1.8))
+                    target_z = bz - attack_dir * 5.5 + sway_z
+                # Zawodnik najbliższy piłce nie wchodzi na posiadacza, tylko tworzy trójkąt podań.
+                if carrier and bot["id"] == chaser_id:
+                    side = -1.0 if float(bot["x"]) <= float(carrier["x"]) else 1.0
+                    target_x = max(-ARENA_BALL_ARENA_X + 3.0, min(ARENA_BALL_ARENA_X - 3.0, float(carrier["x"]) + side * 7.0))
+                    target_z = float(carrier["z"]) + attack_dir * 5.5
+            elif enemy_has_ball:
+                if bot["id"] == chaser_id:
+                    target_x, target_z = bx, bz
+                elif slot == 1:
+                    target_x = bx * .28 + sway * 1.2
+                    target_z = (bz + own_goal_z) * .52 + sway_z
+                else:
+                    side = -1.0 if slot == 0 else 1.0
+                    target_x = side * ARENA_BALL_ARENA_X * .48 + sway * 1.3
+                    target_z = (bz + own_goal_z) * .50 + sway_z
+                    if ball_near_own_goal:
+                        target_x = bx + side * 4.0
+                        target_z = bz - attack_dir * 2.4
             else:
-                side = -1.0 if slot == 0 else 1.0
-                target_x = max(-ARENA_BALL_ARENA_X + 4.0, min(ARENA_BALL_ARENA_X - 4.0, bx + side * 7.0 + sway * 1.4))
-                target_z = max(-ARENA_BALL_ARENA_Z + 4.5, min(ARENA_BALL_ARENA_Z - 4.5, bz - attack_dir * 3.6 + sway_z))
-                if abs(target_z - own_goal_z) < 1.1:
-                    target_z -= attack_dir * 2.0
+                # Wolna piłka: tylko jeden bot ją ściga; pozostali zajmują szerokie
+                # pozycje do natychmiastowego podania po przejęciu.
+                if bot["id"] == chaser_id:
+                    target_x, target_z = bx, bz
+                elif slot == 0:
+                    target_x = -ARENA_BALL_ARENA_X * .64 + sway * 1.5
+                    target_z = bz + attack_dir * 5.5 + sway_z
+                elif slot == 2:
+                    target_x = ARENA_BALL_ARENA_X * .64 + sway * 1.5
+                    target_z = bz + attack_dir * 5.5 + sway_z
+                else:
+                    target_x = bx * .25 + sway * 1.5
+                    target_z = bz - attack_dir * 5.0 + sway_z
+
+            target_x = max(-ARENA_BALL_ARENA_X + 2.6, min(ARENA_BALL_ARENA_X - 2.6, target_x))
+            target_z = max(-ARENA_BALL_ARENA_Z + 3.0, min(ARENA_BALL_ARENA_Z - 3.0, target_z))
 
         arena_ball_move_bot_toward(match, bot, target_x, target_z, step)
 
         if ball.get("carrier_id") == bot["id"]:
             goal_x, goal_aim, clear_after_move = arena_ball_open_goal_target(match, bot, opponent_goal_z)
-            bot["angle"] = goal_aim
             attack_progress = float(bot["z"]) * attack_dir
-            if clear_after_move and attack_progress >= 4.0:
-                arena_ball_kick(match, bot, goal_aim, super_kick=True)
-            elif float(bot.get("bot_stuck_for", 0.0)) > .42:
+            pressure = arena_ball_enemy_clearance(enemies, float(bot["x"]), float(bot["z"]))
+            pass_choice = arena_ball_best_pass_target(match, bot, friends, enemies, attack_dir, current)
+            if pass_choice and pressure < 4.8:
+                mate, pass_angle, pass_distance = pass_choice
+                if arena_ball_make_bot_pass(match, bot, mate, pass_angle, pass_distance, current):
+                    continue
+            bot["angle"] = goal_aim
+            if clear_after_move and attack_progress >= ARENA_BALL_GOAL_LINE * .48:
+                arena_ball_kick(match, bot, goal_aim, super_kick=math.hypot(goal_x-float(bot["x"]), opponent_goal_z-float(bot["z"])) > 11.0)
+            elif float(bot.get("bot_stuck_for", 0.0)) > .58:
                 arena_ball_kick(match, bot, goal_aim, super_kick=False)
 
         if enemies and ball.get("carrier_id") != bot["id"]:
-            target = min(enemies, key=lambda p: math.hypot(p["x"] - bot["x"], p["z"] - bot["z"]))
-            dist = math.hypot(target["x"] - bot["x"], target["z"] - bot["z"])
-            if dist < 12.0 and not arena_ball_line_blocked(match, bot["x"], bot["z"], target["x"], target["z"], .10):
-                aim = math.atan2(target["x"] - bot["x"], target["z"] - bot["z"]) + random.uniform(-.07, .07)
+            target = min(enemies, key=lambda p: math.hypot(float(p["x"]) - float(bot["x"]), float(p["z"]) - float(bot["z"])))
+            dist = math.hypot(float(target["x"]) - float(bot["x"]), float(target["z"]) - float(bot["z"]))
+            if dist < 12.0 and not arena_ball_line_blocked(match, float(bot["x"]), float(bot["z"]), float(target["x"]), float(target["z"]), .10):
+                aim = math.atan2(float(target["x"]) - float(bot["x"]), float(target["z"]) - float(bot["z"])) + random.uniform(-.07, .07)
                 spawn_arena_ball_bullet(match, bot, aim)
 
 
@@ -3552,7 +3698,7 @@ def advance_arena_ball(match: dict[str, Any]) -> None:
             # Podniesienie piłki przez najbliższego żywego gracza.
             candidates = [p for p in players if p.get("hp", 0) > 0 and current >= float(p.get("respawn_at", 0.0)) and not (current < float(ball.get("pickup_block_until", 0.0)) and p["id"] == ball.get("last_kicker_id"))]
             if candidates:
-                nearest = min(candidates, key=lambda p: math.hypot(p["x"] - ball["x"], p["z"] - ball["z"]))
+                nearest = min(candidates, key=lambda p: math.hypot(p["x"] - ball["x"], p["z"] - ball["z"]) + random.random() * .018)
                 if math.hypot(nearest["x"] - ball["x"], nearest["z"] - ball["z"]) <= 1.35:
                     ball["carrier_id"] = nearest["id"]
                     ball["last_touch_team"] = nearest["team"]
@@ -3750,7 +3896,7 @@ def duel_tick_loop() -> None:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "ArenaStarsSQL/5.7-arena-ball-all-slower-goal-ai-fix"
+    server_version = "ArenaStarsSQL/5.8-arena-ball-wide-teamplay-v34"
     protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt: str, *args: Any) -> None:
