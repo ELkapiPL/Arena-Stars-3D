@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-window.__arenaBuild='arena-bot-view-drag-controls-v45';
+window.__arenaBuild='arena-bot-view-natural-horizontal-v46';
 
 const canvas = document.getElementById('game');
 const earlyMobileHint=((navigator.maxTouchPoints||0)>0&&matchMedia('(pointer: coarse)').matches)||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
@@ -367,7 +367,7 @@ function loadProgress(){
 let profile=loadProgress();
 profile.name=persistNickname(profile.name);
 let profileDirty=false,profileSyncBusy=false,profileChangeSeq=0,lastConfigRevision=0,backgroundSyncBusy=false;
-const CLIENT_VERSION='arena-bot-view-drag-controls-v45';
+const CLIENT_VERSION='arena-bot-view-natural-horizontal-v46';
 const CAMERA_MODE_KEY='arenaStars3D_camera_mode_v1';
 let botPerspectiveEnabled=false;
 try{botPerspectiveEnabled=localStorage.getItem(CAMERA_MODE_KEY)==='bot';}catch(_){}
@@ -396,10 +396,12 @@ function toggleBotPerspective(){
 }
 function movementFromBotPerspective(dx,dz){
   if(!isBotPerspectiveActive()||!player)return {x:dx,z:dz};
-  // W/D/S/A mają zachowywać się jak w typowej grze z kamerą za oczami:
-  // W = do przodu, S = do tyłu, A = w lewo, D = w prawo.
+  // Naturalne sterowanie względem obrazu kamery:
+  // W = przód, S = tył, A = lewo, D = prawo.
+  // Macierz kamery ma ekranową prawą stronę przeciwną do wcześniejszego wektora,
+  // dlatego poprawny wektor ruchu w prawo to (-cos(a), +sin(a)).
   const forward=-dz,right=dx,a=Number(player.angle)||0;
-  return {x:Math.sin(a)*forward+Math.cos(a)*right,z:Math.cos(a)*forward-Math.sin(a)*right};
+  return {x:Math.sin(a)*forward-Math.cos(a)*right,z:Math.cos(a)*forward+Math.sin(a)*right};
 }
 const BOT_VIEW_DESKTOP_LOOK_SENSITIVITY=.00135;
 const BOT_VIEW_MOBILE_LOOK_SENSITIVITY=.00110;
@@ -444,7 +446,9 @@ function updateBotPerspectiveAngle(){
   if(!isBotPerspectiveActive()||!player)return false;
   const sensitivity=isMobileDevice?BOT_VIEW_MOBILE_LOOK_SENSITIVITY:BOT_VIEW_DESKTOP_LOOK_SENSITIVITY;
   if(botViewLook.yawPixels){
-    player.angle=normalizeDuelAngle(player.angle+botViewLook.yawPixels*sensitivity);
+    // Przeciągnięcie myszy lub palca w prawo obraca widok w prawo,
+    // a przeciągnięcie w lewo obraca widok w lewo.
+    player.angle=normalizeDuelAngle(player.angle-botViewLook.yawPixels*sensitivity);
     botViewLook.yawPixels=0;
   }
   if(botViewLook.pitchPixels){
