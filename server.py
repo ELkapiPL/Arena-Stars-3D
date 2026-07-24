@@ -229,7 +229,7 @@ def persistent_storage_public_status() -> dict[str, Any]:
         "schemaVersion": DB_SCHEMA_VERSION if DB_READY else 0,
         "emailResetConfigured": bool(RESEND_API_KEY and PASSWORD_RESET_FROM),
         "passwordResetTtlMinutes": PASSWORD_RESET_TTL // 60,
-        "build": "arena-ball-3v3-v27",
+        "build": "arena-ball-3v3-v29",
     }
     if DB_READY:
         payload["connectedAt"] = DB_CONNECTED_AT
@@ -595,7 +595,7 @@ def db_schema_status() -> dict[str, Any]:
         "connectedAt": DB_CONNECTED_AT,
         "emailResetConfigured": bool(RESEND_API_KEY and PASSWORD_RESET_FROM),
         "passwordResetTtlMinutes": PASSWORD_RESET_TTL // 60,
-        "build": "arena-ball-3v3-v27",
+        "build": "arena-ball-3v3-v29",
     }
 
 
@@ -2946,7 +2946,7 @@ ARENA_BALL_BULLET_DAMAGE = 22
 ARENA_BALL_KICK_SPEED = 19.5
 ARENA_BALL_SUPER_KICK_SPEED = 25.0
 ARENA_BALL_TICK_RATE = 20.0
-ARENA_BALL_BOT_SPEED_MULTIPLIER = 0.40  # boty są wolniejsze o 60%
+ARENA_BALL_SPEED_MULTIPLIER = 0.40  # wszyscy gracze w Arena Ball poruszają się o 60% wolniej
 
 # Symetryczna, gęsta mapa. W dogrywce wszystkie przeszkody i krzaki znikają.
 ARENA_BALL_WALLS = (
@@ -3028,9 +3028,7 @@ def create_arena_ball_player(payload: dict[str, Any], player_id: str, team: int,
     name = clean_name(payload.get("name"))
     if is_bot:
         name = f"Bot Arena {bot_number}"
-    player_speed = clean_float(payload.get("speed"), 3.0, 12.0, 6.3)
-    if is_bot:
-        player_speed *= ARENA_BALL_BOT_SPEED_MULTIPLIER
+    player_speed = clean_float(payload.get("speed"), 3.0, 12.0, 6.3) * ARENA_BALL_SPEED_MULTIPLIER
     return {
         "id": player_id, "name": name, "skin": clean_skin(payload.get("skin")),
         "team": int(team), "slot": int(slot), "is_bot": bool(is_bot),
@@ -3286,27 +3284,57 @@ def update_arena_ball_bots(match: dict[str, Any], step: float, current: float) -
         enemies = [p for p in players if p["team"] != team and p.get("hp", 0) > 0 and current >= float(p.get("respawn_at", 0.0))]
         friends = [p for p in players if p["team"] == team and p.get("hp", 0) > 0 and current >= float(p.get("respawn_at", 0.0))]
         target_x, target_z = 0.0, 0.0
+        attack_dir = -1.0 if team == 0 else 1.0
+        opponent_goal_z = attack_dir * 19.35
+        own_goal_z = -attack_dir * 17.0
         if ball.get("carrier_id") == bot["id"]:
-            target_x = 0.0
-            target_z = -18.4 if team == 0 else 18.4
-            distance_goal = math.hypot(target_x - bot["x"], target_z - bot["z"])
-            aim = math.atan2(target_x - bot["x"], target_z - bot["z"])
+            # Zawodnik z piłką nie zatrzymuje się przed bramką. Jeżeli środek
+            # zasłania mur, najpierw wybiera boczny korytarz, a potem wraca na
+            # środek bramki. Blisko pola bramkowego kopie bez zwlekania.
+            direct_blocked = arena_ball_line_blocked(match, bot["x"], bot["z"], 0.0, opponent_goal_z, .34)
+            if direct_blocked:
+                lane = 5.4 if float(bot.get("bot_strafe", 1.0)) >= 0 else -5.4
+                target_x = lane
+                target_z = opponent_goal_z - attack_dir * 4.2
+            else:
+                target_x = 0.0
+                target_z = opponent_goal_z
+            distance_goal = math.hypot(-bot["x"], opponent_goal_z - bot["z"])
+            aim = math.atan2(-bot["x"], opponent_goal_z - bot["z"])
             bot["angle"] = aim
-            if distance_goal < 10.5 and not arena_ball_line_blocked(match, bot["x"], bot["z"], target_x, target_z, .28):
-                arena_ball_kick(match, bot, aim, super_kick=distance_goal > 7.0)
+            clear_shot = not arena_ball_line_blocked(match, bot["x"], bot["z"], 0.0, opponent_goal_z, .24)
+            in_goal_lane = abs(float(bot["x"])) <= ARENA_BALL_GOAL_HALF_WIDTH - .55
+            close_to_goal = (attack_dir < 0 and float(bot["z"]) < -14.0) or (attack_dir > 0 and float(bot["z"]) > 14.0)
+            if (distance_goal < 11.0 and clear_shot) or (close_to_goal and in_goal_lane):
+                arena_ball_kick(match, bot, aim, super_kick=distance_goal > 6.5)
         else:
             bx = float(carrier["x"]) if carrier else float(ball["x"])
             bz = float(carrier["z"]) if carrier else float(ball["z"])
             team_distances = sorted((math.hypot(p["x"] - bx, p["z"] - bz), p["id"]) for p in friends)
             chaser_id = team_distances[0][1] if team_distances else bot["id"]
+            slot = int(bot.get("slot", 0))
+            enemy_has_ball = carrier is not None and int(carrier.get("team", -1)) != team
+            ball_near_own_goal = (team == 0 and bz > 7.0) or (team == 1 and bz < -7.0)
             if bot["id"] == chaser_id:
                 target_x, target_z = bx, bz
-            elif int(bot.get("slot", 0)) == 1:
-                target_x, target_z = (bx * .35, bz * .25)
+            elif enemy_has_ball and ball_near_own_goal and slot != 1:
+                # Skrzydłowy wraca do obrony, ale atakuje zawodnika z piłką,
+                # zamiast stać nieruchomo przed bramką.
+                side = -1.0 if slot == 0 else 1.0
+                target_x = max(-8.0, min(8.0, bx + side * 1.8))
+                target_z = bz - attack_dir * 1.2
+            elif slot == 1:
+                # Środkowy porusza się kilka metrów za piłką i jest gotowy do podania.
+                target_x = max(-8.0, min(8.0, bx * .55))
+                target_z = max(-15.5, min(15.5, bz - attack_dir * 3.6))
             else:
-                own_z = 13.5 if team == 0 else -13.5
-                target_x = max(-7.0, min(7.0, bx * .42))
-                target_z = own_z
+                # Skrzydłowi przesuwają się razem z akcją. Nie parkują już na
+                # stałej pozycji przed własną bramką.
+                side = -1.0 if slot == 0 else 1.0
+                target_x = max(-13.0, min(13.0, bx + side * 4.8))
+                target_z = max(-15.8, min(15.8, bz - attack_dir * 2.4))
+                if abs(target_z - own_goal_z) < .8:
+                    target_z -= attack_dir * 1.4
 
         arena_ball_move_bot_toward(match, bot, target_x, target_z, step)
         if ball.get("carrier_id") == bot["id"]:
@@ -3631,7 +3659,7 @@ def duel_tick_loop() -> None:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "ArenaStarsSQL/5.5-arena-ball-3v3-ball-bots-fix"
+    server_version = "ArenaStarsSQL/5.7-arena-ball-all-slower-goal-ai-fix"
     protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt: str, *args: Any) -> None:

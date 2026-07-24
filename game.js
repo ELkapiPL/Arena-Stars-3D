@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-window.__arenaBuild='arena-ball-3v3-v27';
+window.__arenaBuild='arena-ball-3v3-v29';
 
 const canvas = document.getElementById('game');
 const earlyMobileHint=((navigator.maxTouchPoints||0)>0&&matchMedia('(pointer: coarse)').matches)||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
@@ -343,7 +343,7 @@ function loadProgress(){
 let profile=loadProgress();
 profile.name=persistNickname(profile.name);
 let profileDirty=false,profileSyncBusy=false,profileChangeSeq=0,lastConfigRevision=0,backgroundSyncBusy=false;
-const CLIENT_VERSION='arena-ball-3v3-v27';
+const CLIENT_VERSION='arena-ball-3v3-v29';
 function saveProgress(markDirty=true){try{profile.name=persistNickname(profile.name);localStorage.setItem(SAVE_KEY,JSON.stringify(profile));if(markDirty){profileDirty=true;profileChangeSeq++;}}catch(_){} }
 function getPlayerId(){
   try{let id=localStorage.getItem(PLAYER_ID_KEY);if(!id){id=(crypto.randomUUID?crypto.randomUUID():`gracz-${Date.now()}-${Math.random().toString(16).slice(2)}`);localStorage.setItem(PLAYER_ID_KEY,id);}return id;}
@@ -1008,7 +1008,7 @@ function moveDuelEntity(ent,dx,dz){
 }
 
 // ----------------------------- Arena Ball 3v3 -----------------------------
-const ARENA_BALL_X=18,ARENA_BALL_Z=20,ARENA_BALL_RADIUS=.75;
+const ARENA_BALL_X=18,ARENA_BALL_Z=20,ARENA_BALL_RADIUS=.75,ARENA_BALL_SPEED_MULTIPLIER=.40;
 const arenaBallWalls=[
   {x:-11.8,z:-12,w:4.2,d:1.8,h:1.45,c:[.29,.36,.52]},{x:11.8,z:-12,w:4.2,d:1.8,h:1.45,c:[.29,.36,.52]},
   {x:-11.8,z:12,w:4.2,d:1.8,h:1.45,c:[.29,.36,.52]},{x:11.8,z:12,w:4.2,d:1.8,h:1.45,c:[.29,.36,.52]},
@@ -1094,7 +1094,11 @@ function startBallQueue(){
 function cancelBallQueue(){stopBallSession(true);showLobby(false);}
 function beginBallMatch(data){
   clearTimeout(ballJoinTimer);ballJoinTimer=0;ballSearching=false;ballActive=true;ballEnded=false;ballMatchId=data.matchId;ballNetworkFailures=0;
-  reset();running=true;document.body.classList.add('arena-playing','arena-ball-mode');document.body.classList.remove('lobby-mode','duel-mode');
+  reset();running=true;
+  // Arena Ball ma wolniejsze tempo: zarówno prawdziwi gracze, jak i boty
+  // poruszają się z 40% zwykłej prędkości.
+  if(player)player.speed*=ARENA_BALL_SPEED_MULTIPLIER;
+  document.body.classList.add('arena-playing','arena-ball-mode');document.body.classList.remove('lobby-mode','duel-mode');
   ui.duelQueueView.style.display='none';ui.lobbyView.style.display='block';ui.gameOverView.style.display='none';ui.overlay.style.display='none';
   history.replaceState(null,'','#arena-ball');processBallState(data,true);last=performance.now();
   clearInterval(ballNetworkTimer);ballNetworkTimer=setInterval(sendBallFrame,85);
