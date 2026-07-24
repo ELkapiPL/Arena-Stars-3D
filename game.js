@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-window.__arenaBuild='arena-bot-perspective-v42';
+window.__arenaBuild='arena-bot-perspective-slow-turn-v43';
 
 const canvas = document.getElementById('game');
 const earlyMobileHint=((navigator.maxTouchPoints||0)>0&&matchMedia('(pointer: coarse)').matches)||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
@@ -367,7 +367,7 @@ function loadProgress(){
 let profile=loadProgress();
 profile.name=persistNickname(profile.name);
 let profileDirty=false,profileSyncBusy=false,profileChangeSeq=0,lastConfigRevision=0,backgroundSyncBusy=false;
-const CLIENT_VERSION='arena-bot-perspective-v42';
+const CLIENT_VERSION='arena-bot-perspective-slow-turn-v43';
 const CAMERA_MODE_KEY='arenaStars3D_camera_mode_v1';
 let botPerspectiveEnabled=false;
 try{botPerspectiveEnabled=localStorage.getItem(CAMERA_MODE_KEY)==='bot';}catch(_){}
@@ -396,6 +396,28 @@ function movementFromBotPerspective(dx,dz){
   if(!isBotPerspectiveActive()||!player)return {x:dx,z:dz};
   const forward=-dz,right=dx,a=Number(player.angle)||0;
   return {x:Math.sin(a)*forward+Math.cos(a)*right,z:Math.cos(a)*forward-Math.sin(a)*right};
+}
+const BOT_VIEW_MOBILE_TURN_SPEED=1.05;
+const BOT_VIEW_DESKTOP_TURN_SPEED=1.28;
+const BOT_VIEW_MOUSE_DEAD_ZONE=.10;
+function updateBotPerspectiveAngle(dt){
+  if(!isBotPerspectiveActive()||!player)return false;
+  let turnInput=0;
+  if(isMobileDevice){
+    turnInput=Math.max(-1,Math.min(1,Number(mobileInput.aimX)||0));
+  }else{
+    const viewport=currentArenaViewport(),half=Math.max(1,viewport.width*.5);
+    let normalized=(mouse.x-(viewport.left+half))/half;
+    normalized=Math.max(-1,Math.min(1,normalized));
+    const magnitude=Math.abs(normalized);
+    if(magnitude>BOT_VIEW_MOUSE_DEAD_ZONE){
+      const scaled=(magnitude-BOT_VIEW_MOUSE_DEAD_ZONE)/(1-BOT_VIEW_MOUSE_DEAD_ZONE);
+      turnInput=Math.sign(normalized)*Math.pow(scaled,1.45);
+    }
+  }
+  const speed=isMobileDevice?BOT_VIEW_MOBILE_TURN_SPEED:BOT_VIEW_DESKTOP_TURN_SPEED;
+  player.angle=normalizeDuelAngle(player.angle+turnInput*speed*Math.min(.05,Math.max(0,dt)));
+  return true;
 }
 function saveProgress(markDirty=true){try{profile.name=persistNickname(profile.name);localStorage.setItem(SAVE_KEY,JSON.stringify(profile));if(markDirty){profileDirty=true;profileChangeSeq++;}}catch(_){} }
 function getPlayerId(){
@@ -886,8 +908,7 @@ function updateDuel(dt){
       moveDuelEntity(player,dx*moveSpeed*dt,dz*moveSpeed*dt);
     }
     player.inBush=duelPointInBush(player.x,player.z);
-    if(isBotPerspectiveActive()&&isMobileDevice)player.angle=normalizeDuelAngle(player.angle+mobileInput.aimX*3.4*dt);
-    else player.angle=normalizeDuelAngle(Math.atan2(mouse.worldX-player.x,mouse.worldZ-player.z));
+    if(!updateBotPerspectiveAngle(dt))player.angle=normalizeDuelAngle(Math.atan2(mouse.worldX-player.x,mouse.worldZ-player.z));
     if(mouse.down)duelPlayerShoot();
   }
   if(duelLocalBotMode)updateLocalDuelBot(dt);
@@ -1231,7 +1252,7 @@ function updateArenaBall(dt){
   if((player.hyperActive||0)>0)player.hyperActive=Math.max(0,player.hyperActive-dt);
   player.fire=Math.max(0,player.fire-dt);if(player.reload>0){player.reload=Math.max(0,player.reload-dt);if(player.reload===0)player.ammo=MAG_SIZE;updateUI();}
   if(['playing','overtime'].includes(ballStatus)&&player.hp>0&&!(player.respawnIn>0)){
-    let dx=isMobileDevice?mobileInput.moveX:(keys.KeyD?1:0)-(keys.KeyA?1:0),dz=isMobileDevice?mobileInput.moveZ:(keys.KeyS?1:0)-(keys.KeyW?1:0);if(isBotPerspectiveActive()){const relative=movementFromBotPerspective(dx,dz);dx=relative.x;dz=relative.z;}else if(ballMirrorView){dx=-dx;dz=-dz;}const len=Math.hypot(dx,dz);if(len){dx/=len;dz/=len;const moveSpeed=player.speed*((player.hyperActive||0)>0?HYPER_SPEED_MULT:1);moveArenaBallEntity(player,dx*moveSpeed*dt,dz*moveSpeed*dt);}if(isBotPerspectiveActive()&&isMobileDevice)player.angle=normalizeDuelAngle(player.angle+mobileInput.aimX*3.4*dt);else player.angle=normalizeDuelAngle(Math.atan2(mouse.worldX-player.x,mouse.worldZ-player.z));player.inBush=arenaBallPointInBush(player.x,player.z);if(mouse.down)arenaBallShoot(false);
+    let dx=isMobileDevice?mobileInput.moveX:(keys.KeyD?1:0)-(keys.KeyA?1:0),dz=isMobileDevice?mobileInput.moveZ:(keys.KeyS?1:0)-(keys.KeyW?1:0);if(isBotPerspectiveActive()){const relative=movementFromBotPerspective(dx,dz);dx=relative.x;dz=relative.z;}else if(ballMirrorView){dx=-dx;dz=-dz;}const len=Math.hypot(dx,dz);if(len){dx/=len;dz/=len;const moveSpeed=player.speed*((player.hyperActive||0)>0?HYPER_SPEED_MULT:1);moveArenaBallEntity(player,dx*moveSpeed*dt,dz*moveSpeed*dt);}if(!updateBotPerspectiveAngle(dt))player.angle=normalizeDuelAngle(Math.atan2(mouse.worldX-player.x,mouse.worldZ-player.z));player.inBush=arenaBallPointInBush(player.x,player.z);if(mouse.down)arenaBallShoot(false);
   }else if(player.respawnIn>0){player.respawnIn=Math.max(0,player.respawnIn-dt);showMessage(`POWRÓT ZA ${Math.max(1,Math.ceil(player.respawnIn))}`);}
   const follow=1-Math.exp(-10*dt),turn=1-Math.exp(-14*dt);for(const p of ballPlayers){if(p.hidden)continue;const age=Math.min(.7,Math.max(0,(performance.now()-(p.sampleAt||performance.now()))/1000));const px=p.targetX+(p.vx||0)*age,pz=p.targetZ+(p.vz||0)*age;p.renderX+=(px-p.renderX)*follow;p.renderZ+=(pz-p.renderZ)*follow;p.renderAngle=smoothDuelAngle(p.renderAngle,p.targetAngle,turn);}
   if(ballVisual.carrierId===playerId){ballVisual.x=player.x+Math.sin(player.angle)*1;ballVisual.z=player.z+Math.cos(player.angle)*1;}else{const carrier=ballPlayers.find(p=>p.id===ballVisual.carrierId);if(carrier){ballVisual.x=(carrier.renderX??carrier.x)+Math.sin(carrier.renderAngle??carrier.angle)*1;ballVisual.z=(carrier.renderZ??carrier.z)+Math.cos(carrier.renderAngle??carrier.angle)*1;}else{ballVisual.x+=ballVisual.vx*dt;ballVisual.z+=ballVisual.vz*dt;ballVisual.x+=(ballVisual.targetX-ballVisual.x)*follow;ballVisual.z+=(ballVisual.targetZ-ballVisual.z)*follow;}}
@@ -1400,7 +1421,7 @@ function update(dt){
   survivalTime+=dt;const earnedTrophies=Math.floor(survivalTime/4);if(earnedTrophies>trophies){trophies=earnedTrophies;showMessage(`PUCHAREK ${trophies} 🏆`);updateUI();}
   player.fire=Math.max(0,player.fire-dt);if(player.reload>0){player.reload=Math.max(0,player.reload-dt);if(player.reload===0){player.ammo=MAG_SIZE;showMessage('AMUNICJA GOTOWA!');}updateUI();}player.inv=Math.max(0,player.inv-dt);player.regen=Math.max(0,player.regen-dt);const wasHyper=(player.hyperActive||0)>0;if(wasHyper){player.hyperActive=Math.max(0,player.hyperActive-dt);updateUI();if(player.hyperActive===0)showMessage('HIPERDOŁADOWANIE ZAKOŃCZONE');}if(player.regen<=0&&player.hp<player.maxHp){player.hp=Math.min(player.maxHp,player.hp+5*dt);updateUI();}
   let dx=isMobileDevice?mobileInput.moveX:(keys.KeyD?1:0)-(keys.KeyA?1:0),dz=isMobileDevice?mobileInput.moveZ:(keys.KeyS?1:0)-(keys.KeyW?1:0);if(isBotPerspectiveActive()){const relative=movementFromBotPerspective(dx,dz);dx=relative.x;dz=relative.z;}const l=Math.hypot(dx,dz);if(l){dx/=l;dz/=l;const moveSpeed=player.speed*((player.hyperActive||0)>0?HYPER_SPEED_MULT:1);player.x+=dx*moveSpeed*dt;player.z+=dz*moveSpeed*dt;resolve(player);}
-  if(isBotPerspectiveActive()&&isMobileDevice)player.angle=normalizeDuelAngle(player.angle+mobileInput.aimX*3.4*dt);else player.angle=Math.atan2(mouse.worldX-player.x,mouse.worldZ-player.z);if(mouse.down)playerShoot();
+  if(!updateBotPerspectiveAngle(dt))player.angle=Math.atan2(mouse.worldX-player.x,mouse.worldZ-player.z);if(mouse.down)playerShoot();
   waveClock+=dt;const target=Math.min(4+wave*2,22);spawnClock-=dt;if(spawnClock<=0&&enemies.length<target){spawnEnemy();spawnClock=Math.max(.35,1.35-wave*.055)*rnd(.75,1.2);}if(waveClock>24){wave++;waveClock=0;showMessage(`FALA ${wave}`);player.hp=Math.min(player.maxHp,player.hp+18);updateUI();}
 
   for(let i=enemies.length-1;i>=0;i--){const e=enemies[i];e.fire-=dt;e.hit=Math.max(0,e.hit-dt);let vx=player.x-e.x,vz=player.z-e.z,d=Math.hypot(vx,vz)||1;vx/=d;vz/=d;e.angle=Math.atan2(vx,vz);let move=1;if(e.type==='shooter'){if(d<6)move=-.65;else if(d<10)move=.35;if(e.fire<=0&&d<15){shoot('enemy',e.x+vx*.9,e.z+vz*.9,e.angle,9+wave*.12,e.damage,[1,.55,.12],.2,.08);e.fire=Math.max(.65,1.65-wave*.035)*rnd(.8,1.2);}}else if(e.type==='tank'&&d<1.65){move=0;if(e.fire<=0){damagePlayer(e.damage);e.fire=1.05;}}else if(e.type==='chaser'&&d<1.45){move=0;if(e.fire<=0){damagePlayer(e.damage);e.fire=.85;}}
