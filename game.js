@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-window.__arenaBuild='arena-ball-3v3-v26';
+window.__arenaBuild='arena-ball-3v3-v27';
 
 const canvas = document.getElementById('game');
 const earlyMobileHint=((navigator.maxTouchPoints||0)>0&&matchMedia('(pointer: coarse)').matches)||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
@@ -343,7 +343,7 @@ function loadProgress(){
 let profile=loadProgress();
 profile.name=persistNickname(profile.name);
 let profileDirty=false,profileSyncBusy=false,profileChangeSeq=0,lastConfigRevision=0,backgroundSyncBusy=false;
-const CLIENT_VERSION='arena-ball-3v3-v26';
+const CLIENT_VERSION='arena-ball-3v3-v27';
 function saveProgress(markDirty=true){try{profile.name=persistNickname(profile.name);localStorage.setItem(SAVE_KEY,JSON.stringify(profile));if(markDirty){profileDirty=true;profileChangeSeq++;}}catch(_){} }
 function getPlayerId(){
   try{let id=localStorage.getItem(PLAYER_ID_KEY);if(!id){id=(crypto.randomUUID?crypto.randomUUID():`gracz-${Date.now()}-${Math.random().toString(16).slice(2)}`);localStorage.setItem(PLAYER_ID_KEY,id);}return id;}
@@ -1015,8 +1015,7 @@ const arenaBallWalls=[
   {x:-6,z:-6.2,w:1.8,d:4.8,h:1.55,c:[.34,.30,.52]},{x:6,z:-6.2,w:1.8,d:4.8,h:1.55,c:[.34,.30,.52]},
   {x:-6,z:6.2,w:1.8,d:4.8,h:1.55,c:[.34,.30,.52]},{x:6,z:6.2,w:1.8,d:4.8,h:1.55,c:[.34,.30,.52]},
   {x:0,z:-9,w:4,d:1.6,h:1.35,c:[.28,.42,.48]},{x:0,z:9,w:4,d:1.6,h:1.35,c:[.28,.42,.48]},
-  {x:-11.4,z:0,w:3.4,d:1.7,h:1.4,c:[.38,.31,.50]},{x:11.4,z:0,w:3.4,d:1.7,h:1.4,c:[.38,.31,.50]},
-  {x:0,z:0,w:2.8,d:2.8,h:1.5,c:[.36,.34,.54]}
+  {x:-11.4,z:0,w:3.4,d:1.7,h:1.4,c:[.38,.31,.50]},{x:11.4,z:0,w:3.4,d:1.7,h:1.4,c:[.38,.31,.50]}
 ];
 const arenaBallBushes=[
   {x:-14.2,z:-7.4,r:2},{x:-10.5,z:-5.4,r:1.8},{x:-3,z:-12.6,r:1.9},{x:3,z:-12.6,r:1.9},
@@ -1371,7 +1370,19 @@ function render(){
     else{draw(mesh.sphere,ox,.82,oz,.72,.82,.72,0,[.93,.18,.42]);draw(mesh.sphere,ox,.82,oz,.49,.62,.49,0,[1,.37,.58]);draw(mesh.cube,ox+Math.sin(oa)*.75,.82,oz+Math.cos(oa)*.75,.18,.18,.62,oa,[.28,.10,.18]);draw(mesh.sphere,ox,.82,oz,.78,.86,.78,0,[1,.55,.70],.13);}
     healthBar(ox,oz,o.hp,o.maxHp,2.05,1.25);
   }
-  if(ballActive){for(const bp of ballPlayers)renderArenaBallPlayer(bp);const bx=ballVisual.x??ballVisual.targetX??0,bz=ballVisual.z??ballVisual.targetZ??0;draw(mesh.cyl,bx,.10,bz,.72,.05,.72,0,[1,.64,.08],.75);draw(mesh.sphere,bx,.68,bz,.57,.57,.57,performance.now()*.002,[1,.86,.18]);draw(mesh.sphere,bx,.68,bz,.37,.37,.37,-performance.now()*.002,[.94,.35,.08],.82);}
+  if(ballActive){
+    for(const bp of ballPlayers)renderArenaBallPlayer(bp);
+    const bx=ballVisual.x??ballVisual.targetX??0,bz=ballVisual.z??ballVisual.targetZ??0,t=performance.now()*.0024;
+    // Wyraźny znacznik pod piłką oraz jasna futbolówka z ciemnymi panelami.
+    draw(mesh.cyl,bx,.055,bz,.86,.035,.86,0,[.12,.86,1],.42);
+    draw(mesh.cyl,bx,.085,bz,.66,.025,.66,0,[1,.86,.18],.74);
+    draw(mesh.sphere,bx,.72,bz,.64,.64,.64,t,[1,.98,.86]);
+    draw(mesh.sphere,bx,.91,bz,.25,.18,.25,-t,[.06,.08,.14],.96);
+    draw(mesh.sphere,bx+Math.cos(t)*.43,.69,bz+Math.sin(t)*.43,.18,.18,.18,t,[.07,.09,.16],.94);
+    draw(mesh.sphere,bx+Math.cos(t+2.1)*.43,.69,bz+Math.sin(t+2.1)*.43,.18,.18,.18,t,[.07,.09,.16],.94);
+    draw(mesh.sphere,bx+Math.cos(t+4.2)*.43,.69,bz+Math.sin(t+4.2)*.43,.18,.18,.18,t,[.07,.09,.16],.94);
+    draw(mesh.sphere,bx,1.55,bz,.12,.12,.12,0,[1,.92,.25],.72);
+  }
   if(!duelActive&&!ballActive)for(const e of enemies){draw(mesh.cyl,e.x,.11,e.z,e.r*1.18,.04,e.r*1.18,0,e.color,.65);const c=e.hit>0?[1,1,1]:e.color;draw(mesh.sphere,e.x,e.r*.95,e.z,e.r,e.r*1.05,e.r,0,c);draw(mesh.sphere,e.x,e.r*1.14,e.z,e.r*.62,e.r*.63,e.r*.62,0,[Math.min(1,c[0]+.22),Math.min(1,c[1]+.22),Math.min(1,c[2]+.22)]);if(e.type==='shooter')draw(mesh.cube,e.x+Math.sin(e.angle)*e.r*.95,e.r*.95,e.z+Math.cos(e.angle)*e.r*.95,.16,.16,.58,e.angle,[.18,.16,.19]);if(e.type==='tank'){draw(mesh.cube,e.x,e.r*1.05,e.z,e.r*.95,.24,e.r*.95,0,[.25,.11,.31]);}for(let lv=0;lv<(e.level||1);lv++)draw(mesh.sphere,e.x+(lv-((e.level||1)-1)/2)*.24,e.r*2.28,e.z,.08,.08,.08,0,[1,.78,.12]);healthBar(e.x,e.z,e.hp,e.maxHp,e.r*2.35,e.r*.9);}
   if(ballActive){for(const b of ballBullets){const c=Number(b.team)===0?[.20,.82,1]:[1,.24,.46];draw(mesh.sphere,b.renderX??b.x,.72,b.renderZ??b.z,.21,.21,.21,0,c);}}else if(duelActive){for(const b of duelServerBullets){const mine=b.ownerId===playerId,c=mine?(profile.skin==='arena_vip_plus'?[1,.35,.72]:(profile.skin==='cosmic'?[.78,.38,1]:[.24,.85,1])):[1,.25,.48];draw(mesh.sphere,b.renderX??b.x,.72,b.renderZ??b.z,.21,.21,.21,0,c);}for(const b of duelBotBullets)draw(mesh.sphere,b.x,.72,b.z,.21,.21,.21,0,b.color||[1,.25,.48]);const pc=profile.skin==='arena_vip_plus'?[1,.35,.72]:(profile.skin==='cosmic'?[.78,.38,1]:[.24,.85,1]);for(const b of duelPredictedBullets)draw(mesh.sphere,b.x,.72,b.z,.20,.20,.20,0,b.color||pc,.78);}else for(const b of bullets)draw(mesh.sphere,b.x,b.y,b.z,b.size,b.size,b.size,0,b.color);
   for(const p of particles)draw(mesh.cube,p.x,p.y,p.z,p.size,p.size,p.size,0,p.color,Math.max(0,p.life*2));

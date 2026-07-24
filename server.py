@@ -229,7 +229,7 @@ def persistent_storage_public_status() -> dict[str, Any]:
         "schemaVersion": DB_SCHEMA_VERSION if DB_READY else 0,
         "emailResetConfigured": bool(RESEND_API_KEY and PASSWORD_RESET_FROM),
         "passwordResetTtlMinutes": PASSWORD_RESET_TTL // 60,
-        "build": "arena-ball-3v3-v26",
+        "build": "arena-ball-3v3-v27",
     }
     if DB_READY:
         payload["connectedAt"] = DB_CONNECTED_AT
@@ -595,7 +595,7 @@ def db_schema_status() -> dict[str, Any]:
         "connectedAt": DB_CONNECTED_AT,
         "emailResetConfigured": bool(RESEND_API_KEY and PASSWORD_RESET_FROM),
         "passwordResetTtlMinutes": PASSWORD_RESET_TTL // 60,
-        "build": "arena-ball-3v3-v26",
+        "build": "arena-ball-3v3-v27",
     }
 
 
@@ -2955,7 +2955,6 @@ ARENA_BALL_WALLS = (
     (-6.0, 6.2, 1.8, 4.8), (6.0, 6.2, 1.8, 4.8),
     (0.0, -9.0, 4.0, 1.6), (0.0, 9.0, 4.0, 1.6),
     (-11.4, 0.0, 3.4, 1.7), (11.4, 0.0, 3.4, 1.7),
-    (0.0, 0.0, 2.8, 2.8),
 )
 ARENA_BALL_BUSHES = (
     (-14.2, -7.4, 2.0), (-10.5, -5.4, 1.8), (-3.0, -12.6, 1.9), (3.0, -12.6, 1.9),
@@ -3178,6 +3177,100 @@ def arena_ball_respawn_player(player: dict[str, Any]) -> None:
     })
 
 
+def arena_ball_bot_navigation_target(match: dict[str, Any], bot: dict[str, Any], target_x: float, target_z: float) -> tuple[float, float]:
+    """Wybiera tymczasowy punkt obok ściany, gdy prosta droga jest zablokowana."""
+    x, z = float(bot["x"]), float(bot["z"])
+    if not arena_ball_line_blocked(match, x, z, target_x, target_z, ARENA_BALL_RADIUS * .72):
+        bot.pop("nav_x", None); bot.pop("nav_z", None)
+        return target_x, target_z
+
+    saved_x, saved_z = bot.get("nav_x"), bot.get("nav_z")
+    if saved_x is not None and saved_z is not None:
+        sx, sz = float(saved_x), float(saved_z)
+        if math.hypot(sx - x, sz - z) > .45 and not arena_ball_line_blocked(match, x, z, sx, sz, ARENA_BALL_RADIUS * .65):
+            return sx, sz
+
+    margin = ARENA_BALL_RADIUS + .72
+    strafe = 1.0 if float(bot.get("bot_strafe", 1.0)) >= 0 else -1.0
+    candidates: list[tuple[float, float, float]] = []
+    for wx, wz, width, depth in arena_ball_active_walls(match):
+        left, right = wx - width / 2 - margin, wx + width / 2 + margin
+        top, bottom = wz - depth / 2 - margin, wz + depth / 2 + margin
+        for cx, cz in ((left, top), (left, bottom), (right, top), (right, bottom)):
+            cx = max(-ARENA_BALL_ARENA_X + ARENA_BALL_RADIUS, min(ARENA_BALL_ARENA_X - ARENA_BALL_RADIUS, cx))
+            cz = max(-ARENA_BALL_ARENA_Z + ARENA_BALL_RADIUS, min(ARENA_BALL_ARENA_Z - ARENA_BALL_RADIUS, cz))
+            if arena_ball_hits_wall(match, cx, cz, ARENA_BALL_RADIUS):
+                continue
+            if arena_ball_line_blocked(match, x, z, cx, cz, ARENA_BALL_RADIUS * .62):
+                continue
+            first = math.hypot(cx - x, cz - z)
+            second = math.hypot(target_x - cx, target_z - cz)
+            side_penalty = 0.0
+            if (cx - x) * strafe < 0:
+                side_penalty = .35
+            # Preferujemy narożnik, po którym dalsza droga do celu jest już otwarta.
+            continuation_penalty = 0.0 if not arena_ball_line_blocked(match, cx, cz, target_x, target_z, ARENA_BALL_RADIUS * .55) else 2.0
+            candidates.append((first + second + side_penalty + continuation_penalty, cx, cz))
+
+    if not candidates:
+        bot["bot_strafe"] = -strafe
+        return target_x, target_z
+    _, nav_x, nav_z = min(candidates, key=lambda row: row[0])
+    bot["nav_x"], bot["nav_z"] = nav_x, nav_z
+    return nav_x, nav_z
+
+
+def arena_ball_move_bot_toward(match: dict[str, Any], bot: dict[str, Any], target_x: float, target_z: float, step: float) -> None:
+    """Ruch bota z prostym omijaniem ścian.
+
+    Pierwsza wersja próbowała zawsze iść idealnie po prostej. Gdy ściana była
+    dokładnie przed botem, obie osie ruchu były blokowane i bot wyglądał jak
+    nieruchomy. Teraz bot testuje także kierunki boczne i wybiera ten, który
+    naprawdę przesuwa go w stronę celu.
+    """
+    target_x, target_z = arena_ball_bot_navigation_target(match, bot, target_x, target_z)
+    dx, dz = target_x - float(bot["x"]), target_z - float(bot["z"])
+    distance = math.hypot(dx, dz)
+    if distance <= .18:
+        bot["vx"] = 0.0; bot["vz"] = 0.0
+        return
+
+    base = math.atan2(dz, dx)
+    strafe = 1.0 if float(bot.get("bot_strafe", 1.0)) >= 0 else -1.0
+    # Najpierw kierunek prosty, potem łagodne i mocniejsze obejścia po
+    # zapamiętanej stronie. To ogranicza drżenie bota przy narożnikach.
+    offsets = (0.0, .38 * strafe, -.38 * strafe, .72 * strafe, -.72 * strafe, 1.05 * strafe, -1.05 * strafe, 1.45 * strafe, -1.45 * strafe)
+    move_distance = max(.01, float(bot.get("speed", 6.3)) * step)
+    old_x, old_z = float(bot["x"]), float(bot["z"])
+    best = None
+    for index, offset in enumerate(offsets):
+        angle = base + offset
+        mx, mz = math.cos(angle) * move_distance, math.sin(angle) * move_distance
+        nx, nz = arena_ball_move_position(match, old_x, old_z, mx, mz)
+        moved = math.hypot(nx - old_x, nz - old_z)
+        if moved < move_distance * .20:
+            continue
+        remaining = math.hypot(target_x - nx, target_z - nz)
+        # Preferujemy ruch w stronę celu, ale dajemy niewielką karę za duży skręt.
+        score = remaining + abs(offset) * .10 + index * .002
+        if best is None or score < best[0]:
+            best = (score, nx, nz, angle, moved)
+
+    if best is None:
+        # Gdy bot utknął w bardzo ciasnym miejscu, zmienia stronę obchodzenia
+        # przeszkody przy następnym ticku.
+        bot["bot_strafe"] = -strafe
+        bot["vx"] = 0.0; bot["vz"] = 0.0
+        return
+
+    _, nx, nz, angle, moved = best
+    bot["x"], bot["z"] = nx, nz
+    bot["vx"] = (nx - old_x) / max(step, .001)
+    bot["vz"] = (nz - old_z) / max(step, .001)
+    if moved > .001:
+        bot["angle"] = math.atan2(nx - old_x, nz - old_z)
+
+
 def update_arena_ball_bots(match: dict[str, Any], step: float, current: float) -> None:
     players = list(match["players"].values())
     ball = match["ball"]
@@ -3211,16 +3304,9 @@ def update_arena_ball_bots(match: dict[str, Any], step: float, current: float) -
                 target_x = max(-7.0, min(7.0, bx * .42))
                 target_z = own_z
 
-        dx, dz = target_x - bot["x"], target_z - bot["z"]
-        distance = math.hypot(dx, dz)
-        if distance > .25:
-            nx, nz = dx / distance, dz / distance
-            old_x, old_z = bot["x"], bot["z"]
-            bot["x"], bot["z"] = arena_ball_move_position(match, bot["x"], bot["z"], nx * bot["speed"] * step, nz * bot["speed"] * step)
-            bot["vx"] = (bot["x"] - old_x) / max(step, .001)
-            bot["vz"] = (bot["z"] - old_z) / max(step, .001)
-            if ball.get("carrier_id") != bot["id"]:
-                bot["angle"] = math.atan2(nx, nz)
+        arena_ball_move_bot_toward(match, bot, target_x, target_z, step)
+        if ball.get("carrier_id") == bot["id"]:
+            bot["angle"] = math.atan2(target_x - bot["x"], target_z - bot["z"])
 
         if enemies and ball.get("carrier_id") != bot["id"]:
             target = min(enemies, key=lambda p: math.hypot(p["x"] - bot["x"], p["z"] - bot["z"]))
@@ -3541,7 +3627,7 @@ def duel_tick_loop() -> None:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "ArenaStarsSQL/5.4-arena-ball-3v3"
+    server_version = "ArenaStarsSQL/5.5-arena-ball-3v3-ball-bots-fix"
     protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt: str, *args: Any) -> None:
