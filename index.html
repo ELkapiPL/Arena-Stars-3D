@@ -533,6 +533,247 @@
     .passTrackLabels{display:grid;grid-template-rows:56px 132px 132px 132px;gap:8px;position:sticky;left:0;z-index:2;width:96px;float:left;margin-right:10px}.passTrackLabel{display:grid;place-items:center;text-align:center;border-radius:14px;font-size:10px;font-weight:1000;letter-spacing:.04em;background:#172042;border:1px solid rgba(255,255,255,.14)}.passTrackLabel.vip{background:linear-gradient(160deg,#5c3a0b,#291b12);color:#ffe074}.passTrackLabel.vip_plus{background:linear-gradient(160deg,#4a1f80,#10254f);color:#dcbcff}.passTrackLabel.spacer{background:transparent;border:0}
     .passTracksWrap{display:flex;align-items:flex-start;min-width:max-content}
     .passLegend{padding:0 22px 14px;color:#aebde1;font-size:11px;font-weight:700}.passLegend b{color:#fff}
+
+
+    /* ===== Arena Karnet: kosmiczny lifting ===== */
+    #passOverlay{
+      background:
+        radial-gradient(circle at 12% 18%, rgba(77, 210, 255, .16), transparent 24%),
+        radial-gradient(circle at 86% 14%, rgba(255, 133, 211, .16), transparent 20%),
+        radial-gradient(circle at 52% 82%, rgba(133, 102, 255, .18), transparent 26%),
+        linear-gradient(180deg, rgba(2,6,18,.94), rgba(4,10,28,.97));
+    }
+    #passOverlay::before,
+    #passOverlay::after{
+      content:"";
+      position:fixed;
+      inset:0;
+      pointer-events:none;
+    }
+    #passOverlay::before{
+      opacity:.34;
+      background-image:
+        radial-gradient(circle at 8% 22%, rgba(255,255,255,.95) 0 1px, transparent 1.8px),
+        radial-gradient(circle at 18% 68%, rgba(160,224,255,.85) 0 1px, transparent 2px),
+        radial-gradient(circle at 28% 12%, rgba(255,255,255,.85) 0 1px, transparent 2px),
+        radial-gradient(circle at 41% 32%, rgba(255,255,255,.8) 0 1px, transparent 2px),
+        radial-gradient(circle at 55% 18%, rgba(255,255,255,.75) 0 1px, transparent 2px),
+        radial-gradient(circle at 64% 58%, rgba(168,214,255,.85) 0 1px, transparent 2px),
+        radial-gradient(circle at 73% 24%, rgba(255,255,255,.88) 0 1px, transparent 2px),
+        radial-gradient(circle at 84% 42%, rgba(255,255,255,.82) 0 1px, transparent 2px),
+        radial-gradient(circle at 90% 14%, rgba(255,255,255,.95) 0 1px, transparent 2px),
+        radial-gradient(circle at 93% 74%, rgba(255,255,255,.85) 0 1px, transparent 2px),
+        radial-gradient(circle at 36% 78%, rgba(255,255,255,.82) 0 1px, transparent 2px),
+        radial-gradient(circle at 58% 86%, rgba(255,255,255,.72) 0 1px, transparent 2px);
+    }
+    #passOverlay::after{
+      background:
+        radial-gradient(circle at 20% 50%, rgba(80, 220, 255, .08), transparent 18%),
+        radial-gradient(circle at 76% 62%, rgba(255, 137, 190, .08), transparent 16%);
+      filter:blur(14px);
+      opacity:.85;
+    }
+    .passPanel{
+      position:relative;
+      border:1px solid rgba(131,218,255,.24);
+      border-radius:28px;
+      background:
+        linear-gradient(180deg, rgba(10,18,49,.985), rgba(7,12,33,.985)),
+        radial-gradient(circle at top, rgba(112,92,255,.15), transparent 48%);
+      box-shadow:
+        0 38px 110px rgba(0,0,0,.58),
+        0 0 0 1px rgba(255,255,255,.04) inset,
+        0 0 48px rgba(82,143,255,.12);
+      isolation:isolate;
+    }
+    .passPanel::before,
+    .passPanel::after{
+      content:"";
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+      z-index:0;
+    }
+    .passPanel::before{
+      background:
+        radial-gradient(circle at 18% 16%, rgba(76, 225, 255, .14), transparent 20%),
+        radial-gradient(circle at 83% 13%, rgba(255, 125, 186, .16), transparent 22%),
+        radial-gradient(circle at 50% 72%, rgba(132, 103, 255, .18), transparent 24%);
+      filter:blur(6px);
+    }
+    .passPanel::after{
+      inset:10px;
+      border-radius:22px;
+      border:1px solid rgba(255,255,255,.05);
+      box-shadow:inset 0 0 60px rgba(255,255,255,.02);
+    }
+    .passPanel > *{position:relative;z-index:1}
+    .passHeader{
+      position:relative;
+      overflow:hidden;
+      background:
+        linear-gradient(110deg, rgba(88,54,208,.62), rgba(14,122,192,.34), rgba(255,127,47,.18)),
+        radial-gradient(circle at 15% 10%, rgba(91, 226, 255, .20), transparent 26%),
+        rgba(17,24,54,.74);
+      border-bottom:1px solid rgba(151,229,255,.16);
+    }
+    .passHeader::after{
+      content:"";
+      position:absolute;
+      left:24px; right:24px; bottom:0;
+      height:1px;
+      background:linear-gradient(90deg, transparent, rgba(110,238,255,.6), rgba(255,138,208,.45), transparent);
+    }
+    .passHeader h2{
+      color:#f3f7ff;
+      text-shadow:0 0 18px rgba(97,225,255,.22), 0 0 26px rgba(152,118,255,.18);
+      letter-spacing:.05em;
+    }
+    .passHeader p{color:#d3e1ff}
+    .passProgressCard,
+    .passBuyCard{
+      position:relative;
+      border:1px solid rgba(129, 218, 255, .16);
+      border-radius:20px;
+      background:
+        linear-gradient(180deg, rgba(10,18,48,.88), rgba(8,14,38,.9)),
+        radial-gradient(circle at top right, rgba(98,236,255,.10), transparent 35%);
+      box-shadow:inset 0 0 0 1px rgba(255,255,255,.03), 0 12px 32px rgba(0,0,0,.22);
+    }
+    .passProgressTop{color:#edf4ff}
+    .passProgressBar{
+      height:16px;
+      border-radius:99px;
+      background:
+        linear-gradient(180deg, rgba(13,19,43,.95), rgba(22,29,61,.95));
+      border:1px solid rgba(141,188,255,.16);
+      box-shadow:inset 0 0 12px rgba(0,0,0,.35), 0 0 18px rgba(78,141,255,.08);
+    }
+    .passProgressFill{
+      background:
+        linear-gradient(90deg, #59e9ff 0%, #7f8cff 42%, #d979ff 72%, #ffbf54 100%);
+      box-shadow:0 0 18px rgba(106, 230, 255, .38);
+    }
+    .passTierBadge{
+      border:1px solid rgba(255,255,255,.08);
+      box-shadow:0 0 18px rgba(88,224,255,.10);
+    }
+    .passTierBadge.vip{box-shadow:0 0 20px rgba(255,194,70,.15)}
+    .passTierBadge.vip_plus{box-shadow:0 0 22px rgba(188,104,255,.18)}
+    .passBuyBtn,
+    .passClaimAll{
+      box-shadow:0 7px 18px rgba(0,0,0,.18);
+      transition:transform .18s ease, box-shadow .18s ease, filter .18s ease;
+    }
+    .passBuyBtn:hover,
+    .passClaimAll:hover{
+      transform:translateY(-1px);
+      filter:brightness(1.04);
+      box-shadow:0 10px 24px rgba(0,0,0,.24);
+    }
+    .passLegend{color:#c3d6ff}
+    .passScroller{
+      scrollbar-color:#6d72ff #0d1432;
+      position:relative;
+    }
+    .passScroller::-webkit-scrollbar{height:13px}
+    .passScroller::-webkit-scrollbar-track{
+      background:rgba(10,15,38,.95);
+      border-radius:999px;
+      border:1px solid rgba(122,138,255,.10);
+    }
+    .passScroller::-webkit-scrollbar-thumb{
+      background:linear-gradient(90deg,#63eaff,#8b7cff,#ffb450);
+      border-radius:999px;
+      border:2px solid rgba(8,13,35,.95);
+    }
+    .passTrackLabel{
+      border-color:rgba(152,216,255,.18);
+      box-shadow:inset 0 0 0 1px rgba(255,255,255,.02);
+      background:linear-gradient(180deg, rgba(21,31,68,.95), rgba(11,17,38,.95));
+    }
+    .passTrackLabel.vip{
+      background:linear-gradient(160deg, rgba(124,82,14,.95), rgba(47,29,12,.95));
+      box-shadow:0 0 18px rgba(255,186,62,.10);
+    }
+    .passTrackLabel.vip_plus{
+      background:linear-gradient(160deg, rgba(76,33,138,.96), rgba(16,34,73,.95));
+      box-shadow:0 0 18px rgba(171,96,255,.14);
+    }
+    .passLevelHead{
+      position:relative;
+      overflow:hidden;
+      border-color:rgba(152,218,255,.16);
+      background:
+        linear-gradient(180deg, rgba(26,35,76,.94), rgba(16,23,48,.94));
+      box-shadow:inset 0 0 0 1px rgba(255,255,255,.02), 0 10px 22px rgba(0,0,0,.16);
+    }
+    .passLevelHead::after{
+      content:"";
+      position:absolute;
+      inset:auto 18px 0;
+      height:2px;
+      background:linear-gradient(90deg, transparent, rgba(92, 233, 255, .8), transparent);
+    }
+    .passLevelHead strong{
+      color:#fff;
+      text-shadow:0 0 14px rgba(110,228,255,.25);
+    }
+    .passReward{
+      border-radius:18px;
+      border:1px solid rgba(130, 215, 255, .16);
+      background:
+        linear-gradient(180deg, rgba(11,19,48,.92), rgba(8,14,35,.95)),
+        radial-gradient(circle at top, rgba(98,236,255,.10), transparent 40%);
+      box-shadow:
+        inset 0 0 0 1px rgba(255,255,255,.02),
+        0 12px 26px rgba(0,0,0,.18);
+      backdrop-filter:blur(6px);
+    }
+    .passReward::before{
+      content:"";
+      position:absolute;
+      inset:0;
+      background:linear-gradient(180deg, rgba(255,255,255,.06), transparent 28%);
+      opacity:.55;
+      pointer-events:none;
+    }
+    .passReward.free{
+      box-shadow:inset 0 0 0 1px rgba(102,216,255,.08), 0 10px 24px rgba(0,0,0,.18);
+    }
+    .passReward.vip{
+      background:
+        linear-gradient(160deg, rgba(84,54,12,.95), rgba(38,24,18,.96)),
+        radial-gradient(circle at top, rgba(255,219,95,.12), transparent 42%);
+      border-color:rgba(255,213,94,.34);
+      box-shadow:0 12px 28px rgba(0,0,0,.22), 0 0 16px rgba(255,193,70,.10);
+    }
+    .passReward.vip_plus{
+      background:
+        linear-gradient(155deg, rgba(68,24,118,.95), rgba(17,32,76,.96)),
+        radial-gradient(circle at top, rgba(204,146,255,.14), transparent 44%);
+      border-color:rgba(181,136,255,.38);
+      box-shadow:0 12px 28px rgba(0,0,0,.22), 0 0 18px rgba(171,96,255,.12);
+    }
+    .passReward.empty{background:rgba(13,18,37,.48)}
+    .passReward.claimed{
+      border-color:rgba(92,255,176,.52);
+      box-shadow:0 0 18px rgba(92,255,176,.12), inset 0 0 0 1px rgba(92,255,176,.08);
+    }
+    .passReward.claimable{
+      box-shadow:0 0 26px rgba(96,232,255,.20), 0 0 42px rgba(152,118,255,.12);
+    }
+    .passRewardIcon{
+      font-size:30px;
+      filter:drop-shadow(0 0 12px rgba(110,228,255,.22));
+    }
+    .passRewardName{color:#f2f6ff}
+    .passRewardState{color:#b9c9ef}
+    .passReward button{
+      background:linear-gradient(180deg,#74f2cb,#34b892);
+      box-shadow:0 6px 14px rgba(0,0,0,.18);
+    }
+
     @media(max-width:760px){body.mobile-device.lobby-mode #lobbyFullscreenBtn{display:block}#passOpenBtn{left:auto;right:10px;top:170px;bottom:auto;padding:10px 12px;font-size:11px}.passHeader{padding:15px}.passHeader h2{font-size:23px}.passSummary{grid-template-columns:1fr;padding:12px}.passPanel{width:98vw}.passLevelColumn{grid-template-rows:50px 118px 118px 118px}.passGrid{grid-template-columns:repeat(20,140px)}.passTrackLabels{grid-template-rows:50px 118px 118px 118px;width:78px}.passScroller{padding-left:8px}}
 
 
@@ -1000,29 +1241,6 @@
       body.lobby-mode #playBtn{width:108px!important;font-size:14px!important}
     }
 
-
-
-    /* ===== V23: lobby przywiązane do faktycznie widocznego obszaru telefonu ===== */
-    /* Android podczas wchodzenia w fullscreen chwilowo przesuwa visualViewport. */
-    /* Używamy więc nie tylko jego wysokości, ale również offsetTop/offsetLeft. */
-    @media (orientation:landscape) and (max-height:760px){
-      body.mobile-device.lobby-mode #overlay,
-      body.mobile-device.lobby-mode #lobbyView{
-        position:fixed!important;
-        inset:auto!important;
-        left:var(--arena-visual-left,0px)!important;
-        top:var(--arena-visual-top,0px)!important;
-        right:auto!important;
-        bottom:auto!important;
-        width:var(--arena-visual-width,100vw)!important;
-        height:var(--arena-visual-height,100dvh)!important;
-        min-width:0!important;
-        min-height:0!important;
-        overflow:hidden!important;
-        transform:none!important;
-      }
-    }
-
   </style>
 </head>
 <body class="lobby-mode">
@@ -1219,7 +1437,7 @@
 
   <div id="passOverlay" aria-hidden="true">
     <section class="passPanel" role="dialog" aria-modal="true" aria-label="Arena Karnet">
-      <header class="passHeader"><div><h2>🎟️ ARENA KARNET</h2><p>Poziomy odblokowują się automatycznie za posiadane pucharki. Każdy kolejny poziom wymaga 40 pucharków. Zakup VIP lub VIP+ odblokowuje tylko dodatkowe tory nagród.</p></div><button id="passCloseBtn" class="passClose" type="button">✕</button></header>
+      <header class="passHeader"><div><h2>🎟️ ARENA KARNET</h2><p>Poziomy odblokowują się automatycznie za posiadane pucharki. Każdy kolejny poziom wymaga 40 pucharków. Zakup VIP lub VIP+ odblokowuje tylko dodatkowe tory nagród.</p><p style="margin:8px 0 0;font-size:11px;color:#89e8ff;font-weight:900;letter-spacing:.08em;text-transform:uppercase">Kosmiczna trasa nagród • neonowe bonusy • galaktyczny progres</p></div><button id="passCloseBtn" class="passClose" type="button">✕</button></header>
       <div class="passSummary">
         <div class="passProgressCard"><div class="passProgressTop"><span id="passPointsText">0 pucharków</span><span id="passTierBadge" class="passTierBadge">BEZPŁATNY</span></div><div class="passProgressBar"><div id="passProgressFill" class="passProgressFill"></div></div><div id="passNextText" class="passRewardState">Ładowanie postępu…</div></div>
         <div class="passBuyCard"><b>ODBLOCKUJ DODATKOWE NAGRODY</b><div class="passBuyRow"><button id="passBuyVipBtn" class="passBuyBtn vip" type="button">ARENA KARNET VIP • 13 ZŁ</button><button id="passBuyVipPlusBtn" class="passBuyBtn vipPlus" type="button">ARENA KARNET VIP+ • 21 ZŁ</button><button id="passClaimAllBtn" class="passClaimAll" type="button">ODBIERZ WSZYSTKIE</button></div></div>
@@ -1592,6 +1810,6 @@
 </script>
 
 
-<script src="game.js?v=arena-mobile-viewport-offset-fix-v23"></script>
+<script src="game.js?v=arena-mobile-fullscreen-layout-v24"></script>
 </body>
 </html>
