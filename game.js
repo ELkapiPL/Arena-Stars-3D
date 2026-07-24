@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-window.__arenaBuild='arena-ball-3v3-v29';
+window.__arenaBuild='arena-ball-3v3-v30';
 
 const canvas = document.getElementById('game');
 const earlyMobileHint=((navigator.maxTouchPoints||0)>0&&matchMedia('(pointer: coarse)').matches)||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
@@ -343,7 +343,7 @@ function loadProgress(){
 let profile=loadProgress();
 profile.name=persistNickname(profile.name);
 let profileDirty=false,profileSyncBusy=false,profileChangeSeq=0,lastConfigRevision=0,backgroundSyncBusy=false;
-const CLIENT_VERSION='arena-ball-3v3-v29';
+const CLIENT_VERSION='arena-ball-3v3-v30';
 function saveProgress(markDirty=true){try{profile.name=persistNickname(profile.name);localStorage.setItem(SAVE_KEY,JSON.stringify(profile));if(markDirty){profileDirty=true;profileChangeSeq++;}}catch(_){} }
 function getPlayerId(){
   try{let id=localStorage.getItem(PLAYER_ID_KEY);if(!id){id=(crypto.randomUUID?crypto.randomUUID():`gracz-${Date.now()}-${Math.random().toString(16).slice(2)}`);localStorage.setItem(PLAYER_ID_KEY,id);}return id;}
@@ -1008,25 +1008,27 @@ function moveDuelEntity(ent,dx,dz){
 }
 
 // ----------------------------- Arena Ball 3v3 -----------------------------
-const ARENA_BALL_X=18,ARENA_BALL_Z=20,ARENA_BALL_RADIUS=.75,ARENA_BALL_SPEED_MULTIPLIER=.40;
+const ARENA_BALL_X=27,ARENA_BALL_Z=30,ARENA_BALL_GOAL_HALF=7.2,ARENA_BALL_GOAL_LINE=28.5,ARENA_BALL_RADIUS=.75,ARENA_BALL_SPEED_MULTIPLIER=.44;
+// Arena jest większa o 50%. Przeszkody zachowują swoje rozmiary, ale są
+// rozstawione szerzej, dzięki czemu powstają dłuższe i czytelniejsze korytarze.
 const arenaBallWalls=[
-  {x:-11.8,z:-12,w:4.2,d:1.8,h:1.45,c:[.29,.36,.52]},{x:11.8,z:-12,w:4.2,d:1.8,h:1.45,c:[.29,.36,.52]},
-  {x:-11.8,z:12,w:4.2,d:1.8,h:1.45,c:[.29,.36,.52]},{x:11.8,z:12,w:4.2,d:1.8,h:1.45,c:[.29,.36,.52]},
-  {x:-6,z:-6.2,w:1.8,d:4.8,h:1.55,c:[.34,.30,.52]},{x:6,z:-6.2,w:1.8,d:4.8,h:1.55,c:[.34,.30,.52]},
-  {x:-6,z:6.2,w:1.8,d:4.8,h:1.55,c:[.34,.30,.52]},{x:6,z:6.2,w:1.8,d:4.8,h:1.55,c:[.34,.30,.52]},
-  {x:0,z:-9,w:4,d:1.6,h:1.35,c:[.28,.42,.48]},{x:0,z:9,w:4,d:1.6,h:1.35,c:[.28,.42,.48]},
-  {x:-11.4,z:0,w:3.4,d:1.7,h:1.4,c:[.38,.31,.50]},{x:11.4,z:0,w:3.4,d:1.7,h:1.4,c:[.38,.31,.50]}
+  {x:-17.7,z:-18,w:4.2,d:1.8,h:1.45,c:[.29,.36,.52]},{x:17.7,z:-18,w:4.2,d:1.8,h:1.45,c:[.29,.36,.52]},
+  {x:-17.7,z:18,w:4.2,d:1.8,h:1.45,c:[.29,.36,.52]},{x:17.7,z:18,w:4.2,d:1.8,h:1.45,c:[.29,.36,.52]},
+  {x:-9,z:-9.3,w:1.8,d:4.8,h:1.55,c:[.34,.30,.52]},{x:9,z:-9.3,w:1.8,d:4.8,h:1.55,c:[.34,.30,.52]},
+  {x:-9,z:9.3,w:1.8,d:4.8,h:1.55,c:[.34,.30,.52]},{x:9,z:9.3,w:1.8,d:4.8,h:1.55,c:[.34,.30,.52]},
+  {x:0,z:-13.5,w:4,d:1.6,h:1.35,c:[.28,.42,.48]},{x:0,z:13.5,w:4,d:1.6,h:1.35,c:[.28,.42,.48]},
+  {x:-17.1,z:0,w:3.4,d:1.7,h:1.4,c:[.38,.31,.50]},{x:17.1,z:0,w:3.4,d:1.7,h:1.4,c:[.38,.31,.50]}
 ];
 const arenaBallBushes=[
-  {x:-14.2,z:-7.4,r:2},{x:-10.5,z:-5.4,r:1.8},{x:-3,z:-12.6,r:1.9},{x:3,z:-12.6,r:1.9},
-  {x:14.2,z:-7.4,r:2},{x:10.5,z:-5.4,r:1.8},{x:-14.2,z:7.4,r:2},{x:-10.5,z:5.4,r:1.8},
-  {x:-3,z:12.6,r:1.9},{x:3,z:12.6,r:1.9},{x:14.2,z:7.4,r:2},{x:10.5,z:5.4,r:1.8},
-  {x:-8.6,z:0,r:1.7},{x:8.6,z:0,r:1.7},{x:0,z:-4.6,r:1.65},{x:0,z:4.6,r:1.65}
+  {x:-21.3,z:-11.1,r:2},{x:-15.75,z:-8.1,r:1.8},{x:-4.5,z:-18.9,r:1.9},{x:4.5,z:-18.9,r:1.9},
+  {x:21.3,z:-11.1,r:2},{x:15.75,z:-8.1,r:1.8},{x:-21.3,z:11.1,r:2},{x:-15.75,z:8.1,r:1.8},
+  {x:-4.5,z:18.9,r:1.9},{x:4.5,z:18.9,r:1.9},{x:21.3,z:11.1,r:2},{x:15.75,z:8.1,r:1.8},
+  {x:-12.9,z:0,r:1.7},{x:12.9,z:0,r:1.7},{x:0,z:-6.9,r:1.65},{x:0,z:6.9,r:1.65}
 ];
 function arenaBallPointInBush(x,z){return !ballOvertime&&arenaBallBushes.some(b=>(x-b.x)*(x-b.x)+(z-b.z)*(z-b.z)<b.r*b.r);}
 function arenaBallHitsWall(x,z,r=.12){
   if(Math.abs(x)>ARENA_BALL_X-r)return true;
-  if(Math.abs(z)>ARENA_BALL_Z-r&&Math.abs(x)>4.8-r)return true;
+  if(Math.abs(z)>ARENA_BALL_Z-r&&Math.abs(x)>ARENA_BALL_GOAL_HALF-r)return true;
   if(!ballWallsActive)return false;
   return arenaBallWalls.some(o=>x>o.x-o.w/2-r&&x<o.x+o.w/2+r&&z>o.z-o.d/2-r&&z<o.z+o.d/2+r);
 }
@@ -1095,8 +1097,7 @@ function cancelBallQueue(){stopBallSession(true);showLobby(false);}
 function beginBallMatch(data){
   clearTimeout(ballJoinTimer);ballJoinTimer=0;ballSearching=false;ballActive=true;ballEnded=false;ballMatchId=data.matchId;ballNetworkFailures=0;
   reset();running=true;
-  // Arena Ball ma wolniejsze tempo: zarówno prawdziwi gracze, jak i boty
-  // poruszają się z 40% zwykłej prędkości.
+  // W v30 wszyscy gracze są o 10% szybsi niż w v29: 44% zwykłej prędkości.
   if(player)player.speed*=ARENA_BALL_SPEED_MULTIPLIER;
   document.body.classList.add('arena-playing','arena-ball-mode');document.body.classList.remove('lobby-mode','duel-mode');
   ui.duelQueueView.style.display='none';ui.lobbyView.style.display='block';ui.gameOverView.style.display='none';ui.overlay.style.display='none';
@@ -1318,15 +1319,17 @@ function render(){
   // Każdy gracz widzi własną postać od dołu ekranu. Druga strona dostaje
   // lustrzany widok areny: kamera obraca się o 180 stopni, a sterowanie
   // jest odwracane w updateDuel, więc W zawsze oznacza ruch w górę ekranu.
-  if((duelActive&&duelMirrorView)||(ballActive&&ballMirrorView))M4.lookAt(view,[focusX-sx,20,focusZ-15-sz],[focusX,0,focusZ+1],[0,1,0]);
-  else M4.lookAt(view,[focusX+sx,20,focusZ+15+sz],[focusX,0,focusZ-1],[0,1,0]);
+  const cameraHeight=ballActive?30:20,cameraOffset=ballActive?22.5:15,cameraLook=ballActive?1.5:1;
+  if((duelActive&&duelMirrorView)||(ballActive&&ballMirrorView))M4.lookAt(view,[focusX-sx,cameraHeight,focusZ-cameraOffset-sz],[focusX,0,focusZ+cameraLook],[0,1,0]);
+  else M4.lookAt(view,[focusX+sx,cameraHeight,focusZ+cameraOffset+sz],[focusX,0,focusZ-cameraLook],[0,1,0]);
   M4.multiply(viewProj,proj,view);M4.invert(invVP,viewProj);if(isMobileDevice)updateMobileAimScreen();screenToGround(mouse.x,mouse.y);
   gl.enable(gl.DEPTH_TEST);gl.enable(gl.CULL_FACE);gl.clearColor(.08,.14,.24,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.useProgram(program);gl.uniformMatrix4fv(loc.vp,false,viewProj);gl.uniform3f(loc.light,.45,-1,.35);
   // podłoże i delikatna kratka
-  draw(mesh.cube,0,-.45,0,20,.45,20,0,[.20,.49,.38]);
-  const floorStep=isMobileDevice?6:4,floorHalf=floorStep*.46;for(let x=-18+floorStep/2;x<18;x+=floorStep)for(let z=-18+floorStep/2;z<18;z+=floorStep)draw(mesh.cube,x,-.015,z,floorHalf,.02,floorHalf,0,(Math.round((x+z)/floorStep)%2===0)?[.24,.57,.43]:[.22,.53,.40]);
+  const floorX=ballActive?ARENA_BALL_X:20,floorZ=ballActive?ARENA_BALL_Z:20;
+  draw(mesh.cube,0,-.45,0,floorX,.45,floorZ,0,[.20,.49,.38]);
+  const floorStep=isMobileDevice?6:4,floorHalf=floorStep*.46;for(let x=-floorX+floorStep/2;x<floorX;x+=floorStep)for(let z=-floorZ+floorStep/2;z<floorZ;z+=floorStep)draw(mesh.cube,x,-.015,z,floorHalf,.02,floorHalf,0,(Math.round((x+z)/floorStep)%2===0)?[.24,.57,.43]:[.22,.53,.40]);
   // granice
-  if(ballActive){draw(mesh.cube,-12.4,.45,-19,7.6,.9,.55,0,[.12,.40,.66]);draw(mesh.cube,12.4,.45,-19,7.6,.9,.55,0,[.12,.40,.66]);draw(mesh.cube,-12.4,.45,19,7.6,.9,.55,0,[.65,.17,.34]);draw(mesh.cube,12.4,.45,19,7.6,.9,.55,0,[.65,.17,.34]);draw(mesh.cube,-19,.45,0,.55,.9,20,0,[.18,.23,.35]);draw(mesh.cube,19,.45,0,.55,.9,20,0,[.18,.23,.35]);draw(mesh.cube,-4.9,.72,-19.2,.18,1.45,1.0,0,[.20,.78,1]);draw(mesh.cube,4.9,.72,-19.2,.18,1.45,1.0,0,[.20,.78,1]);draw(mesh.cube,0,1.45,-19.2,4.9,.18,1.0,0,[.20,.78,1]);draw(mesh.cube,-4.9,.72,19.2,.18,1.45,1.0,0,[1,.25,.48]);draw(mesh.cube,4.9,.72,19.2,.18,1.45,1.0,0,[1,.25,.48]);draw(mesh.cube,0,1.45,19.2,4.9,.18,1.0,0,[1,.25,.48]);}else{draw(mesh.cube,0,.45,-19,20,.9,.55,0,[.18,.23,.35]);draw(mesh.cube,0,.45,19,20,.9,.55,0,[.18,.23,.35]);draw(mesh.cube,-19,.45,0,.55,.9,20,0,[.18,.23,.35]);draw(mesh.cube,19,.45,0,.55,.9,20,0,[.18,.23,.35]);}
+  if(ballActive){const wallZ=ARENA_BALL_GOAL_LINE,sideCenter=(ARENA_BALL_X+ARENA_BALL_GOAL_HALF)/2,sideHalf=(ARENA_BALL_X-ARENA_BALL_GOAL_HALF)/2,postX=ARENA_BALL_GOAL_HALF+.1;draw(mesh.cube,-sideCenter,.45,-wallZ,sideHalf,.9,.55,0,[.12,.40,.66]);draw(mesh.cube,sideCenter,.45,-wallZ,sideHalf,.9,.55,0,[.12,.40,.66]);draw(mesh.cube,-sideCenter,.45,wallZ,sideHalf,.9,.55,0,[.65,.17,.34]);draw(mesh.cube,sideCenter,.45,wallZ,sideHalf,.9,.55,0,[.65,.17,.34]);draw(mesh.cube,-ARENA_BALL_X-.5,.45,0,.55,.9,ARENA_BALL_Z,0,[.18,.23,.35]);draw(mesh.cube,ARENA_BALL_X+.5,.45,0,.55,.9,ARENA_BALL_Z,0,[.18,.23,.35]);draw(mesh.cube,-postX,.72,-wallZ-.2,.18,1.45,1.0,0,[.20,.78,1]);draw(mesh.cube,postX,.72,-wallZ-.2,.18,1.45,1.0,0,[.20,.78,1]);draw(mesh.cube,0,1.45,-wallZ-.2,postX,.18,1.0,0,[.20,.78,1]);draw(mesh.cube,-postX,.72,wallZ+.2,.18,1.45,1.0,0,[1,.25,.48]);draw(mesh.cube,postX,.72,wallZ+.2,.18,1.45,1.0,0,[1,.25,.48]);draw(mesh.cube,0,1.45,wallZ+.2,postX,.18,1.0,0,[1,.25,.48]);}else{draw(mesh.cube,0,.45,-19,20,.9,.55,0,[.18,.23,.35]);draw(mesh.cube,0,.45,19,20,.9,.55,0,[.18,.23,.35]);draw(mesh.cube,-19,.45,0,.55,.9,20,0,[.18,.23,.35]);draw(mesh.cube,19,.45,0,.55,.9,20,0,[.18,.23,.35]);}
   if(!duelActive&&!ballActive)for(const o of obstacles){draw(mesh.cube,o.x,o.h/2-.02,o.z,o.w/2,o.h/2,o.d/2,0,o.c);draw(mesh.cube,o.x,o.h+.05,o.z,o.w*.43,.08,o.d*.43,0,[Math.min(1,o.c[0]+.12),Math.min(1,o.c[1]+.12),Math.min(1,o.c[2]+.12)]);}
   if(duelActive)for(const o of duelWalls){draw(mesh.cube,o.x,o.h/2-.02,o.z,o.w/2,o.h/2,o.d/2,0,o.c);draw(mesh.cube,o.x,o.h+.04,o.z,o.w*.43,.07,o.d*.42,0,[.48,.53,.68]);}
   if(!duelActive&&!ballActive)for(const b of bushes){for(let k=0;k<5;k++){const a=k/5*Math.PI*2;draw(mesh.sphere,b[0]+Math.cos(a)*.55,.45,b[1]+Math.sin(a)*.55,.7,.55,.7,0,[.08,.48,.22]);}}
