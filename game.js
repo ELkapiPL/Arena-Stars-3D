@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-window.__arenaBuild='arena-ball-wide-teamplay-calibration-v35';
+window.__arenaBuild='arena-ball-super-hyper-kick-v36';
 
 const canvas = document.getElementById('game');
 const earlyMobileHint=((navigator.maxTouchPoints||0)>0&&matchMedia('(pointer: coarse)').matches)||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
@@ -359,7 +359,7 @@ function loadProgress(){
 let profile=loadProgress();
 profile.name=persistNickname(profile.name);
 let profileDirty=false,profileSyncBusy=false,profileChangeSeq=0,lastConfigRevision=0,backgroundSyncBusy=false;
-const CLIENT_VERSION='arena-ball-wide-teamplay-calibration-v35';
+const CLIENT_VERSION='arena-ball-super-hyper-kick-v36';
 function saveProgress(markDirty=true){try{profile.name=persistNickname(profile.name);localStorage.setItem(SAVE_KEY,JSON.stringify(profile));if(markDirty){profileDirty=true;profileChangeSeq++;}}catch(_){} }
 function getPlayerId(){
   try{let id=localStorage.getItem(PLAYER_ID_KEY);if(!id){id=(crypto.randomUUID?crypto.randomUUID():`gracz-${Date.now()}-${Math.random().toString(16).slice(2)}`);localStorage.setItem(PLAYER_ID_KEY,id);}return id;}
@@ -952,7 +952,7 @@ let upgrades={...profile.upgrades};
 let running=false,runCommitted=false,last=performance.now(),score=0,wave=1,kills=0,walletCoins=profile.coins,runCoins=0,trophies=0,survivalTime=0,waveClock=0,spawnClock=0,shake=0,messageClock=0;
 let player,enemies=[],bullets=[],particles=[],stars=[],pickups=[],coins=[];
 let selectedMode=profile.mode||'solo',duelSearching=false,duelActive=false,duelEnded=false,duelMatchId='',duelOpponent=null,duelServerBullets=[],duelPredictedBullets=[],duelShotQueue=[],duelVisualHitSeqs=new Set(),duelLocalShotSeq=0,duelNetworkBusy=false,duelNetworkTimer=0,duelJoinTimer=0,duelNetworkFailures=0,duelMatchStatus='',duelStartIn=0,duelStartDeadline=0,duelLastStateAt=performance.now(),duelRtt=0,duelFrameSeq=0,duelLocalBotMode=false,duelBotBullets=[],duelBotTurnTimer=0,duelBotShotTimer=.8,duelBotStrafe=1,duelBotStuck=0,duelBotReveal=0,duelRound=1,duelYourWins=0,duelOpponentWins=0,duelRoundDraws=0,duelRoundEventSeq=0,duelRoundResolving=false,duelMirrorView=false,duelShotFlushBusy=false,duelShotFlushTimer=0;
-let ballSearching=false,ballActive=false,ballEnded=false,ballMatchId='',ballPlayers=[],ballBullets=[],ballVisual={x:0,z:0,targetX:0,targetZ:0,vx:0,vz:0,carrierId:null},ballNetworkBusy=false,ballNetworkTimer=0,ballJoinTimer=0,ballNetworkFailures=0,ballStatus='',ballTeam=0,ballMirrorView=false,ballActionSeq=0,ballKickQueued=false,ballSuperKickQueued=false,ballScores=[0,0],ballTimeRemaining=120,ballOvertime=false,ballWallsActive=true,ballGoalEventSeq=0,ballLastStateAt=performance.now();
+let ballSearching=false,ballActive=false,ballEnded=false,ballMatchId='',ballPlayers=[],ballBullets=[],ballVisual={x:0,z:0,targetX:0,targetZ:0,vx:0,vz:0,carrierId:null},ballNetworkBusy=false,ballNetworkTimer=0,ballJoinTimer=0,ballNetworkFailures=0,ballStatus='',ballTeam=0,ballMirrorView=false,ballActionSeq=0,ballKickQueued=false,ballSuperKickQueued=false,ballHyperQueued=false,ballScores=[0,0],ballTimeRemaining=120,ballOvertime=false,ballWallsActive=true,ballGoalEventSeq=0,ballLastStateAt=performance.now();
 queueMicrotask(()=>{try{scheduleSqlSync(false);}catch(error){console.error('SQL sync startup error',error);}});
 window.__arenaDebug=()=>({duelActive,duelLocalBotMode,duelMatchStatus,duelRound,duelYourWins,duelOpponentWins,duelRoundDraws,player:player?{x:player.x,z:player.z,hp:player.hp}:null,opponent:duelOpponent?{x:duelOpponent.renderX??duelOpponent.x,z:duelOpponent.renderZ??duelOpponent.z,hp:duelOpponent.hp,hidden:duelOpponent.hidden,isBot:duelOpponent.isBot}:null,playerBullets:duelPredictedBullets.length,botBullets:duelBotBullets.length,botAmmo:duelOpponent?.ammo,botReload:duelOpponent?.reload,botSuper:duelOpponent?.super,botHyper:duelOpponent?.hyper,botHyperActive:duelOpponent?.hyperActive,mirrorView:duelMirrorView,shotQueue:duelShotQueue.length,shotFlushBusy:duelShotFlushBusy});
 
@@ -1075,7 +1075,7 @@ function setBallHud(){
 function clearBallTimers(){clearTimeout(ballJoinTimer);ballJoinTimer=0;clearInterval(ballNetworkTimer);ballNetworkTimer=0;ballNetworkBusy=false;}
 function stopBallSession(notify=true){
   const oldMatch=ballMatchId;clearBallTimers();
-  ballSearching=false;ballActive=false;ballEnded=false;ballMatchId='';ballPlayers=[];ballBullets=[];ballVisual={x:0,z:0,targetX:0,targetZ:0,vx:0,vz:0,carrierId:null};ballNetworkFailures=0;ballStatus='';ballKickQueued=false;ballSuperKickQueued=false;ballScores=[0,0];ballTimeRemaining=120;ballOvertime=false;ballWallsActive=true;ballGoalEventSeq=0;
+  ballSearching=false;ballActive=false;ballEnded=false;ballMatchId='';ballPlayers=[];ballBullets=[];ballVisual={x:0,z:0,targetX:0,targetZ:0,vx:0,vz:0,carrierId:null};ballNetworkFailures=0;ballStatus='';ballKickQueued=false;ballSuperKickQueued=false;ballHyperQueued=false;ballScores=[0,0];ballTimeRemaining=120;ballOvertime=false;ballWallsActive=true;ballGoalEventSeq=0;
   document.body.classList.remove('arena-ball-mode');
   if(location.hash==='#arena-ball')history.replaceState(null,'',location.pathname+location.search);
   if(notify&&(oldMatch||playerId)){
@@ -1104,7 +1104,7 @@ async function requestBallJoin(){
 function startBallQueue(){
   if(ballSearching||ballActive)return;chooseBallMode();
   if(duelSearching||duelActive)stopDuelSession(true);if(running&&!duelActive)commitRun();
-  reset();running=false;ballSearching=true;ballEnded=false;ballMatchId='';ballPlayers=[];ballBullets=[];ballNetworkFailures=0;ballActionSeq=0;ballKickQueued=false;ballSuperKickQueued=false;ballScores=[0,0];ballTimeRemaining=120;ballOvertime=false;ballWallsActive=true;ballGoalEventSeq=0;
+  reset();running=false;ballSearching=true;ballEnded=false;ballMatchId='';ballPlayers=[];ballBullets=[];ballNetworkFailures=0;ballActionSeq=0;ballKickQueued=false;ballSuperKickQueued=false;ballHyperQueued=false;ballScores=[0,0];ballTimeRemaining=120;ballOvertime=false;ballWallsActive=true;ballGoalEventSeq=0;
   document.body.classList.add('lobby-mode');document.body.classList.remove('duel-mode','arena-ball-mode');
   ui.lobbyView.style.display='none';ui.gameOverView.style.display='none';ui.duelQueueView.style.display='grid';ui.overlay.style.display='block';
   ballQueueCard('ball');setDuelQueueText('Łączenie z kolejką Arena Ball 3v3…');requestBallJoin();
@@ -1129,7 +1129,7 @@ function processBallState(data,initial=false){
   if(me&&player){
     if(initial){player.x=Number(me.x)||0;player.z=Number(me.z)||0;player.angle=normalizeDuelAngle(me.angle);}
     else{const sx=Number(me.x),sz=Number(me.z),err=Math.hypot(sx-player.x,sz-player.z);if(err>4){player.x=sx;player.z=sz;}else if(err>1.6){player.x+=(sx-player.x)*.18;player.z+=(sz-player.z)*.18;}}
-    player.hp=Math.max(0,Number(me.hp)||0);player.maxHp=Math.max(1,Number(me.maxHp)||player.maxHp);player.inBush=!!me.inBush;player.respawnIn=Math.max(0,Number(me.respawnIn)||0);player.hasBall=me.hasBall===true;player.super=player.hasBall?100:0;player.hyper=0;player.hyperActive=0;
+    player.hp=Math.max(0,Number(me.hp)||0);player.maxHp=Math.max(1,Number(me.maxHp)||player.maxHp);player.inBush=!!me.inBush;player.respawnIn=Math.max(0,Number(me.respawnIn)||0);player.hasBall=me.hasBall===true;player.super=Math.max(0,Math.min(100,Number(me.super)||0));player.hyper=Math.max(0,Math.min(100,Number(me.hyper)||0));player.hyperActive=Math.max(0,Number(me.hyperActive)||0);
   }
   ballPlayers=list.filter(p=>p.id!==playerId).map(p=>{
     const old=previous.get(p.id),x=Number(p.x)||old?.targetX||0,z=Number(p.z)||old?.targetZ||0,a=normalizeDuelAngle(p.angle);
@@ -1146,25 +1146,38 @@ function processBallState(data,initial=false){
 }
 async function sendBallFrame(){
   if(!ballActive||!ballMatchId||!player||ballNetworkBusy)return;
-  ballNetworkBusy=true;const seq=++ballActionSeq,kick=ballKickQueued,superKick=ballSuperKickQueued;
+  ballNetworkBusy=true;const seq=++ballActionSeq,kick=ballKickQueued,superKick=ballSuperKickQueued,activateHyper=ballHyperQueued;
   try{
-    const data=await api('/api/arena-ball/action',{method:'POST',timeoutMs:2600,body:JSON.stringify({matchId:ballMatchId,playerId,x:player.x,z:player.z,angle:normalizeDuelAngle(player.angle),kick,superKick,seq})});
-    ballNetworkFailures=0;if(Number(data.ackActionSeq)>=seq){if(kick)ballKickQueued=false;if(superKick)ballSuperKickQueued=false;}processBallState(data,false);
+    const data=await api('/api/arena-ball/action',{method:'POST',timeoutMs:2600,body:JSON.stringify({matchId:ballMatchId,playerId,x:player.x,z:player.z,angle:normalizeDuelAngle(player.angle),kick,superKick,activateHyper,seq})});
+    ballNetworkFailures=0;if(Number(data.ackActionSeq)>=seq){if(kick)ballKickQueued=false;if(superKick)ballSuperKickQueued=false;if(activateHyper)ballHyperQueued=false;}processBallState(data,false);
   }catch(_){ballNetworkFailures++;if(ballNetworkFailures===3)showMessage('PONOWNE ŁĄCZENIE…');if(ballNetworkFailures>18&&!ballEnded)finishBall({winnerTeam:null,reason:'Utracono połączenie z serwerem Arena Ball.'});}
   finally{ballNetworkBusy=false;}
 }
 function arenaBallShoot(superKick=false){
   if(!ballActive||!['playing','overtime'].includes(ballStatus)||!player||player.hp<=0||player.respawnIn>0)return;
-  if(player.hasBall||ballVisual.carrierId===playerId){ballKickQueued=true;ballSuperKickQueued=!!superKick;ballVisual.carrierId=null;const a=player.angle,speed=superKick?ARENA_BALL_SUPER_KICK_SPEED:ARENA_BALL_NORMAL_KICK_SPEED;ballVisual.vx=Math.sin(a)*speed;ballVisual.vz=Math.cos(a)*speed;showMessage(superKick?'SUPER KOP — PÓŁ MAPY!':'PODANIE / STRZAŁ!');return;}
+  const hasBall=player.hasBall||ballVisual.carrierId===playerId;
+  if(hasBall){
+    if(superKick&&(player.super||0)<100){showMessage(`SUPER KOP: ${Math.floor(player.super||0)}%`);return;}
+    ballKickQueued=true;ballSuperKickQueued=!!superKick;ballVisual.carrierId=null;
+    const a=player.angle,speed=superKick?ARENA_BALL_SUPER_KICK_SPEED:ARENA_BALL_NORMAL_KICK_SPEED;
+    ballVisual.vx=Math.sin(a)*speed;ballVisual.vz=Math.cos(a)*speed;
+    if(superKick){player.super=0;showMessage('SUPER KOP!');burst(player.x+Math.sin(a),player.z+Math.cos(a),[1,.78,.12],18,7);}
+    else showMessage('PODANIE / STRZAŁ!');
+    updateUI();return;
+  }
+  if(superKick){showMessage((player.super||0)>=100?'SUPER KOP GOTOWY — PRZEJMIJ PIŁKĘ':`SUPERATAK: ${Math.floor(player.super||0)}%`);return;}
   if(player.fire>0||player.reload>0)return;if(player.ammo<=0){startReload();return;}
-  player.fire=player.fireCooldown;player.ammo--;ballKickQueued=true;ballSuperKickQueued=false;burst(player.x+Math.sin(player.angle),player.z+Math.cos(player.angle),ballTeam===0?[.25,.85,1]:[1,.28,.48],5,2.7);if(player.ammo<=0)startReload();else updateUI();
+  const hyper=(player.hyperActive||0)>0;
+  player.fire=player.fireCooldown/(hyper?HYPER_FIRE_MULT:1);player.ammo--;ballKickQueued=true;ballSuperKickQueued=false;
+  burst(player.x+Math.sin(player.angle),player.z+Math.cos(player.angle),hyper?[.30,1,.86]:(ballTeam===0?[.25,.85,1]:[1,.28,.48]),5,2.7);
+  if(player.ammo<=0)startReload();else updateUI();
 }
 function updateArenaBall(dt){
   if(!ballActive||!player)return;if(isMobileDevice&&mobilePortraitBlocked){mouse.down=false;return;}
-  player.super=(player.hasBall||ballVisual.carrierId===playerId)?100:0;player.hyper=0;player.hyperActive=0;
+  if((player.hyperActive||0)>0)player.hyperActive=Math.max(0,player.hyperActive-dt);
   player.fire=Math.max(0,player.fire-dt);if(player.reload>0){player.reload=Math.max(0,player.reload-dt);if(player.reload===0)player.ammo=MAG_SIZE;updateUI();}
   if(['playing','overtime'].includes(ballStatus)&&player.hp>0&&!(player.respawnIn>0)){
-    let dx=isMobileDevice?mobileInput.moveX:(keys.KeyD?1:0)-(keys.KeyA?1:0),dz=isMobileDevice?mobileInput.moveZ:(keys.KeyS?1:0)-(keys.KeyW?1:0);if(ballMirrorView){dx=-dx;dz=-dz;}const len=Math.hypot(dx,dz);if(len){dx/=len;dz/=len;moveArenaBallEntity(player,dx*player.speed*dt,dz*player.speed*dt);}player.angle=normalizeDuelAngle(Math.atan2(mouse.worldX-player.x,mouse.worldZ-player.z));player.inBush=arenaBallPointInBush(player.x,player.z);if(mouse.down)arenaBallShoot(false);
+    let dx=isMobileDevice?mobileInput.moveX:(keys.KeyD?1:0)-(keys.KeyA?1:0),dz=isMobileDevice?mobileInput.moveZ:(keys.KeyS?1:0)-(keys.KeyW?1:0);if(ballMirrorView){dx=-dx;dz=-dz;}const len=Math.hypot(dx,dz);if(len){dx/=len;dz/=len;const moveSpeed=player.speed*((player.hyperActive||0)>0?HYPER_SPEED_MULT:1);moveArenaBallEntity(player,dx*moveSpeed*dt,dz*moveSpeed*dt);}player.angle=normalizeDuelAngle(Math.atan2(mouse.worldX-player.x,mouse.worldZ-player.z));player.inBush=arenaBallPointInBush(player.x,player.z);if(mouse.down)arenaBallShoot(false);
   }else if(player.respawnIn>0){player.respawnIn=Math.max(0,player.respawnIn-dt);showMessage(`POWRÓT ZA ${Math.max(1,Math.ceil(player.respawnIn))}`);}
   const follow=1-Math.exp(-10*dt),turn=1-Math.exp(-14*dt);for(const p of ballPlayers){if(p.hidden)continue;const age=Math.min(.7,Math.max(0,(performance.now()-(p.sampleAt||performance.now()))/1000));const px=p.targetX+(p.vx||0)*age,pz=p.targetZ+(p.vz||0)*age;p.renderX+=(px-p.renderX)*follow;p.renderZ+=(pz-p.renderZ)*follow;p.renderAngle=smoothDuelAngle(p.renderAngle,p.targetAngle,turn);}
   if(ballVisual.carrierId===playerId){ballVisual.x=player.x+Math.sin(player.angle)*1;ballVisual.z=player.z+Math.cos(player.angle)*1;}else{const carrier=ballPlayers.find(p=>p.id===ballVisual.carrierId);if(carrier){ballVisual.x=(carrier.renderX??carrier.x)+Math.sin(carrier.renderAngle??carrier.angle)*1;ballVisual.z=(carrier.renderZ??carrier.z)+Math.cos(carrier.renderAngle??carrier.angle)*1;}else{ballVisual.x+=ballVisual.vx*dt;ballVisual.z+=ballVisual.vz*dt;ballVisual.x+=(ballVisual.targetX-ballVisual.x)*follow;ballVisual.z+=(ballVisual.targetZ-ballVisual.z)*follow;}}
@@ -1198,9 +1211,9 @@ function simulateArenaBallTrajectory(speed){
 }
 function renderArenaBallAimGuide(){
   if(!ballActive||!player||!['playing','overtime'].includes(ballStatus)||!(player.hasBall||ballVisual.carrierId===playerId))return;
-  const superPath=simulateArenaBallTrajectory(ARENA_BALL_SUPER_KICK_SPEED);
+  const superReady=(player.super||0)>=100,superPath=superReady?simulateArenaBallTrajectory(ARENA_BALL_SUPER_KICK_SPEED):[];
   const normalPath=simulateArenaBallTrajectory(ARENA_BALL_NORMAL_KICK_SPEED);
-  for(let i=0;i<superPath.length;i+=2){const p=superPath[i],pulse=.72+Math.sin(performance.now()*.006+i*.55)*.16;draw(mesh.sphere,p.x,.12,p.z,.10*pulse,.055,.10*pulse,0,[1,.78,.10],.38);}
+  for(let i=0;i<superPath.length;i+=2){const p=superPath[i],pulse=.72+Math.sin(performance.now()*.006+i*.55)*.16;draw(mesh.sphere,p.x,.12,p.z,.10*pulse,.055,.10*pulse,0,[1,.78,.10],.56);}
   for(let i=0;i<normalPath.length;i++){const p=normalPath[i],pulse=.84+Math.sin(performance.now()*.007+i*.65)*.12;draw(mesh.sphere,p.x,.15,p.z,.12*pulse,.065,.12*pulse,0,[.16,.88,1],.72);}
   const normalEnd=normalPath[normalPath.length-1];if(normalEnd){draw(mesh.cyl,normalEnd.x,.075,normalEnd.z,.46,.025,.46,0,[.14,.90,1],.72);draw(mesh.cyl,normalEnd.x,.08,normalEnd.z,.24,.03,.24,0,[1,1,1],.62);}
   const superEnd=superPath[superPath.length-1];if(superEnd){const pulse=1+Math.sin(performance.now()*.008)*.12;draw(mesh.cyl,superEnd.x,.07,superEnd.z,.62*pulse,.025,.62*pulse,0,[1,.72,.08],.62);draw(mesh.sphere,superEnd.x,.18,superEnd.z,.17,.10,.17,0,[1,.92,.30],.78);}
@@ -1317,8 +1330,8 @@ function startReload(){if(!running||!player||player.reload>0||player.ammo>=MAG_S
 function playerShoot(){if(ballActive){arenaBallShoot(false);return;}if(duelActive){duelPlayerShoot();return;}if(!running||player.fire>0||player.reload>0)return;if(player.ammo<=0){startReload();return;}const hyper=(player.hyperActive||0)>0;player.fire=player.fireCooldown/(hyper?HYPER_FIRE_MULT:1);player.ammo--;const cosmic=profile.skin==='cosmic',shotColor=hyper?[.35,1,.92]:(cosmic?[.78,.38,1]:[.24,.85,1]),flashColor=hyper?[1,.95,.35]:(cosmic?[.35,1,1]:[.35,.9,1]);shoot('player',player.x+Math.sin(player.angle)*1.05,player.z+Math.cos(player.angle)*1.05,player.angle,18,22,shotColor,.21,.025);burst(player.x+Math.sin(player.angle),player.z+Math.cos(player.angle),flashColor,4,2.5);if(player.ammo<=0)startReload();else updateUI();}
 function addCharge(baseAmount){if(!player)return;const amount=Math.max(0,Number(baseAmount)||0)*SUPER_CHARGE_MULTIPLIER;player.super=Math.min(100,Math.max(0,Number(player.super)||0)+amount);if((player.hyperActive||0)<=0)player.hyper=Math.min(100,Math.max(0,Number(player.hyper)||0)+amount/HYPER_CHARGE_RATIO);updateUI();}
 function superPulse(pulse,total){if(!running||!player)return;const color=total>1?[.25,1,.88]:[1,.35,.93];for(let i=0;i<24;i++)shoot('player',player.x,player.z,i/24*Math.PI*2,14,28,color,.24,0);for(const e of enemies){const d=Math.hypot(e.x-player.x,e.z-player.z);if(d<5.5){e.hp-=45;const k=(5.5-d)/5.5;e.x+=(e.x-player.x)/(d||1)*k*3;e.z+=(e.z-player.z)/(d||1)*k*3;}}burst(player.x,player.z,color,32,9);shake=Math.max(shake,.55);if(total>1)showMessage(`HIPER SUPER ${pulse}/${total}!`);}
-function superAttack(){if(ballActive){if(player?.hasBall||ballVisual.carrierId===playerId)arenaBallShoot(true);else showMessage('SUPER KOP DOSTĘPNY, GDY MASZ PIŁKĘ');return;}if(duelActive){if(duelLocalBotMode&&duelMatchStatus==='playing'){duelUseSuper(player,false);updateUI();}else showMessage('SUPER ONLINE BĘDZIE DODANY PÓŹNIEJ');return;}if(!running||player.super<100)return;player.super=0;player.inv=.6;const pulses=(player.hyperActive||0)>0?3:1,caster=player;if(pulses===1){showMessage('SUPER!');superPulse(1,1);}else{/* Liczba fal jest ustalana w chwili użycia. Koniec hiperdoładowania nie anuluje fal 2 i 3. */superPulse(1,3);setTimeout(()=>{if(running&&player===caster)superPulse(2,3);},170);setTimeout(()=>{if(running&&player===caster)superPulse(3,3);},340);}updateUI();}
-function activateHyper(){if(ballActive){showMessage('W ARENA BALL HIPER BĘDZIE DODANY PÓŹNIEJ');return;}if(duelActive){if(duelLocalBotMode&&duelMatchStatus==='playing'){duelActivateHyper(player,false);updateUI();}else showMessage('HIPER ONLINE BĘDZIE DODANY PÓŹNIEJ');return;}if(!running||!player||player.hyper<100||player.hyperActive>0)return;player.hyper=0;player.hyperActive=HYPER_DURATION;player.inv=Math.max(player.inv,.45);showMessage('HIPERDOŁADOWANIE: 9 SEKUND!');burst(player.x,player.z,[.25,1,.82],40,10);shake=.4;updateUI();}
+function superAttack(){if(ballActive){if(!player)return;if((player.super||0)<100){showMessage(`SUPERATAK: ${Math.floor(player.super||0)}%`);return;}if(player.hasBall||ballVisual.carrierId===playerId)arenaBallShoot(true);else showMessage('SUPER KOP GOTOWY — PRZEJMIJ PIŁKĘ');return;}if(duelActive){if(duelLocalBotMode&&duelMatchStatus==='playing'){duelUseSuper(player,false);updateUI();}else showMessage('SUPER ONLINE BĘDZIE DODANY PÓŹNIEJ');return;}if(!running||player.super<100)return;player.super=0;player.inv=.6;const pulses=(player.hyperActive||0)>0?3:1,caster=player;if(pulses===1){showMessage('SUPER!');superPulse(1,1);}else{/* Liczba fal jest ustalana w chwili użycia. Koniec hiperdoładowania nie anuluje fal 2 i 3. */superPulse(1,3);setTimeout(()=>{if(running&&player===caster)superPulse(2,3);},170);setTimeout(()=>{if(running&&player===caster)superPulse(3,3);},340);}updateUI();}
+function activateHyper(){if(ballActive){if(!player||player.hyperActive>0)return;if((player.hyper||0)<100){showMessage(`HIPERDOŁADOWANIE: ${Math.floor(player.hyper||0)}%`);return;}player.hyper=0;player.hyperActive=HYPER_DURATION;ballHyperQueued=true;showMessage('HIPERDOŁADOWANIE: 9 SEKUND!');burst(player.x,player.z,[.25,1,.82],34,9);shake=.35;updateUI();return;}if(duelActive){if(duelLocalBotMode&&duelMatchStatus==='playing'){duelActivateHyper(player,false);updateUI();}else showMessage('HIPER ONLINE BĘDZIE DODANY PÓŹNIEJ');return;}if(!running||!player||player.hyper<100||player.hyperActive>0)return;player.hyper=0;player.hyperActive=HYPER_DURATION;player.inv=Math.max(player.inv,.45);showMessage('HIPERDOŁADOWANIE: 9 SEKUND!');burst(player.x,player.z,[.25,1,.82],40,10);shake=.4;updateUI();}
 function spawnCoins(x,z,count){for(let i=0;i<count;i++){const a=(i/count)*Math.PI*2+rnd(-.3,.3),power=rnd(1.8,4.2);coins.push({x,z,r:.22,vx:Math.cos(a)*power,vz:Math.sin(a)*power,t:rnd(0,6.28),life:25});}}
 function enemyDeath(e){score+=e.type==='tank'?350:e.type==='shooter'?180:120;kills++;addCharge(e.type==='tank'?18:10);burst(e.x,e.z,e.color,e.type==='tank'?24:15,e.type==='tank'?8:5);spawnCoins(e.x,e.z,e.coinReward||1);stars.push({x:e.x,z:e.z,y:.45,t:Math.random()*6.28,life:10});if(kills%7===0)pickups.push({x:e.x,z:e.z,type:'heal',life:14,t:0});updateUI();}
 function damagePlayer(d){if(player.inv>0)return;if((player.hyperActive||0)>0)d*=HYPER_DAMAGE_MULT;player.hp-=d;player.inv=.55;player.regen=4;shake=.35;burst(player.x,player.z,[1,.15,.2],16,6);updateUI();if(player.hp<=0)gameOver();}

@@ -229,7 +229,7 @@ def persistent_storage_public_status() -> dict[str, Any]:
         "schemaVersion": DB_SCHEMA_VERSION if DB_READY else 0,
         "emailResetConfigured": bool(RESEND_API_KEY and PASSWORD_RESET_FROM),
         "passwordResetTtlMinutes": PASSWORD_RESET_TTL // 60,
-        "build": "arena-ball-3v3-v30",
+        "build": "arena-ball-super-hyper-kick-v36",
     }
     if DB_READY:
         payload["connectedAt"] = DB_CONNECTED_AT
@@ -595,7 +595,7 @@ def db_schema_status() -> dict[str, Any]:
         "connectedAt": DB_CONNECTED_AT,
         "emailResetConfigured": bool(RESEND_API_KEY and PASSWORD_RESET_FROM),
         "passwordResetTtlMinutes": PASSWORD_RESET_TTL // 60,
-        "build": "arena-ball-3v3-v30",
+        "build": "arena-ball-super-hyper-kick-v36",
     }
 
 
@@ -2947,6 +2947,12 @@ ARENA_BALL_KICK_SPEED = 14.625
 ARENA_BALL_SUPER_KICK_SPEED = 23.125
 ARENA_BALL_TICK_RATE = 20.0
 ARENA_BALL_SPEED_MULTIPLIER = 0.44  # o 10% szybciej niż v29; 44% zwykłej prędkości
+ARENA_BALL_SUPER_CHARGE_PER_DAMAGE = 0.66
+ARENA_BALL_HYPER_CHARGE_RATIO = 3.0
+ARENA_BALL_HYPER_DURATION = 9.0
+ARENA_BALL_HYPER_SPEED_MULTIPLIER = 1.05
+ARENA_BALL_HYPER_FIRE_MULTIPLIER = 1.04
+ARENA_BALL_HYPER_DAMAGE_TAKEN_MULTIPLIER = 0.93
 
 # Symetryczna, gęsta mapa. W dogrywce wszystkie przeszkody i krzaki znikają.
 # V34: boisko większe o 25% względem v33. Pozycje przeszkód zostały
@@ -3038,6 +3044,7 @@ def create_arena_ball_player(payload: dict[str, Any], player_id: str, team: int,
         "x": x, "z": z, "angle": angle, "spawn_x": x, "spawn_z": z, "spawn_angle": angle,
         "hp": max_hp, "max_hp": max_hp,
         "speed": player_speed,
+        "super": 0.0, "hyper": 0.0, "hyper_active_until": 0.0,
         "fire_cooldown": max(.72, clean_float(payload.get("fireCooldown"), 0.08, 0.9, 0.25)) if is_bot else clean_float(payload.get("fireCooldown"), 0.08, 0.9, 0.25),
         "last_shot": 0.0, "last_seen": now(), "last_move": now(),
         "vx": 0.0, "vz": 0.0, "revealed_until": 0.0,
@@ -3113,11 +3120,37 @@ def arena_ball_drop_ball(match: dict[str, Any], player: dict[str, Any], impulse:
     })
 
 
+def arena_ball_hyper_active(player: dict[str, Any], current: float | None = None) -> bool:
+    current = now() if current is None else current
+    return current < float(player.get("hyper_active_until", 0.0))
+
+
+def arena_ball_add_charge(player: dict[str, Any], damage: float) -> None:
+    amount = max(0.0, float(damage)) * ARENA_BALL_SUPER_CHARGE_PER_DAMAGE
+    player["super"] = min(100.0, max(0.0, float(player.get("super", 0.0))) + amount)
+    if not arena_ball_hyper_active(player):
+        player["hyper"] = min(100.0, max(0.0, float(player.get("hyper", 0.0))) + amount / ARENA_BALL_HYPER_CHARGE_RATIO)
+
+
+def arena_ball_activate_hyper(player: dict[str, Any], current: float | None = None) -> bool:
+    current = now() if current is None else current
+    if arena_ball_hyper_active(player, current) or float(player.get("hyper", 0.0)) < 100.0:
+        return False
+    player["hyper"] = 0.0
+    player["hyper_active_until"] = current + ARENA_BALL_HYPER_DURATION
+    player["revealed_until"] = max(float(player.get("revealed_until", 0.0)), current + .8)
+    return True
+
+
 def arena_ball_kick(match: dict[str, Any], player: dict[str, Any], angle: float, super_kick: bool = False) -> bool:
     ball = match["ball"]
     if ball.get("carrier_id") != player["id"]:
         return False
     angle = normalize_duel_angle(angle, player.get("angle", 0.0))
+    if super_kick:
+        if float(player.get("super", 0.0)) < 100.0:
+            return False
+        player["super"] = 0.0
     speed = ARENA_BALL_SUPER_KICK_SPEED if super_kick else ARENA_BALL_KICK_SPEED
     ball.update({
         "carrier_id": None,
@@ -3137,7 +3170,8 @@ def spawn_arena_ball_bullet(match: dict[str, Any], owner: dict[str, Any], angle:
     current = now()
     if owner.get("hp", 0) <= 0 or current < float(owner.get("respawn_at", 0.0)):
         return False
-    if current - float(owner.get("last_shot", 0.0)) < float(owner.get("fire_cooldown", .25)):
+    effective_cooldown = float(owner.get("fire_cooldown", .25)) / (ARENA_BALL_HYPER_FIRE_MULTIPLIER if arena_ball_hyper_active(owner, current) else 1.0)
+    if current - float(owner.get("last_shot", 0.0)) < effective_cooldown:
         return False
     owner["last_shot"] = current
     owner["revealed_until"] = current + .85
@@ -3266,7 +3300,7 @@ def arena_ball_move_bot_toward(match: dict[str, Any], bot: dict[str, Any], targe
         1.42 * strafe, -1.42 * strafe, math.pi * .72 * strafe,
         -math.pi * .72 * strafe,
     )
-    move_distance = max(.01, float(bot.get("speed", 6.3)) * step)
+    move_distance = max(.01, float(bot.get("speed", 6.3)) * (ARENA_BALL_HYPER_SPEED_MULTIPLIER if arena_ball_hyper_active(bot) else 1.0) * step)
     best = None
     for index, offset in enumerate(offsets):
         angle = base + offset
@@ -3428,7 +3462,7 @@ def arena_ball_make_bot_pass(
     match: dict[str, Any], bot: dict[str, Any], mate: dict[str, Any], angle: float, distance: float, current: float
 ) -> bool:
     # Zwykłe podanie wystarcza na większość boiska; dłuższe przerzuty używają mocniejszego kopnięcia.
-    kicked = arena_ball_kick(match, bot, angle, super_kick=distance > 20.0)
+    kicked = arena_ball_kick(match, bot, angle, super_kick=distance > 20.0 and float(bot.get("super", 0.0)) >= 100.0)
     if not kicked:
         return False
     bot["bot_last_pass_at"] = current
@@ -3449,6 +3483,8 @@ def update_arena_ball_bots(match: dict[str, Any], step: float, current: float) -
     for bot in players:
         if not bot.get("is_bot") or bot.get("hp", 0) <= 0 or current < float(bot.get("respawn_at", 0.0)):
             continue
+        if float(bot.get("hyper", 0.0)) >= 100.0 and not arena_ball_hyper_active(bot, current):
+            arena_ball_activate_hyper(bot, current)
         team = int(bot["team"])
         enemies = [p for p in players if p["team"] != team and p.get("hp", 0) > 0 and current >= float(p.get("respawn_at", 0.0))]
         friends = [p for p in players if p["team"] == team and p.get("hp", 0) > 0 and current >= float(p.get("respawn_at", 0.0))]
@@ -3487,7 +3523,7 @@ def update_arena_ball_bots(match: dict[str, Any], step: float, current: float) -
             shooting_zone = attack_progress >= ARENA_BALL_GOAL_LINE * .42
             stuck = float(bot.get("bot_stuck_for", 0.0))
             if (clear_shot and (shooting_zone or distance_goal < 19.0)) or very_close or stuck > .62:
-                if arena_ball_kick(match, bot, goal_aim, super_kick=distance_goal > 11.0):
+                if arena_ball_kick(match, bot, goal_aim, super_kick=distance_goal > 11.0 and float(bot.get("super", 0.0)) >= 100.0):
                     bot["bot_stuck_for"] = 0.0
                     bot.pop("nav_x", None); bot.pop("nav_z", None)
                     continue
@@ -3573,7 +3609,7 @@ def update_arena_ball_bots(match: dict[str, Any], step: float, current: float) -
                     continue
             bot["angle"] = goal_aim
             if clear_after_move and attack_progress >= ARENA_BALL_GOAL_LINE * .48:
-                arena_ball_kick(match, bot, goal_aim, super_kick=math.hypot(goal_x-float(bot["x"]), opponent_goal_z-float(bot["z"])) > 11.0)
+                arena_ball_kick(match, bot, goal_aim, super_kick=math.hypot(goal_x-float(bot["x"]), opponent_goal_z-float(bot["z"])) > 11.0 and float(bot.get("super", 0.0)) >= 100.0)
             elif float(bot.get("bot_stuck_for", 0.0)) > .58:
                 arena_ball_kick(match, bot, goal_aim, super_kick=False)
 
@@ -3598,6 +3634,9 @@ def arena_ball_public_player(match: dict[str, Any], player: dict[str, Any], view
         "isBot": bool(player.get("is_bot")), "hidden": hidden, "inBush": in_bush,
         "respawnIn": max(0.0, float(player.get("respawn_at", 0.0)) - now()),
         "hasBall": match["ball"].get("carrier_id") == player["id"],
+        "super": round(max(0.0, min(100.0, float(player.get("super", 0.0)))), 2),
+        "hyper": round(max(0.0, min(100.0, float(player.get("hyper", 0.0)))), 2),
+        "hyperActive": round(max(0.0, float(player.get("hyper_active_until", 0.0)) - now()), 2),
     }
     if not hidden:
         row.update({
@@ -3727,8 +3766,14 @@ def advance_arena_ball(match: dict[str, Any]) -> None:
                 if hit_t is not None and (best_t is None or hit_t < best_t):
                     best_t, best_target = hit_t, target
             if best_target is not None:
-                best_target["hp"] = max(0, best_target["hp"] - bullet["damage"])
+                damage = float(bullet["damage"])
+                if arena_ball_hyper_active(best_target, current):
+                    damage *= ARENA_BALL_HYPER_DAMAGE_TAKEN_MULTIPLIER
+                best_target["hp"] = max(0, best_target["hp"] - damage)
                 best_target["revealed_until"] = current + .8
+                shooter = match["players"].get(bullet.get("owner_id"))
+                if shooter is not None:
+                    arena_ball_add_charge(shooter, damage)
                 if best_target["hp"] <= 0:
                     arena_ball_drop_ball(match, best_target, 4.0)
                     best_target["respawn_at"] = current + ARENA_BALL_RESPAWN_SECONDS
@@ -3845,10 +3890,12 @@ def arena_ball_action(payload: dict[str, Any]) -> dict[str, Any] | None:
     if seq > int(player.get("last_action_seq", 0)):
         player["last_action_seq"] = seq
         if match.get("status") in {"playing", "overtime"} and player.get("hp", 0) > 0 and current >= float(player.get("respawn_at", 0.0)):
+            if payload.get("activateHyper"):
+                arena_ball_activate_hyper(player, current)
             requested_x = clean_float(payload.get("x"), -ARENA_BALL_ARENA_X, ARENA_BALL_ARENA_X, player["x"])
             requested_z = clean_float(payload.get("z"), -ARENA_BALL_ARENA_Z, ARENA_BALL_ARENA_Z, player["z"])
             elapsed = max(.02, min(.35, current - float(player.get("last_move", current))))
-            max_distance = float(player["speed"]) * elapsed * 1.42 + .18
+            max_distance = float(player["speed"]) * (ARENA_BALL_HYPER_SPEED_MULTIPLIER if arena_ball_hyper_active(player, current) else 1.0) * elapsed * 1.42 + .18
             dx, dz = requested_x - player["x"], requested_z - player["z"]
             distance = math.hypot(dx, dz)
             if distance > max_distance and distance > 1e-9:
@@ -3859,7 +3906,9 @@ def arena_ball_action(payload: dict[str, Any]) -> dict[str, Any] | None:
             player["last_move"] = current
             player["angle"] = normalize_duel_angle(payload.get("angle"), player["angle"])
             if payload.get("kick"):
-                if not arena_ball_kick(match, player, player["angle"], bool(payload.get("superKick"))):
+                if match["ball"].get("carrier_id") == player["id"]:
+                    arena_ball_kick(match, player, player["angle"], bool(payload.get("superKick")))
+                else:
                     spawn_arena_ball_bullet(match, player, player["angle"])
     advance_arena_ball(match)
     return arena_ball_payload(match, player_id)
@@ -3896,7 +3945,7 @@ def duel_tick_loop() -> None:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "ArenaStarsSQL/5.9-arena-ball-wide-teamplay-calibration-v35"
+    server_version = "ArenaStarsSQL/6.0-arena-ball-super-hyper-kick-v36"
     protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt: str, *args: Any) -> None:
