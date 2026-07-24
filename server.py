@@ -229,7 +229,7 @@ def persistent_storage_public_status() -> dict[str, Any]:
         "schemaVersion": DB_SCHEMA_VERSION if DB_READY else 0,
         "emailResetConfigured": bool(RESEND_API_KEY and PASSWORD_RESET_FROM),
         "passwordResetTtlMinutes": PASSWORD_RESET_TTL // 60,
-        "build": "arena-bot-perspective-controls-ball-v44",
+        "build": "arena-bot-view-drag-controls-v45",
     }
     if DB_READY:
         payload["connectedAt"] = DB_CONNECTED_AT
@@ -595,7 +595,7 @@ def db_schema_status() -> dict[str, Any]:
         "connectedAt": DB_CONNECTED_AT,
         "emailResetConfigured": bool(RESEND_API_KEY and PASSWORD_RESET_FROM),
         "passwordResetTtlMinutes": PASSWORD_RESET_TTL // 60,
-        "build": "arena-bot-perspective-controls-ball-v44",
+        "build": "arena-bot-view-drag-controls-v45",
     }
 
 
@@ -3986,7 +3986,7 @@ def duel_tick_loop() -> None:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "ArenaStarsSQL/6.4-arena-bot-perspective-controls-ball-v44"
+    server_version = "ArenaStarsSQL/6.5-arena-bot-view-drag-controls-v45"
     protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt: str, *args: Any) -> None:

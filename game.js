@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-window.__arenaBuild='arena-bot-perspective-controls-ball-v44';
+window.__arenaBuild='arena-bot-view-drag-controls-v45';
 
 const canvas = document.getElementById('game');
 const earlyMobileHint=((navigator.maxTouchPoints||0)>0&&matchMedia('(pointer: coarse)').matches)||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
@@ -367,7 +367,7 @@ function loadProgress(){
 let profile=loadProgress();
 profile.name=persistNickname(profile.name);
 let profileDirty=false,profileSyncBusy=false,profileChangeSeq=0,lastConfigRevision=0,backgroundSyncBusy=false;
-const CLIENT_VERSION='arena-bot-perspective-controls-ball-v44';
+const CLIENT_VERSION='arena-bot-view-drag-controls-v45';
 const CAMERA_MODE_KEY='arenaStars3D_camera_mode_v1';
 let botPerspectiveEnabled=false;
 try{botPerspectiveEnabled=localStorage.getItem(CAMERA_MODE_KEY)==='bot';}catch(_){}
@@ -386,6 +386,7 @@ function toggleBotPerspective(){
   botPerspectiveEnabled=!botPerspectiveEnabled;
   try{localStorage.setItem(CAMERA_MODE_KEY,botPerspectiveEnabled?'bot':'top');}catch(_){}
   updateCameraModeUI();
+  resetBotViewLook(true);
   const viewport=currentArenaViewport();
   mobileInput.aimX=0;mobileInput.aimY=-1;
   mouse.x=viewport.left+viewport.width/2;
@@ -395,37 +396,61 @@ function toggleBotPerspective(){
 }
 function movementFromBotPerspective(dx,dz){
   if(!isBotPerspectiveActive()||!player)return {x:dx,z:dz};
-  // W widoku robota obie osie wejścia były odwrócone względem obrazu kamery.
-  // Odwracamy zarówno lewo/prawo, jak i przód/tył.
-  const forward=dz,right=-dx,a=Number(player.angle)||0;
+  // W/D/S/A mają zachowywać się jak w typowej grze z kamerą za oczami:
+  // W = do przodu, S = do tyłu, A = w lewo, D = w prawo.
+  const forward=-dz,right=dx,a=Number(player.angle)||0;
   return {x:Math.sin(a)*forward+Math.cos(a)*right,z:Math.cos(a)*forward-Math.sin(a)*right};
 }
-const BOT_VIEW_MOBILE_TURN_SPEED=.22;
-const BOT_VIEW_DESKTOP_TURN_SPEED=.34;
-const BOT_VIEW_MOBILE_DEAD_ZONE=.20;
-const BOT_VIEW_MOUSE_DEAD_ZONE=.18;
-function updateBotPerspectiveAngle(dt){
+const BOT_VIEW_DESKTOP_LOOK_SENSITIVITY=.00135;
+const BOT_VIEW_MOBILE_LOOK_SENSITIVITY=.00110;
+const BOT_VIEW_MIN_PITCH=-.48;
+const BOT_VIEW_MAX_PITCH=.34;
+let botViewPitch=0;
+const botViewLook={pointerId:null,lastX:0,lastY:0,yawPixels:0,pitchPixels:0,desktopRightHeld:false};
+function resetBotViewLook(resetPitch=false){
+  botViewLook.pointerId=null;botViewLook.lastX=0;botViewLook.lastY=0;
+  botViewLook.yawPixels=0;botViewLook.pitchPixels=0;botViewLook.desktopRightHeld=false;
+  if(resetPitch)botViewPitch=0;
+}
+function beginBotViewLook(e){
+  if(!isBotPerspectiveActive())return false;
+  const mobileTouch=isMobileDevice&&(e.pointerType==='touch'||e.pointerType==='pen');
+  const desktopRight=!isMobileDevice&&e.pointerType!=='touch'&&e.button===2;
+  if(!mobileTouch&&!desktopRight)return false;
+  if(botViewLook.pointerId!==null&&botViewLook.pointerId!==e.pointerId)return false;
+  botViewLook.pointerId=e.pointerId;botViewLook.lastX=e.clientX;botViewLook.lastY=e.clientY;
+  botViewLook.desktopRightHeld=desktopRight;
+  try{canvas.setPointerCapture(e.pointerId);}catch(_){}
+  e.preventDefault();
+  return true;
+}
+function moveBotViewLook(e){
+  if(!isBotPerspectiveActive()||e.pointerId!==botViewLook.pointerId)return false;
+  const dx=e.clientX-botViewLook.lastX,dy=e.clientY-botViewLook.lastY;
+  botViewLook.lastX=e.clientX;botViewLook.lastY=e.clientY;
+  if(Number.isFinite(dx))botViewLook.yawPixels+=Math.max(-90,Math.min(90,dx));
+  if(Number.isFinite(dy))botViewLook.pitchPixels+=Math.max(-70,Math.min(70,dy));
+  e.preventDefault();
+  return true;
+}
+function endBotViewLook(e){
+  if(e.pointerId!==botViewLook.pointerId)return false;
+  try{canvas.releasePointerCapture(e.pointerId);}catch(_){}
+  botViewLook.pointerId=null;botViewLook.desktopRightHeld=false;
+  e.preventDefault();
+  return true;
+}
+function updateBotPerspectiveAngle(){
   if(!isBotPerspectiveActive()||!player)return false;
-  let turnInput=0;
-  if(isMobileDevice){
-    let normalized=Math.max(-1,Math.min(1,Number(mobileInput.aimX)||0));
-    const magnitude=Math.abs(normalized);
-    if(magnitude>BOT_VIEW_MOBILE_DEAD_ZONE){
-      const scaled=(magnitude-BOT_VIEW_MOBILE_DEAD_ZONE)/(1-BOT_VIEW_MOBILE_DEAD_ZONE);
-      turnInput=Math.sign(normalized)*Math.pow(scaled,2.15);
-    }
-  }else{
-    const viewport=currentArenaViewport(),half=Math.max(1,viewport.width*.5);
-    let normalized=(mouse.x-(viewport.left+half))/half;
-    normalized=Math.max(-1,Math.min(1,normalized));
-    const magnitude=Math.abs(normalized);
-    if(magnitude>BOT_VIEW_MOUSE_DEAD_ZONE){
-      const scaled=(magnitude-BOT_VIEW_MOUSE_DEAD_ZONE)/(1-BOT_VIEW_MOUSE_DEAD_ZONE);
-      turnInput=Math.sign(normalized)*Math.pow(scaled,2.0);
-    }
+  const sensitivity=isMobileDevice?BOT_VIEW_MOBILE_LOOK_SENSITIVITY:BOT_VIEW_DESKTOP_LOOK_SENSITIVITY;
+  if(botViewLook.yawPixels){
+    player.angle=normalizeDuelAngle(player.angle+botViewLook.yawPixels*sensitivity);
+    botViewLook.yawPixels=0;
   }
-  const speed=isMobileDevice?BOT_VIEW_MOBILE_TURN_SPEED:BOT_VIEW_DESKTOP_TURN_SPEED;
-  player.angle=normalizeDuelAngle(player.angle+turnInput*speed*Math.min(.04,Math.max(0,dt)));
+  if(botViewLook.pitchPixels){
+    botViewPitch=Math.max(BOT_VIEW_MIN_PITCH,Math.min(BOT_VIEW_MAX_PITCH,botViewPitch-botViewLook.pitchPixels*sensitivity));
+    botViewLook.pitchPixels=0;
+  }
   return true;
 }
 function saveProgress(markDirty=true){try{profile.name=persistNickname(profile.name);localStorage.setItem(SAVE_KEY,JSON.stringify(profile));if(markDirty){profileDirty=true;profileChangeSeq++;}}catch(_){} }
@@ -1322,7 +1347,7 @@ function commitRun(){
   saveProgress();updateLobby();syncProfile().then(fetchRanking);
   recordMatchResult({mode:'solo',result:'finished',pointsDelta,trophiesDelta,coinsDelta,durationSeconds:survivalTime,details:{kills,wave,score}});
 }
-function showLobby(leaveOnline=true){if(leaveOnline&&(duelActive||duelSearching||duelMatchId))stopDuelSession(true);if(leaveOnline&&(ballActive||ballSearching||ballMatchId))stopBallSession(true);running=false;updateCameraModeUI();resetMobileInput();hideMobileFullscreenGate();pendingMobileGameStart=null;document.body.classList.remove('arena-playing','result-mode','duel-mode','arena-ball-mode','bot-view');rankingCenterOnNextRender=true;document.body.classList.add('lobby-mode');ui.lobbyView.style.display='block';ui.duelQueueView.style.display='none';ui.gameOverView.style.display='none';ui.overlay.style.display='grid';if(ui.hudModeText)ui.hudModeText.textContent='Online';if(ui.gameOverBadge)ui.gameOverBadge.textContent='KONIEC MECZU • POSTĘP ZAPISANY';if(ui.gameOverTitle)ui.gameOverTitle.innerHTML='ROBOTY CIĘ<br>POKONAŁY';updateLobby();fetchRanking();if(isMobileDevice)scheduleMobileViewportRefresh();}
+function showLobby(leaveOnline=true){resetBotViewLook(true);if(leaveOnline&&(duelActive||duelSearching||duelMatchId))stopDuelSession(true);if(leaveOnline&&(ballActive||ballSearching||ballMatchId))stopBallSession(true);running=false;updateCameraModeUI();resetMobileInput();hideMobileFullscreenGate();pendingMobileGameStart=null;document.body.classList.remove('arena-playing','result-mode','duel-mode','arena-ball-mode','bot-view');rankingCenterOnNextRender=true;document.body.classList.add('lobby-mode');ui.lobbyView.style.display='block';ui.duelQueueView.style.display='none';ui.gameOverView.style.display='none';ui.overlay.style.display='grid';if(ui.hudModeText)ui.hudModeText.textContent='Online';if(ui.gameOverBadge)ui.gameOverBadge.textContent='KONIEC MECZU • POSTĘP ZAPISANY';if(ui.gameOverTitle)ui.gameOverTitle.innerHTML='ROBOTY CIĘ<br>POKONAŁY';updateLobby();fetchRanking();if(isMobileDevice)scheduleMobileViewportRefresh();}
 function startSoloGame(){if(running)commitRun();if(ballActive||ballSearching||ballMatchId)stopBallSession(true);reset();running=true;document.body.classList.add('arena-playing');document.body.classList.remove('lobby-mode','result-mode','duel-mode','arena-ball-mode');ui.lobbyView.style.display='block';ui.gameOverView.style.display='none';updateUI();ui.overlay.style.display='none';last=performance.now();}
 function startSelectedGameNow(){
   resetMobileInput();
@@ -1493,8 +1518,9 @@ function render(){
   // tam, gdzie celuje postać. Standardowy widok z góry pozostaje bez zmian.
   if(botPerspective){
     const a=Number(player?.angle)||0,fx=Math.sin(a),fz=Math.cos(a),rx=Math.cos(a),rz=-Math.sin(a);
-    const eyeX=focusX+fx*.10+rx*sx*.10,eyeZ=focusZ+fz*.10+rz*sz*.10;
-    M4.lookAt(view,[eyeX,1.38,eyeZ],[focusX+fx*22,1.02,focusZ+fz*22],[0,1,0]);
+    const eyeY=1.38,eyeX=focusX+fx*.10+rx*sx*.10,eyeZ=focusZ+fz*.10+rz*sz*.10;
+    const pitchCos=Math.cos(botViewPitch),pitchSin=Math.sin(botViewPitch),lookDistance=22;
+    M4.lookAt(view,[eyeX,eyeY,eyeZ],[focusX+fx*lookDistance*pitchCos,eyeY+pitchSin*lookDistance,focusZ+fz*lookDistance*pitchCos],[0,1,0]);
   }else{
     // Każdy gracz widzi własną postać od dołu ekranu. Druga strona dostaje
     // lustrzany widok areny: kamera obraca się o 180 stopni.
@@ -1586,7 +1612,22 @@ setupMobileControls();
 addEventListener('keydown',e=>{keys[e.code]=true;if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();if(e.code==='KeyQ'&&!e.repeat)superAttack();if((e.code==='KeyF'||e.code==='Space')&&!e.repeat&&ballActive)arenaBallSuperKick();if(e.code==='KeyE'&&!e.repeat)activateHyper();if(e.code==='KeyC'&&!e.repeat)toggleBotPerspective();if(e.code==='KeyR'&&!e.repeat&&running)startGame();if(e.code==='Digit1'&&!e.repeat)buyUpgrade('move');if(e.code==='Digit2'&&!e.repeat)buyUpgrade('fire');if(e.code==='Digit3'&&!e.repeat)buyUpgrade('hp');});
 addEventListener('keyup',e=>keys[e.code]=false);
 canvas.addEventListener('mousemove',e=>{mouse.x=e.clientX;mouse.y=e.clientY;positionCrosshair(e.clientX,e.clientY);});
-canvas.addEventListener('mousedown',e=>{if(e.button===0){mouse.down=true;playerShoot();}else if(e.button===2&&ballActive){e.preventDefault();arenaBallSuperKick();}});addEventListener('mouseup',e=>{if(e.button===0)mouse.down=false;});canvas.addEventListener('contextmenu',e=>e.preventDefault());
+canvas.addEventListener('pointerdown',e=>{beginBotViewLook(e);},{passive:false});
+canvas.addEventListener('pointermove',e=>{moveBotViewLook(e);},{passive:false});
+canvas.addEventListener('pointerup',e=>{endBotViewLook(e);},{passive:false});
+canvas.addEventListener('pointercancel',e=>{endBotViewLook(e);},{passive:false});
+canvas.addEventListener('lostpointercapture',e=>{if(e.pointerId===botViewLook.pointerId)resetBotViewLook(false);});
+canvas.addEventListener('mousedown',e=>{
+  if(e.button===0){mouse.down=true;playerShoot();}
+  else if(e.button===2){
+    e.preventDefault();
+    // W widoku bota prawy przycisk służy wyłącznie do obracania kamery.
+    // W widoku z góry zachowuje szybki superkop w Arena Ball.
+    if(!isBotPerspectiveActive()&&ballActive)arenaBallSuperKick();
+  }
+});
+addEventListener('mouseup',e=>{if(e.button===0)mouse.down=false;if(e.button===2&&botViewLook.desktopRightHeld)resetBotViewLook(false);});
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
 if(ui.cameraModeBtn)ui.cameraModeBtn.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();toggleBotPerspective();});
 if(ui.versionOneBtn)ui.versionOneBtn.addEventListener('click',buyVersionOne);
 if(ui.saveNameBtn)ui.saveNameBtn.addEventListener('click',saveOnlineName);
