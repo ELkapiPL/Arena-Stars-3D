@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-window.__arenaBuild='arena-ball-3v3-v30';
+window.__arenaBuild='arena-ball-aim-guide-v33';
 
 const canvas = document.getElementById('game');
 const earlyMobileHint=((navigator.maxTouchPoints||0)>0&&matchMedia('(pointer: coarse)').matches)||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
@@ -343,7 +343,7 @@ function loadProgress(){
 let profile=loadProgress();
 profile.name=persistNickname(profile.name);
 let profileDirty=false,profileSyncBusy=false,profileChangeSeq=0,lastConfigRevision=0,backgroundSyncBusy=false;
-const CLIENT_VERSION='arena-ball-3v3-v30';
+const CLIENT_VERSION='arena-ball-aim-guide-v33';
 function saveProgress(markDirty=true){try{profile.name=persistNickname(profile.name);localStorage.setItem(SAVE_KEY,JSON.stringify(profile));if(markDirty){profileDirty=true;profileChangeSeq++;}}catch(_){} }
 function getPlayerId(){
   try{let id=localStorage.getItem(PLAYER_ID_KEY);if(!id){id=(crypto.randomUUID?crypto.randomUUID():`gracz-${Date.now()}-${Math.random().toString(16).slice(2)}`);localStorage.setItem(PLAYER_ID_KEY,id);}return id;}
@@ -1008,7 +1008,7 @@ function moveDuelEntity(ent,dx,dz){
 }
 
 // ----------------------------- Arena Ball 3v3 -----------------------------
-const ARENA_BALL_X=27,ARENA_BALL_Z=30,ARENA_BALL_GOAL_HALF=7.2,ARENA_BALL_GOAL_LINE=28.5,ARENA_BALL_RADIUS=.75,ARENA_BALL_SPEED_MULTIPLIER=.44;
+const ARENA_BALL_X=27,ARENA_BALL_Z=30,ARENA_BALL_GOAL_HALF=7.2,ARENA_BALL_GOAL_LINE=28.5,ARENA_BALL_RADIUS=.75,ARENA_BALL_SPEED_MULTIPLIER=.44,ARENA_BALL_NORMAL_KICK_SPEED=14.625,ARENA_BALL_SUPER_KICK_SPEED=18.5;
 // Arena jest większa o 50%. Przeszkody zachowują swoje rozmiary, ale są
 // rozstawione szerzej, dzięki czemu powstają dłuższe i czytelniejsze korytarze.
 const arenaBallWalls=[
@@ -1139,7 +1139,7 @@ async function sendBallFrame(){
 }
 function arenaBallShoot(superKick=false){
   if(!ballActive||!['playing','overtime'].includes(ballStatus)||!player||player.hp<=0||player.respawnIn>0)return;
-  if(player.hasBall||ballVisual.carrierId===playerId){ballKickQueued=true;ballSuperKickQueued=!!superKick;ballVisual.carrierId=null;const a=player.angle,speed=superKick?25:19.5;ballVisual.vx=Math.sin(a)*speed;ballVisual.vz=Math.cos(a)*speed;showMessage(superKick?'SUPER KOP!':'PODANIE / STRZAŁ!');return;}
+  if(player.hasBall||ballVisual.carrierId===playerId){ballKickQueued=true;ballSuperKickQueued=!!superKick;ballVisual.carrierId=null;const a=player.angle,speed=superKick?ARENA_BALL_SUPER_KICK_SPEED:ARENA_BALL_NORMAL_KICK_SPEED;ballVisual.vx=Math.sin(a)*speed;ballVisual.vz=Math.cos(a)*speed;showMessage(superKick?'SUPER KOP — PÓŁ MAPY!':'PODANIE / STRZAŁ!');return;}
   if(player.fire>0||player.reload>0)return;if(player.ammo<=0){startReload();return;}
   player.fire=player.fireCooldown;player.ammo--;ballKickQueued=true;ballSuperKickQueued=false;burst(player.x+Math.sin(player.angle),player.z+Math.cos(player.angle),ballTeam===0?[.25,.85,1]:[1,.28,.48],5,2.7);if(player.ammo<=0)startReload();else updateUI();
 }
@@ -1163,6 +1163,33 @@ function finishBall(data){
   if(ui.gameOverBadge)ui.gameOverBadge.textContent='KONIEC ARENA BALL • 3V3';if(ui.gameOverTitle)ui.gameOverTitle.innerHTML=won?'ZWYCIĘSTWO!':(lost?'PRZEGRANA':'REMIS!');if(ui.endStats)ui.endStats.innerHTML=`<div class="endStat">Wynik<span>${ballScores[0]} : ${ballScores[1]}</span></div><div class="endStat">Drużyna<span>${ballTeam===0?'NIEBIESKA':'CZERWONA'}</span></div><div class="endStat">Tryb<span>ARENA BALL 3V3</span></div><div class="endStat">Nagroda<span>${rewardPoints} ⭐ • ${rewardCoins} 🪙 • ${rewardTrophies} 🏆</span></div>`;ui.gameOverView.querySelector('p').textContent=data.reason||'Mecz Arena Ball został zakończony.';
   ui.duelQueueView.style.display='none';ui.lobbyView.style.display='none';ui.gameOverView.style.display='grid';ui.gameOverView.scrollTop=0;document.body.classList.remove('arena-playing','arena-ball-mode');document.body.classList.add('lobby-mode','result-mode');ui.overlay.style.display='block';
 }
+function simulateArenaBallTrajectory(speed){
+  if(!player)return [];
+  const a=player.angle||0,step=.05,points=[];
+  let x=player.x+Math.sin(a)*1.25,z=player.z+Math.cos(a)*1.25;
+  let vx=Math.sin(a)*speed,vz=Math.cos(a)*speed;
+  for(let i=0;i<110;i++){
+    let nx=x+vx*step,nz=z+vz*step;
+    if(arenaBallHitsWall(nx,z,.64)){vx*=-.72;nx=x+vx*step;}
+    if(arenaBallHitsWall(nx,nz,.64)){vz*=-.72;nz=z+vz*step;}
+    x=nx;z=nz;
+    const drag=.985**(step/.025);vx*=drag;vz*=drag;
+    if(i%3===0)points.push({x,z});
+    if(Math.abs(z)>ARENA_BALL_GOAL_LINE+.7&&Math.abs(x)<=ARENA_BALL_GOAL_HALF-.15)break;
+    if(Math.hypot(vx,vz)<.18)break;
+  }
+  return points;
+}
+function renderArenaBallAimGuide(){
+  if(!ballActive||!player||!['playing','overtime'].includes(ballStatus)||!(player.hasBall||ballVisual.carrierId===playerId))return;
+  const superPath=simulateArenaBallTrajectory(ARENA_BALL_SUPER_KICK_SPEED);
+  const normalPath=simulateArenaBallTrajectory(ARENA_BALL_NORMAL_KICK_SPEED);
+  for(let i=0;i<superPath.length;i+=2){const p=superPath[i],pulse=.72+Math.sin(performance.now()*.006+i*.55)*.16;draw(mesh.sphere,p.x,.12,p.z,.10*pulse,.055,.10*pulse,0,[1,.78,.10],.38);}
+  for(let i=0;i<normalPath.length;i++){const p=normalPath[i],pulse=.84+Math.sin(performance.now()*.007+i*.65)*.12;draw(mesh.sphere,p.x,.15,p.z,.12*pulse,.065,.12*pulse,0,[.16,.88,1],.72);}
+  const normalEnd=normalPath[normalPath.length-1];if(normalEnd){draw(mesh.cyl,normalEnd.x,.075,normalEnd.z,.46,.025,.46,0,[.14,.90,1],.72);draw(mesh.cyl,normalEnd.x,.08,normalEnd.z,.24,.03,.24,0,[1,1,1],.62);}
+  const superEnd=superPath[superPath.length-1];if(superEnd){const pulse=1+Math.sin(performance.now()*.008)*.12;draw(mesh.cyl,superEnd.x,.07,superEnd.z,.62*pulse,.025,.62*pulse,0,[1,.72,.08],.62);draw(mesh.sphere,superEnd.x,.18,superEnd.z,.17,.10,.17,0,[1,.92,.30],.78);}
+}
+
 function renderArenaBallPlayer(p){
   if(!p||p.hidden||Number(p.respawnIn)>0)return;const x=p.renderX??p.x,z=p.renderZ??p.z,a=p.renderAngle??normalizeDuelAngle(p.angle),team=Number(p.team)||0,teamColor=team===0?[.10,.68,1]:[1,.20,.40],inner=team===0?[.28,.86,1]:[1,.40,.58];draw(mesh.cyl,x,.11,z,1.02,.05,1.02,0,teamColor,.82);draw(mesh.sphere,x,.82,z,.72,.82,.72,0,teamColor);draw(mesh.sphere,x,.83,z,.48,.61,.48,0,inner);draw(mesh.cube,x+Math.sin(a)*.75,.82,z+Math.cos(a)*.75,.18,.18,.62,a,[.12,.15,.25]);if(p.hasBall)draw(mesh.sphere,x,.22,z,1.18,.06,1.18,0,[1,.86,.15],.72);healthBar(x,z,p.hp,p.maxHp,2.05,1.25);
 }
@@ -1378,6 +1405,7 @@ function render(){
     healthBar(ox,oz,o.hp,o.maxHp,2.05,1.25);
   }
   if(ballActive){
+    renderArenaBallAimGuide();
     for(const bp of ballPlayers)renderArenaBallPlayer(bp);
     const bx=ballVisual.x??ballVisual.targetX??0,bz=ballVisual.z??ballVisual.targetZ??0,t=performance.now()*.0024;
     // Wyraźny znacznik pod piłką oraz jasna futbolówka z ciemnymi panelami.
