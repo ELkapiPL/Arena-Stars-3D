@@ -2946,6 +2946,7 @@ ARENA_BALL_BULLET_DAMAGE = 22
 ARENA_BALL_KICK_SPEED = 19.5
 ARENA_BALL_SUPER_KICK_SPEED = 25.0
 ARENA_BALL_TICK_RATE = 20.0
+ARENA_BALL_BOT_SPEED_MULTIPLIER = 0.40  # boty są wolniejsze o 60%
 
 # Symetryczna, gęsta mapa. W dogrywce wszystkie przeszkody i krzaki znikają.
 ARENA_BALL_WALLS = (
@@ -3027,12 +3028,15 @@ def create_arena_ball_player(payload: dict[str, Any], player_id: str, team: int,
     name = clean_name(payload.get("name"))
     if is_bot:
         name = f"Bot Arena {bot_number}"
+    player_speed = clean_float(payload.get("speed"), 3.0, 12.0, 6.3)
+    if is_bot:
+        player_speed *= ARENA_BALL_BOT_SPEED_MULTIPLIER
     return {
         "id": player_id, "name": name, "skin": clean_skin(payload.get("skin")),
         "team": int(team), "slot": int(slot), "is_bot": bool(is_bot),
         "x": x, "z": z, "angle": angle, "spawn_x": x, "spawn_z": z, "spawn_angle": angle,
         "hp": max_hp, "max_hp": max_hp,
-        "speed": clean_float(payload.get("speed"), 3.0, 12.0, 6.3),
+        "speed": player_speed,
         "fire_cooldown": clean_float(payload.get("fireCooldown"), 0.08, 0.9, 0.25),
         "last_shot": 0.0, "last_seen": now(), "last_move": now(),
         "vx": 0.0, "vz": 0.0, "revealed_until": 0.0,
