@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-window.__arenaBuild='arena-ball-super-names-v37';
+window.__arenaBuild='arena-ball-super-hyper-slower-v38';
 
 const canvas = document.getElementById('game');
 const earlyMobileHint=((navigator.maxTouchPoints||0)>0&&matchMedia('(pointer: coarse)').matches)||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
@@ -308,7 +308,7 @@ function setupMobileControls(){
   updateMobileOrientation();
 }
 const BASE_HP=150,BASE_SPEED=8.2,BASE_FIRE_COOLDOWN=.19,MAG_SIZE=30,RELOAD_TIME=1.5,UPGRADE_COSTS=[100,200,400,800,1600];
-const SUPER_CHARGE_MULTIPLIER=.4; // ładowanie jest o 60% wolniejsze
+const SUPER_CHARGE_MULTIPLIER=.1333333333; // v38: superatak i hiperdoładowanie ładują się 3 razy wolniej niż w v37
 const HYPER_CHARGE_RATIO=3,HYPER_DURATION=9,HYPER_SPEED_MULT=1.05,HYPER_FIRE_MULT=1.04,HYPER_DAMAGE_MULT=.93;
 const COSMIC_SKIN_COST=1250,VERSION_ONE_COST=150,VERSION_ONE_SPEED=1.03,VERSION_ONE_FIRE=1.02,VERSION_ONE_HP=1.10;
 const SAVE_KEY='arenaStars3D_save_v3';
@@ -360,7 +360,7 @@ function loadProgress(){
 let profile=loadProgress();
 profile.name=persistNickname(profile.name);
 let profileDirty=false,profileSyncBusy=false,profileChangeSeq=0,lastConfigRevision=0,backgroundSyncBusy=false;
-const CLIENT_VERSION='arena-ball-super-names-v37';
+const CLIENT_VERSION='arena-ball-super-hyper-slower-v38';
 function saveProgress(markDirty=true){try{profile.name=persistNickname(profile.name);localStorage.setItem(SAVE_KEY,JSON.stringify(profile));if(markDirty){profileDirty=true;profileChangeSeq++;}}catch(_){} }
 function getPlayerId(){
   try{let id=localStorage.getItem(PLAYER_ID_KEY);if(!id){id=(crypto.randomUUID?crypto.randomUUID():`gracz-${Date.now()}-${Math.random().toString(16).slice(2)}`);localStorage.setItem(PLAYER_ID_KEY,id);}return id;}

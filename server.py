@@ -229,7 +229,7 @@ def persistent_storage_public_status() -> dict[str, Any]:
         "schemaVersion": DB_SCHEMA_VERSION if DB_READY else 0,
         "emailResetConfigured": bool(RESEND_API_KEY and PASSWORD_RESET_FROM),
         "passwordResetTtlMinutes": PASSWORD_RESET_TTL // 60,
-        "build": "arena-ball-super-names-v37",
+        "build": "arena-ball-super-hyper-slower-v38",
     }
     if DB_READY:
         payload["connectedAt"] = DB_CONNECTED_AT
@@ -595,7 +595,7 @@ def db_schema_status() -> dict[str, Any]:
         "connectedAt": DB_CONNECTED_AT,
         "emailResetConfigured": bool(RESEND_API_KEY and PASSWORD_RESET_FROM),
         "passwordResetTtlMinutes": PASSWORD_RESET_TTL // 60,
-        "build": "arena-ball-super-names-v37",
+        "build": "arena-ball-super-hyper-slower-v38",
     }
 
 
@@ -2949,7 +2949,7 @@ ARENA_BALL_KICK_SPEED = 14.625
 ARENA_BALL_SUPER_KICK_SPEED = 23.125
 ARENA_BALL_TICK_RATE = 20.0
 ARENA_BALL_SPEED_MULTIPLIER = 0.44  # o 10% szybciej niż v29; 44% zwykłej prędkości
-ARENA_BALL_SUPER_CHARGE_PER_DAMAGE = 0.66
+ARENA_BALL_SUPER_CHARGE_PER_DAMAGE = 0.22  # v38: ładowanie 3 razy wolniejsze niż w v37
 ARENA_BALL_HYPER_CHARGE_RATIO = 3.0
 ARENA_BALL_HYPER_DURATION = 9.0
 ARENA_BALL_HYPER_SPEED_MULTIPLIER = 1.05
@@ -3986,7 +3986,7 @@ def duel_tick_loop() -> None:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "ArenaStarsSQL/6.1-arena-ball-super-names-v37"
+    server_version = "ArenaStarsSQL/6.1-arena-ball-super-hyper-slower-v38"
     protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt: str, *args: Any) -> None:
