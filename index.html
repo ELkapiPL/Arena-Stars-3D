@@ -1380,6 +1380,53 @@
     }
 
 
+    /* ===== V31: mobilne lobby niżej, bez obcinania górnej krawędzi ===== */
+    @media (pointer:coarse) and (orientation:landscape){
+      body.mobile-device.lobby-mode .lobbyLogo{
+        top:max(14px,calc(env(safe-area-inset-top) + 12px))!important;
+        font-size:clamp(22px,5.8vh,34px)!important;
+        line-height:.84!important;
+      }
+      body.mobile-device.lobby-mode #lobbyTrophies{
+        top:max(14px,calc(env(safe-area-inset-top) + 12px))!important;
+        left:max(8px,env(safe-area-inset-left))!important;
+        padding:6px 9px!important;
+      }
+      body.mobile-device.lobby-mode #accountBox{
+        top:max(14px,calc(env(safe-area-inset-top) + 12px))!important;
+        right:max(8px,env(safe-area-inset-right))!important;
+      }
+      body.mobile-device.lobby-mode #accountUser{
+        top:max(54px,calc(env(safe-area-inset-top) + 50px))!important;
+        right:max(8px,env(safe-area-inset-right))!important;
+      }
+      body.mobile-device.lobby-mode #skinDock,
+      body.mobile-device.lobby-mode #rankingDock{
+        top:max(74px,calc(env(safe-area-inset-top) + 70px))!important;
+      }
+      body.mobile-device.lobby-mode #heroStage{
+        top:46%!important;
+      }
+    }
+    @media (pointer:coarse) and (orientation:landscape) and (max-height:760px){
+      body.mobile-device.lobby-mode .lobbyLogo{
+        top:max(16px,calc(env(safe-area-inset-top) + 14px))!important;
+        font-size:clamp(21px,5.3vh,30px)!important;
+      }
+      body.mobile-device.lobby-mode #lobbyTrophies,
+      body.mobile-device.lobby-mode #accountBox{
+        top:max(16px,calc(env(safe-area-inset-top) + 14px))!important;
+      }
+      body.mobile-device.lobby-mode #accountUser{
+        top:max(57px,calc(env(safe-area-inset-top) + 53px))!important;
+      }
+      body.mobile-device.lobby-mode #skinDock,
+      body.mobile-device.lobby-mode #rankingDock{
+        top:max(78px,calc(env(safe-area-inset-top) + 74px))!important;
+      }
+    }
+
+
     /* ===== ARENA BALL 3V3 ===== */
     #arenaBallHud{
       display:none;
@@ -2037,6 +2084,6 @@
 </script>
 
 
-<script src="game.js?v=arena-ball-3v3-v30"></script>
+<script src="game.js?v=arena-ball-3v3-v31"></script>
 </body>
 </html>
