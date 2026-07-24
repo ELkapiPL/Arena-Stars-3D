@@ -229,7 +229,7 @@ def persistent_storage_public_status() -> dict[str, Any]:
         "schemaVersion": DB_SCHEMA_VERSION if DB_READY else 0,
         "emailResetConfigured": bool(RESEND_API_KEY and PASSWORD_RESET_FROM),
         "passwordResetTtlMinutes": PASSWORD_RESET_TTL // 60,
-        "build": "arena-ball-super-hyper-kick-v36",
+        "build": "arena-ball-super-names-v37",
     }
     if DB_READY:
         payload["connectedAt"] = DB_CONNECTED_AT
@@ -595,7 +595,7 @@ def db_schema_status() -> dict[str, Any]:
         "connectedAt": DB_CONNECTED_AT,
         "emailResetConfigured": bool(RESEND_API_KEY and PASSWORD_RESET_FROM),
         "passwordResetTtlMinutes": PASSWORD_RESET_TTL // 60,
-        "build": "arena-ball-super-hyper-kick-v36",
+        "build": "arena-ball-super-names-v37",
     }
 
 
@@ -2710,7 +2710,7 @@ def create_duel_bot(payload: dict[str, Any], bot_id: str, x: float, z: float, an
     # Bot jest dokładną kopią statystyk gracza: ten sam HP, ruch, szybkostrzelność i skórka.
     bot = create_duel_player(payload, bot_id, x, z, angle)
     bot.update({
-        "name": "Bot Kopia",
+        "name": "Bot 1",
         "is_bot": True,
         "strafe_dir": random.choice((-1.0, 1.0)),
         "next_turn": now() + 0.8,
@@ -2943,6 +2943,8 @@ ARENA_BALL_RADIUS = 0.75
 ARENA_BALL_BALL_RADIUS = 0.58
 ARENA_BALL_BULLET_SPEED = 18.0
 ARENA_BALL_BULLET_DAMAGE = 22
+ARENA_BALL_SUPER_BULLET_DAMAGE = 28
+ARENA_BALL_SUPER_BULLET_SPEED = 16.0
 ARENA_BALL_KICK_SPEED = 14.625
 ARENA_BALL_SUPER_KICK_SPEED = 23.125
 ARENA_BALL_TICK_RATE = 20.0
@@ -3036,7 +3038,7 @@ def create_arena_ball_player(payload: dict[str, Any], player_id: str, team: int,
     max_hp = int(round(base_hp * float(game_config.get("duelHpMultiplier", DUEL_HP_MULTIPLIER))))
     name = clean_name(payload.get("name"))
     if is_bot:
-        name = f"Bot Arena {bot_number}"
+        name = f"Bot {bot_number}"
     player_speed = clean_float(payload.get("speed"), 3.0, 12.0, 6.3) * ARENA_BALL_SPEED_MULTIPLIER
     return {
         "id": player_id, "name": name, "skin": clean_skin(payload.get("skin")),
@@ -3076,6 +3078,13 @@ def arena_ball_reset_positions(match: dict[str, Any]) -> None:
     match["bullets"] = []
 
 
+
+def renumber_arena_ball_bots(match: dict[str, Any]) -> None:
+    bots = [player for player in match.get("players", {}).values() if player.get("is_bot")]
+    bots.sort(key=lambda player: (int(player.get("team", 0)), int(player.get("slot", 0)), str(player.get("id", ""))))
+    for number, bot in enumerate(bots, 1):
+        bot["name"] = f"Bot {number}"
+
 def create_arena_ball_match(entries: list[tuple[str, dict[str, Any], bool]]) -> dict[str, Any]:
     global arena_ball_counter
     arena_ball_counter += 1
@@ -3083,11 +3092,14 @@ def create_arena_ball_match(entries: list[tuple[str, dict[str, Any], bool]]) -> 
     match_id = f"ball-{int(now() * 1000)}-{arena_ball_counter}"
     players: dict[str, dict[str, Any]] = {}
     team_slots = {0: 0, 1: 0}
+    bot_number = 0
     for index, (pid, payload, is_bot) in enumerate(entries[:6]):
         team = 0 if index < 3 else 1
         slot = team_slots[team]
         team_slots[team] += 1
-        players[pid] = create_arena_ball_player(payload, pid, team, slot, is_bot=is_bot, bot_number=index + 1)
+        if is_bot:
+            bot_number += 1
+        players[pid] = create_arena_ball_player(payload, pid, team, slot, is_bot=is_bot, bot_number=bot_number or 1)
     current = now()
     match = {
         "id": match_id, "status": "countdown", "created_at": current,
@@ -3098,6 +3110,7 @@ def create_arena_ball_match(entries: list[tuple[str, dict[str, Any], bool]]) -> 
         "reason": "", "finished_at": 0.0, "resume_at": 0.0,
         "state_seq": 0, "goal_event_seq": 0, "last_goal_team": None,
     }
+    renumber_arena_ball_bots(match)
     arena_ball_matches[match_id] = match
     for pid, player in players.items():
         if not player.get("is_bot"):
@@ -3183,6 +3196,31 @@ def spawn_arena_ball_bullet(match: dict[str, Any], owner: dict[str, Any], angle:
         "vx": math.sin(angle) * ARENA_BALL_BULLET_SPEED, "vz": math.cos(angle) * ARENA_BALL_BULLET_SPEED,
         "life": 2.4, "damage": ARENA_BALL_BULLET_DAMAGE, "radius": DUEL_BULLET_RADIUS,
     })
+    return True
+
+
+
+
+def spawn_arena_ball_super(match: dict[str, Any], owner: dict[str, Any]) -> bool:
+    current = now()
+    if owner.get("hp", 0) <= 0 or current < float(owner.get("respawn_at", 0.0)):
+        return False
+    if float(owner.get("super", 0.0)) < 100.0:
+        return False
+    owner["super"] = 0.0
+    owner["revealed_until"] = current + 1.0
+    ox, oz = float(owner["x"]), float(owner["z"])
+    for index in range(24):
+        angle = index / 24.0 * math.pi * 2.0
+        match["bullet_seq"] += 1
+        match["bullets"].append({
+            "id": f'{match["id"]}-s{match["bullet_seq"]}', "owner_id": owner["id"], "team": owner["team"],
+            "x": ox + math.sin(angle) * 1.05, "z": oz + math.cos(angle) * 1.05,
+            "vx": math.sin(angle) * ARENA_BALL_SUPER_BULLET_SPEED,
+            "vz": math.cos(angle) * ARENA_BALL_SUPER_BULLET_SPEED,
+            "life": 2.7, "damage": ARENA_BALL_SUPER_BULLET_DAMAGE, "radius": DUEL_BULLET_RADIUS,
+            "super_shot": True,
+        })
     return True
 
 
@@ -3697,7 +3735,7 @@ def advance_arena_ball(match: dict[str, Any]) -> None:
     for player in match["players"].values():
         if not player.get("is_bot") and current - float(player.get("last_seen", current)) > ARENA_BALL_PLAYER_TIMEOUT:
             player["is_bot"] = True
-            player["name"] = f'{player["name"]} • BOT'
+            renumber_arena_ball_bots(match)
         if player.get("hp", 0) <= 0 and current >= float(player.get("respawn_at", current + 1)):
             arena_ball_respawn_player(player)
 
@@ -3830,6 +3868,7 @@ def join_arena_ball(payload: dict[str, Any]) -> dict[str, Any]:
             player = match["players"].get(player_id)
             if player:
                 player["last_seen"] = now(); player["is_bot"] = False; player["name"] = clean_name(payload.get("name"))
+                renumber_arena_ball_bots(match)
                 return arena_ball_payload(match, player_id)
 
     current = now()
@@ -3892,6 +3931,8 @@ def arena_ball_action(payload: dict[str, Any]) -> dict[str, Any] | None:
         if match.get("status") in {"playing", "overtime"} and player.get("hp", 0) > 0 and current >= float(player.get("respawn_at", 0.0)):
             if payload.get("activateHyper"):
                 arena_ball_activate_hyper(player, current)
+            if payload.get("superAttack"):
+                spawn_arena_ball_super(match, player)
             requested_x = clean_float(payload.get("x"), -ARENA_BALL_ARENA_X, ARENA_BALL_ARENA_X, player["x"])
             requested_z = clean_float(payload.get("z"), -ARENA_BALL_ARENA_Z, ARENA_BALL_ARENA_Z, player["z"])
             elapsed = max(.02, min(.35, current - float(player.get("last_move", current))))
@@ -3922,7 +3963,7 @@ def leave_arena_ball(payload: dict[str, Any]) -> dict[str, Any]:
         player = match["players"][player_id]
         player["is_bot"] = True
         player["last_seen"] = now() - ARENA_BALL_PLAYER_TIMEOUT - 1
-        player["name"] = f'{clean_name(player.get("name"))} • BOT'
+        renumber_arena_ball_bots(match)
         arena_ball_drop_ball(match, player, 3.0)
     arena_ball_player_match.pop(player_id, None)
     return {"ok": True}
@@ -3945,7 +3986,7 @@ def duel_tick_loop() -> None:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "ArenaStarsSQL/6.0-arena-ball-super-hyper-kick-v36"
+    server_version = "ArenaStarsSQL/6.1-arena-ball-super-names-v37"
     protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt: str, *args: Any) -> None:

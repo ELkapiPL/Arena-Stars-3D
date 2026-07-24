@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-window.__arenaBuild='arena-ball-super-hyper-kick-v36';
+window.__arenaBuild='arena-ball-super-names-v37';
 
 const canvas = document.getElementById('game');
 const earlyMobileHint=((navigator.maxTouchPoints||0)>0&&matchMedia('(pointer: coarse)').matches)||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
@@ -18,7 +18,7 @@ const ui = {
   score:$('score'), wave:$('wave'), kills:$('kills'), coins:$('coins'), trophies:$('trophies'), healthText:$('healthText'), healthFill:$('healthFill'), ammoText:$('ammoText'), ammoFill:$('ammoFill'),
   superText:$('superText'), superFill:$('superFill'), hyperText:$('hyperText'), hyperFill:$('hyperFill'), finalScore:$('finalScore'), finalKills:$('finalKills'), finalCoins:$('finalCoins'), finalTrophies:$('finalTrophies'),
   savedTrophies:$('savedTrophies'), savedPoints:$('savedPoints'), savedCoins:$('savedCoins'), skinNotice:$('skinNotice'), versionOneBtn:$('versionOneBtn'), versionNotice:$('versionNotice'), rankingBody:$('rankingBody'), rankingPosition:$('rankingPosition'), rankingLive:$('rankingLive'), rankingTotal:$('rankingTotal'), nicknameInput:$('nicknameInput'), saveNameBtn:$('saveNameBtn'), onlineStatus:$('onlineStatus'), onlineHudCount:$('onlineHudCount'), modeBtn:$('modeBtn'), modeMenu:$('modeMenu'), soloModeOption:$('soloModeOption'), duelModeOption:$('duelModeOption'), ballModeOption:$('ballModeOption'), duelQueueView:$('duelQueueView'), duelQueueText:$('duelQueueText'), duelCancelBtn:$('duelCancelBtn'), duelOpponentName:$('duelOpponentName'), duelOpponentHp:$('duelOpponentHp'), arenaBallScore:$('arenaBallScore'), arenaBallClock:$('arenaBallClock'), hudModeText:$('hudModeText'), gameOverTitle:$('gameOverTitle'), gameOverBadge:$('gameOverBadge'), endStats:$('endStats'),
-  crosshair:$('crosshair'), centerMsg:$('centerMsg'), mobileControls:$('mobileControls'), mobileMoveStick:$('mobileMoveStick'), mobileMoveKnob:$('mobileMoveKnob'), mobileAttackStick:$('mobileAttackStick'), mobileAttackKnob:$('mobileAttackKnob'), mobileSuperBtn:$('mobileSuperBtn'), mobileHyperBtn:$('mobileHyperBtn'), rotatePhoneOverlay:$('rotatePhoneOverlay'), rotateLockBtn:$('rotateLockBtn'), mobileFullscreenGate:$('mobileFullscreenGate'), mobileFullscreenStartBtn:$('mobileFullscreenStartBtn'), mobileFullscreenTitle:$('mobileFullscreenTitle'), mobileFullscreenText:$('mobileFullscreenText'), lobbyFullscreenBtn:$('lobbyFullscreenBtn'), passOpenBtn:$('passOpenBtn'), passOverlay:$('passOverlay'), passCloseBtn:$('passCloseBtn'), passGrid:$('passGrid'), passPointsText:$('passPointsText'), passTierBadge:$('passTierBadge'), passProgressFill:$('passProgressFill'), passNextText:$('passNextText'), passBuyVipBtn:$('passBuyVipBtn'), passBuyVipPlusBtn:$('passBuyVipPlusBtn'), passClaimAllBtn:$('passClaimAllBtn'), passMessage:$('passMessage'), storeOpenBtn:$('storeOpenBtn'), storeOverlay:$('storeOverlay'), storeCloseBtn:$('storeCloseBtn'), coinShopMessage:$('coinShopMessage'),
+  crosshair:$('crosshair'), centerMsg:$('centerMsg'), mobileControls:$('mobileControls'), mobileMoveStick:$('mobileMoveStick'), mobileMoveKnob:$('mobileMoveKnob'), mobileAttackStick:$('mobileAttackStick'), mobileAttackKnob:$('mobileAttackKnob'), mobileSuperBtn:$('mobileSuperBtn'), mobileSuperKickBtn:$('mobileSuperKickBtn'), mobileHyperBtn:$('mobileHyperBtn'), rotatePhoneOverlay:$('rotatePhoneOverlay'), rotateLockBtn:$('rotateLockBtn'), mobileFullscreenGate:$('mobileFullscreenGate'), mobileFullscreenStartBtn:$('mobileFullscreenStartBtn'), mobileFullscreenTitle:$('mobileFullscreenTitle'), mobileFullscreenText:$('mobileFullscreenText'), lobbyFullscreenBtn:$('lobbyFullscreenBtn'), passOpenBtn:$('passOpenBtn'), passOverlay:$('passOverlay'), passCloseBtn:$('passCloseBtn'), passGrid:$('passGrid'), passPointsText:$('passPointsText'), passTierBadge:$('passTierBadge'), passProgressFill:$('passProgressFill'), passNextText:$('passNextText'), passBuyVipBtn:$('passBuyVipBtn'), passBuyVipPlusBtn:$('passBuyVipPlusBtn'), passClaimAllBtn:$('passClaimAllBtn'), passMessage:$('passMessage'), storeOpenBtn:$('storeOpenBtn'), storeOverlay:$('storeOverlay'), storeCloseBtn:$('storeCloseBtn'), coinShopMessage:$('coinShopMessage'),
   upgradeButtons:[...document.querySelectorAll('[data-upgrade]')],
   persistentLevelEls:[...document.querySelectorAll('[data-persistent-level]')],
   skinCards:[...document.querySelectorAll('[data-skin]')],
@@ -293,6 +293,7 @@ function setupMobileControls(){
     button?.addEventListener('click',run);
   };
   mobilePowerPress(ui.mobileSuperBtn,superAttack,25);
+  mobilePowerPress(ui.mobileSuperKickBtn,arenaBallSuperKick,25);
   mobilePowerPress(ui.mobileHyperBtn,activateHyper,[25,25,25]);
   ui.rotateLockBtn?.addEventListener('click',()=>requestLandscapeOrientation(true));
   ui.lobbyFullscreenBtn?.addEventListener('click',async e=>{e.preventDefault();await requestLandscapeOrientation(true);hideMobileFullscreenGate();});
@@ -359,7 +360,7 @@ function loadProgress(){
 let profile=loadProgress();
 profile.name=persistNickname(profile.name);
 let profileDirty=false,profileSyncBusy=false,profileChangeSeq=0,lastConfigRevision=0,backgroundSyncBusy=false;
-const CLIENT_VERSION='arena-ball-super-hyper-kick-v36';
+const CLIENT_VERSION='arena-ball-super-names-v37';
 function saveProgress(markDirty=true){try{profile.name=persistNickname(profile.name);localStorage.setItem(SAVE_KEY,JSON.stringify(profile));if(markDirty){profileDirty=true;profileChangeSeq++;}}catch(_){} }
 function getPlayerId(){
   try{let id=localStorage.getItem(PLAYER_ID_KEY);if(!id){id=(crypto.randomUUID?crypto.randomUUID():`gracz-${Date.now()}-${Math.random().toString(16).slice(2)}`);localStorage.setItem(PLAYER_ID_KEY,id);}return id;}
@@ -952,7 +953,7 @@ let upgrades={...profile.upgrades};
 let running=false,runCommitted=false,last=performance.now(),score=0,wave=1,kills=0,walletCoins=profile.coins,runCoins=0,trophies=0,survivalTime=0,waveClock=0,spawnClock=0,shake=0,messageClock=0;
 let player,enemies=[],bullets=[],particles=[],stars=[],pickups=[],coins=[];
 let selectedMode=profile.mode||'solo',duelSearching=false,duelActive=false,duelEnded=false,duelMatchId='',duelOpponent=null,duelServerBullets=[],duelPredictedBullets=[],duelShotQueue=[],duelVisualHitSeqs=new Set(),duelLocalShotSeq=0,duelNetworkBusy=false,duelNetworkTimer=0,duelJoinTimer=0,duelNetworkFailures=0,duelMatchStatus='',duelStartIn=0,duelStartDeadline=0,duelLastStateAt=performance.now(),duelRtt=0,duelFrameSeq=0,duelLocalBotMode=false,duelBotBullets=[],duelBotTurnTimer=0,duelBotShotTimer=.8,duelBotStrafe=1,duelBotStuck=0,duelBotReveal=0,duelRound=1,duelYourWins=0,duelOpponentWins=0,duelRoundDraws=0,duelRoundEventSeq=0,duelRoundResolving=false,duelMirrorView=false,duelShotFlushBusy=false,duelShotFlushTimer=0;
-let ballSearching=false,ballActive=false,ballEnded=false,ballMatchId='',ballPlayers=[],ballBullets=[],ballVisual={x:0,z:0,targetX:0,targetZ:0,vx:0,vz:0,carrierId:null},ballNetworkBusy=false,ballNetworkTimer=0,ballJoinTimer=0,ballNetworkFailures=0,ballStatus='',ballTeam=0,ballMirrorView=false,ballActionSeq=0,ballKickQueued=false,ballSuperKickQueued=false,ballHyperQueued=false,ballScores=[0,0],ballTimeRemaining=120,ballOvertime=false,ballWallsActive=true,ballGoalEventSeq=0,ballLastStateAt=performance.now();
+let ballSearching=false,ballActive=false,ballEnded=false,ballMatchId='',ballPlayers=[],ballBullets=[],ballVisual={x:0,z:0,targetX:0,targetZ:0,vx:0,vz:0,carrierId:null},ballNetworkBusy=false,ballNetworkTimer=0,ballJoinTimer=0,ballNetworkFailures=0,ballStatus='',ballTeam=0,ballMirrorView=false,ballActionSeq=0,ballKickQueued=false,ballSuperKickQueued=false,ballSuperAttackQueued=false,ballHyperQueued=false,ballScores=[0,0],ballTimeRemaining=120,ballOvertime=false,ballWallsActive=true,ballGoalEventSeq=0,ballLastStateAt=performance.now();
 queueMicrotask(()=>{try{scheduleSqlSync(false);}catch(error){console.error('SQL sync startup error',error);}});
 window.__arenaDebug=()=>({duelActive,duelLocalBotMode,duelMatchStatus,duelRound,duelYourWins,duelOpponentWins,duelRoundDraws,player:player?{x:player.x,z:player.z,hp:player.hp}:null,opponent:duelOpponent?{x:duelOpponent.renderX??duelOpponent.x,z:duelOpponent.renderZ??duelOpponent.z,hp:duelOpponent.hp,hidden:duelOpponent.hidden,isBot:duelOpponent.isBot}:null,playerBullets:duelPredictedBullets.length,botBullets:duelBotBullets.length,botAmmo:duelOpponent?.ammo,botReload:duelOpponent?.reload,botSuper:duelOpponent?.super,botHyper:duelOpponent?.hyper,botHyperActive:duelOpponent?.hyperActive,mirrorView:duelMirrorView,shotQueue:duelShotQueue.length,shotFlushBusy:duelShotFlushBusy});
 
@@ -1075,7 +1076,7 @@ function setBallHud(){
 function clearBallTimers(){clearTimeout(ballJoinTimer);ballJoinTimer=0;clearInterval(ballNetworkTimer);ballNetworkTimer=0;ballNetworkBusy=false;}
 function stopBallSession(notify=true){
   const oldMatch=ballMatchId;clearBallTimers();
-  ballSearching=false;ballActive=false;ballEnded=false;ballMatchId='';ballPlayers=[];ballBullets=[];ballVisual={x:0,z:0,targetX:0,targetZ:0,vx:0,vz:0,carrierId:null};ballNetworkFailures=0;ballStatus='';ballKickQueued=false;ballSuperKickQueued=false;ballHyperQueued=false;ballScores=[0,0];ballTimeRemaining=120;ballOvertime=false;ballWallsActive=true;ballGoalEventSeq=0;
+  ballSearching=false;ballActive=false;ballEnded=false;ballMatchId='';ballPlayers=[];ballBullets=[];ballVisual={x:0,z:0,targetX:0,targetZ:0,vx:0,vz:0,carrierId:null};ballNetworkFailures=0;ballStatus='';ballKickQueued=false;ballSuperKickQueued=false;ballSuperAttackQueued=false;ballHyperQueued=false;ballScores=[0,0];ballTimeRemaining=120;ballOvertime=false;ballWallsActive=true;ballGoalEventSeq=0;
   document.body.classList.remove('arena-ball-mode');
   if(location.hash==='#arena-ball')history.replaceState(null,'',location.pathname+location.search);
   if(notify&&(oldMatch||playerId)){
@@ -1104,7 +1105,7 @@ async function requestBallJoin(){
 function startBallQueue(){
   if(ballSearching||ballActive)return;chooseBallMode();
   if(duelSearching||duelActive)stopDuelSession(true);if(running&&!duelActive)commitRun();
-  reset();running=false;ballSearching=true;ballEnded=false;ballMatchId='';ballPlayers=[];ballBullets=[];ballNetworkFailures=0;ballActionSeq=0;ballKickQueued=false;ballSuperKickQueued=false;ballHyperQueued=false;ballScores=[0,0];ballTimeRemaining=120;ballOvertime=false;ballWallsActive=true;ballGoalEventSeq=0;
+  reset();running=false;ballSearching=true;ballEnded=false;ballMatchId='';ballPlayers=[];ballBullets=[];ballNetworkFailures=0;ballActionSeq=0;ballKickQueued=false;ballSuperKickQueued=false;ballSuperAttackQueued=false;ballHyperQueued=false;ballScores=[0,0];ballTimeRemaining=120;ballOvertime=false;ballWallsActive=true;ballGoalEventSeq=0;
   document.body.classList.add('lobby-mode');document.body.classList.remove('duel-mode','arena-ball-mode');
   ui.lobbyView.style.display='none';ui.gameOverView.style.display='none';ui.duelQueueView.style.display='grid';ui.overlay.style.display='block';
   ballQueueCard('ball');setDuelQueueText('Łączenie z kolejką Arena Ball 3v3…');requestBallJoin();
@@ -1146,15 +1147,29 @@ function processBallState(data,initial=false){
 }
 async function sendBallFrame(){
   if(!ballActive||!ballMatchId||!player||ballNetworkBusy)return;
-  ballNetworkBusy=true;const seq=++ballActionSeq,kick=ballKickQueued,superKick=ballSuperKickQueued,activateHyper=ballHyperQueued;
+  ballNetworkBusy=true;const seq=++ballActionSeq,kick=ballKickQueued,superKick=ballSuperKickQueued,superAttack=ballSuperAttackQueued,activateHyper=ballHyperQueued;
   try{
-    const data=await api('/api/arena-ball/action',{method:'POST',timeoutMs:2600,body:JSON.stringify({matchId:ballMatchId,playerId,x:player.x,z:player.z,angle:normalizeDuelAngle(player.angle),kick,superKick,activateHyper,seq})});
-    ballNetworkFailures=0;if(Number(data.ackActionSeq)>=seq){if(kick)ballKickQueued=false;if(superKick)ballSuperKickQueued=false;if(activateHyper)ballHyperQueued=false;}processBallState(data,false);
+    const data=await api('/api/arena-ball/action',{method:'POST',timeoutMs:2600,body:JSON.stringify({matchId:ballMatchId,playerId,x:player.x,z:player.z,angle:normalizeDuelAngle(player.angle),kick,superKick,superAttack,activateHyper,seq})});
+    ballNetworkFailures=0;if(Number(data.ackActionSeq)>=seq){if(kick)ballKickQueued=false;if(superKick)ballSuperKickQueued=false;if(superAttack)ballSuperAttackQueued=false;if(activateHyper)ballHyperQueued=false;}processBallState(data,false);
   }catch(_){ballNetworkFailures++;if(ballNetworkFailures===3)showMessage('PONOWNE ŁĄCZENIE…');if(ballNetworkFailures>18&&!ballEnded)finishBall({winnerTeam:null,reason:'Utracono połączenie z serwerem Arena Ball.'});}
   finally{ballNetworkBusy=false;}
 }
+function arenaBallUseProjectileSuper(){
+  if(!ballActive||!['playing','overtime'].includes(ballStatus)||!player||player.hp<=0||player.respawnIn>0)return false;
+  if((player.super||0)<100){showMessage(`SUPERATAK: ${Math.floor(player.super||0)}%`);return false;}
+  player.super=0;ballSuperAttackQueued=true;
+  showMessage('SUPERATAK!');
+  burst(player.x,player.z,[1,.28,.86],34,9);shake=.35;updateUI();
+  return true;
+}
+function arenaBallSuperKick(){
+  if(!ballActive||!player)return false;
+  const hasBall=player.hasBall||ballVisual.carrierId===playerId;
+  if(!hasBall){showMessage((player.super||0)>=100?'SUPER KOP GOTOWY — PRZEJMIJ PIŁKĘ':`SUPER KOP: ${Math.floor(player.super||0)}%`);return false;}
+  return arenaBallShoot(true)!==false;
+}
 function arenaBallShoot(superKick=false){
-  if(!ballActive||!['playing','overtime'].includes(ballStatus)||!player||player.hp<=0||player.respawnIn>0)return;
+  if(!ballActive||!['playing','overtime'].includes(ballStatus)||!player||player.hp<=0||player.respawnIn>0)return false;
   const hasBall=player.hasBall||ballVisual.carrierId===playerId;
   if(hasBall){
     if(superKick&&(player.super||0)<100){showMessage(`SUPER KOP: ${Math.floor(player.super||0)}%`);return;}
@@ -1163,9 +1178,9 @@ function arenaBallShoot(superKick=false){
     ballVisual.vx=Math.sin(a)*speed;ballVisual.vz=Math.cos(a)*speed;
     if(superKick){player.super=0;showMessage('SUPER KOP!');burst(player.x+Math.sin(a),player.z+Math.cos(a),[1,.78,.12],18,7);}
     else showMessage('PODANIE / STRZAŁ!');
-    updateUI();return;
+    updateUI();return true;
   }
-  if(superKick){showMessage((player.super||0)>=100?'SUPER KOP GOTOWY — PRZEJMIJ PIŁKĘ':`SUPERATAK: ${Math.floor(player.super||0)}%`);return;}
+  if(superKick){showMessage((player.super||0)>=100?'SUPER KOP GOTOWY — PRZEJMIJ PIŁKĘ':`SUPER KOP: ${Math.floor(player.super||0)}%`);return false;}
   if(player.fire>0||player.reload>0)return;if(player.ammo<=0){startReload();return;}
   const hyper=(player.hyperActive||0)>0;
   player.fire=player.fireCooldown/(hyper?HYPER_FIRE_MULT:1);player.ammo--;ballKickQueued=true;ballSuperKickQueued=false;
@@ -1274,6 +1289,7 @@ function updateUI(){
   ui.hyperFill.style.width=hyperActive?`${player.hyperActive/HYPER_DURATION*100}%`:`${Math.min(100,hyperValue)}%`;
   ui.hyperFill.classList.toggle('active',hyperActive);
   if(ui.mobileSuperBtn){const superValue=Math.max(0,Math.min(100,player?.super||0));ui.mobileSuperBtn.style.setProperty('--charge',`${superValue*3.6}deg`);ui.mobileSuperBtn.classList.toggle('ready',superValue>=100);ui.mobileSuperBtn.setAttribute('aria-label',superValue>=100?'Superatak gotowy':'Superatak '+Math.floor(superValue)+' procent');}
+  if(ui.mobileSuperKickBtn){const superValue=Math.max(0,Math.min(100,player?.super||0)),hasBall=ballActive&&(player?.hasBall||ballVisual.carrierId===playerId),available=ballActive&&hasBall&&superValue>=100;ui.mobileSuperKickBtn.classList.toggle('available',available);ui.mobileSuperKickBtn.classList.toggle('ready',available);ui.mobileSuperKickBtn.style.setProperty('--charge',`${superValue*3.6}deg`);ui.mobileSuperKickBtn.setAttribute('aria-label',available?'Superkopnięcie gotowe':'Superkopnięcie niedostępne');}
   if(ui.mobileHyperBtn){const hyperCharge=Math.max(0,Math.min(100,player?.hyper||0));ui.mobileHyperBtn.style.setProperty('--charge',`${hyperCharge*3.6}deg`);ui.mobileHyperBtn.classList.toggle('ready',hyperCharge>=100&&!hyperActive);ui.mobileHyperBtn.classList.toggle('active',hyperActive);ui.mobileHyperBtn.setAttribute('aria-label',hyperActive?'Hiperdoładowanie aktywne':(hyperCharge>=100?'Hiperdoładowanie gotowe':'Hiperdoładowanie '+Math.floor(hyperCharge)+' procent'));}
   for(const button of ui.upgradeButtons){
     const type=button.dataset.upgrade,level=upgrades[type]||0,cost=shopCost(UPGRADE_COSTS[level]);
@@ -1330,7 +1346,7 @@ function startReload(){if(!running||!player||player.reload>0||player.ammo>=MAG_S
 function playerShoot(){if(ballActive){arenaBallShoot(false);return;}if(duelActive){duelPlayerShoot();return;}if(!running||player.fire>0||player.reload>0)return;if(player.ammo<=0){startReload();return;}const hyper=(player.hyperActive||0)>0;player.fire=player.fireCooldown/(hyper?HYPER_FIRE_MULT:1);player.ammo--;const cosmic=profile.skin==='cosmic',shotColor=hyper?[.35,1,.92]:(cosmic?[.78,.38,1]:[.24,.85,1]),flashColor=hyper?[1,.95,.35]:(cosmic?[.35,1,1]:[.35,.9,1]);shoot('player',player.x+Math.sin(player.angle)*1.05,player.z+Math.cos(player.angle)*1.05,player.angle,18,22,shotColor,.21,.025);burst(player.x+Math.sin(player.angle),player.z+Math.cos(player.angle),flashColor,4,2.5);if(player.ammo<=0)startReload();else updateUI();}
 function addCharge(baseAmount){if(!player)return;const amount=Math.max(0,Number(baseAmount)||0)*SUPER_CHARGE_MULTIPLIER;player.super=Math.min(100,Math.max(0,Number(player.super)||0)+amount);if((player.hyperActive||0)<=0)player.hyper=Math.min(100,Math.max(0,Number(player.hyper)||0)+amount/HYPER_CHARGE_RATIO);updateUI();}
 function superPulse(pulse,total){if(!running||!player)return;const color=total>1?[.25,1,.88]:[1,.35,.93];for(let i=0;i<24;i++)shoot('player',player.x,player.z,i/24*Math.PI*2,14,28,color,.24,0);for(const e of enemies){const d=Math.hypot(e.x-player.x,e.z-player.z);if(d<5.5){e.hp-=45;const k=(5.5-d)/5.5;e.x+=(e.x-player.x)/(d||1)*k*3;e.z+=(e.z-player.z)/(d||1)*k*3;}}burst(player.x,player.z,color,32,9);shake=Math.max(shake,.55);if(total>1)showMessage(`HIPER SUPER ${pulse}/${total}!`);}
-function superAttack(){if(ballActive){if(!player)return;if((player.super||0)<100){showMessage(`SUPERATAK: ${Math.floor(player.super||0)}%`);return;}if(player.hasBall||ballVisual.carrierId===playerId)arenaBallShoot(true);else showMessage('SUPER KOP GOTOWY — PRZEJMIJ PIŁKĘ');return;}if(duelActive){if(duelLocalBotMode&&duelMatchStatus==='playing'){duelUseSuper(player,false);updateUI();}else showMessage('SUPER ONLINE BĘDZIE DODANY PÓŹNIEJ');return;}if(!running||player.super<100)return;player.super=0;player.inv=.6;const pulses=(player.hyperActive||0)>0?3:1,caster=player;if(pulses===1){showMessage('SUPER!');superPulse(1,1);}else{/* Liczba fal jest ustalana w chwili użycia. Koniec hiperdoładowania nie anuluje fal 2 i 3. */superPulse(1,3);setTimeout(()=>{if(running&&player===caster)superPulse(2,3);},170);setTimeout(()=>{if(running&&player===caster)superPulse(3,3);},340);}updateUI();}
+function superAttack(){if(ballActive){arenaBallUseProjectileSuper();return;}if(duelActive){if(duelLocalBotMode&&duelMatchStatus==='playing'){duelUseSuper(player,false);updateUI();}else showMessage('SUPER ONLINE BĘDZIE DODANY PÓŹNIEJ');return;}if(!running||player.super<100)return;player.super=0;player.inv=.6;const pulses=(player.hyperActive||0)>0?3:1,caster=player;if(pulses===1){showMessage('SUPER!');superPulse(1,1);}else{/* Liczba fal jest ustalana w chwili użycia. Koniec hiperdoładowania nie anuluje fal 2 i 3. */superPulse(1,3);setTimeout(()=>{if(running&&player===caster)superPulse(2,3);},170);setTimeout(()=>{if(running&&player===caster)superPulse(3,3);},340);}updateUI();}
 function activateHyper(){if(ballActive){if(!player||player.hyperActive>0)return;if((player.hyper||0)<100){showMessage(`HIPERDOŁADOWANIE: ${Math.floor(player.hyper||0)}%`);return;}player.hyper=0;player.hyperActive=HYPER_DURATION;ballHyperQueued=true;showMessage('HIPERDOŁADOWANIE: 9 SEKUND!');burst(player.x,player.z,[.25,1,.82],34,9);shake=.35;updateUI();return;}if(duelActive){if(duelLocalBotMode&&duelMatchStatus==='playing'){duelActivateHyper(player,false);updateUI();}else showMessage('HIPER ONLINE BĘDZIE DODANY PÓŹNIEJ');return;}if(!running||!player||player.hyper<100||player.hyperActive>0)return;player.hyper=0;player.hyperActive=HYPER_DURATION;player.inv=Math.max(player.inv,.45);showMessage('HIPERDOŁADOWANIE: 9 SEKUND!');burst(player.x,player.z,[.25,1,.82],40,10);shake=.4;updateUI();}
 function spawnCoins(x,z,count){for(let i=0;i<count;i++){const a=(i/count)*Math.PI*2+rnd(-.3,.3),power=rnd(1.8,4.2);coins.push({x,z,r:.22,vx:Math.cos(a)*power,vz:Math.sin(a)*power,t:rnd(0,6.28),life:25});}}
 function enemyDeath(e){score+=e.type==='tank'?350:e.type==='shooter'?180:120;kills++;addCharge(e.type==='tank'?18:10);burst(e.x,e.z,e.color,e.type==='tank'?24:15,e.type==='tank'?8:5);spawnCoins(e.x,e.z,e.coinReward||1);stars.push({x:e.x,z:e.z,y:.45,t:Math.random()*6.28,life:10});if(kills%7===0)pickups.push({x:e.x,z:e.z,type:'heal',life:14,t:0});updateUI();}
@@ -1370,6 +1386,37 @@ function update(dt){
 function screenToGround(cx,cy){const r=canvas.getBoundingClientRect(),x=(cx-r.left)/r.width*2-1,y=1-(cy-r.top)/r.height*2;const near=M4.transformPoint(invVP,x,y,-1,1),far=M4.transformPoint(invVP,x,y,1,1);for(const p of [near,far]){p[0]/=p[3];p[1]/=p[3];p[2]/=p[3];}const dy=far[1]-near[1],t=Math.abs(dy)<1e-5?0:-near[1]/dy;mouse.worldX=near[0]+(far[0]-near[0])*t;mouse.worldZ=near[2]+(far[2]-near[2])*t;}
 function resize(){const viewport=isMobileDevice?currentArenaViewport():{left:0,top:0,width:innerWidth,height:innerHeight};const cssW=Math.max(1,viewport.width),cssH=Math.max(1,viewport.height);if(isMobileDevice){canvas.style.position='fixed';canvas.style.left=viewport.left+'px';canvas.style.top=viewport.top+'px';canvas.style.width=cssW+'px';canvas.style.height=cssH+'px';}const dprLimit=isMobileDevice?1.22:1.75,dpr=Math.min(devicePixelRatio||1,dprLimit),w=Math.max(1,Math.floor(cssW*dpr)),h=Math.max(1,Math.floor(cssH*dpr));if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;gl.viewport(0,0,w,h);}M4.perspective(proj,Math.PI/3,w/h,.1,100);}
 function healthBar(x,z,hp,maxHp,y=2.2,width=1.25){draw(mesh.cube,x,y,z,width,.075,.08,0,[.16,.12,.16]);const f=Math.max(0,hp/maxHp);draw(mesh.cube,x-(width*(1-f)),y+.01,z,width*f,.08,.085,0,f>.45?[.2,.95,.35]:[1,.25,.18]);}
+
+const worldNameTagLayer=$('worldNameTags');
+const worldNameTagEls=new Map();
+function worldPointToScreen(x,y,z){
+  const m=viewProj,clipX=m[0]*x+m[4]*y+m[8]*z+m[12],clipY=m[1]*x+m[5]*y+m[9]*z+m[13],clipW=m[3]*x+m[7]*y+m[11]*z+m[15];
+  if(!Number.isFinite(clipW)||clipW<=.01)return null;
+  const nx=clipX/clipW,ny=clipY/clipW;if(nx<-1.25||nx>1.25||ny<-1.25||ny>1.25)return null;
+  const r=canvas.getBoundingClientRect();return {x:r.left+(nx*.5+.5)*r.width,y:r.top+(1-(ny*.5+.5))*r.height};
+}
+function clearUnusedWorldNameTags(active){
+  for(const [id,el] of worldNameTagEls){if(!active.has(id)){el.remove();worldNameTagEls.delete(id);}}
+}
+function updateWorldNameTags(){
+  if(!worldNameTagLayer)return;
+  const active=new Set(),entries=[];
+  if(duelActive&&player){
+    entries.push({id:'self',name:currentAccount?.username||profile.name||'Gracz',x:player.x,z:player.z,team:0,isBot:false,hidden:false});
+    if(duelOpponent&&!duelOpponent.hidden)entries.push({id:'duel-'+(duelOpponent.id||'opponent'),name:duelOpponent.isBot?'Bot 1':(duelOpponent.name||'Przeciwnik'),x:duelOpponent.renderX??duelOpponent.x,z:duelOpponent.renderZ??duelOpponent.z,team:1,isBot:!!duelOpponent.isBot,hidden:false});
+  }else if(ballActive&&player){
+    entries.push({id:'self',name:currentAccount?.username||profile.name||'Gracz',x:player.x,z:player.z,team:ballTeam,isBot:false,hidden:false});
+    for(const p of ballPlayers){if(p.hidden||Number(p.respawnIn)>0)continue;entries.push({id:'ball-'+p.id,name:p.name||'Gracz',x:p.renderX??p.x,z:p.renderZ??p.z,team:Number(p.team)||0,isBot:!!p.isBot,hidden:false});}
+  }
+  for(const item of entries){
+    const pos=worldPointToScreen(Number(item.x)||0,2.72,Number(item.z)||0);if(!pos)continue;
+    active.add(item.id);let el=worldNameTagEls.get(item.id);if(!el){el=document.createElement('div');el.className='worldNameTag';worldNameTagLayer.appendChild(el);worldNameTagEls.set(item.id,el);}
+    el.textContent=item.name;el.className=`worldNameTag ${item.team===0?'blue':'red'}${item.isBot?' bot':''}`;el.style.left=`${pos.x}px`;el.style.top=`${pos.y}px`;el.style.display='block';
+  }
+  clearUnusedWorldNameTags(active);
+  worldNameTagLayer.style.display=(duelActive||ballActive)?'block':'none';
+}
+
 function render(){
   resize();const sx=shake?rnd(-shake,shake)*.35:0,sz=shake?rnd(-shake,shake)*.35:0;const focusX=player?.x||0,focusZ=player?.z||0;
   // Każdy gracz widzi własną postać od dołu ekranu. Druga strona dostaje
@@ -1450,15 +1497,16 @@ function render(){
   if(!duelActive&&!ballActive)for(const e of enemies){draw(mesh.cyl,e.x,.11,e.z,e.r*1.18,.04,e.r*1.18,0,e.color,.65);const c=e.hit>0?[1,1,1]:e.color;draw(mesh.sphere,e.x,e.r*.95,e.z,e.r,e.r*1.05,e.r,0,c);draw(mesh.sphere,e.x,e.r*1.14,e.z,e.r*.62,e.r*.63,e.r*.62,0,[Math.min(1,c[0]+.22),Math.min(1,c[1]+.22),Math.min(1,c[2]+.22)]);if(e.type==='shooter')draw(mesh.cube,e.x+Math.sin(e.angle)*e.r*.95,e.r*.95,e.z+Math.cos(e.angle)*e.r*.95,.16,.16,.58,e.angle,[.18,.16,.19]);if(e.type==='tank'){draw(mesh.cube,e.x,e.r*1.05,e.z,e.r*.95,.24,e.r*.95,0,[.25,.11,.31]);}for(let lv=0;lv<(e.level||1);lv++)draw(mesh.sphere,e.x+(lv-((e.level||1)-1)/2)*.24,e.r*2.28,e.z,.08,.08,.08,0,[1,.78,.12]);healthBar(e.x,e.z,e.hp,e.maxHp,e.r*2.35,e.r*.9);}
   if(ballActive){for(const b of ballBullets){const c=Number(b.team)===0?[.20,.82,1]:[1,.24,.46];draw(mesh.sphere,b.renderX??b.x,.72,b.renderZ??b.z,.21,.21,.21,0,c);}}else if(duelActive){for(const b of duelServerBullets){const mine=b.ownerId===playerId,c=mine?(profile.skin==='arena_vip_plus'?[1,.35,.72]:(profile.skin==='cosmic'?[.78,.38,1]:[.24,.85,1])):[1,.25,.48];draw(mesh.sphere,b.renderX??b.x,.72,b.renderZ??b.z,.21,.21,.21,0,c);}for(const b of duelBotBullets)draw(mesh.sphere,b.x,.72,b.z,.21,.21,.21,0,b.color||[1,.25,.48]);const pc=profile.skin==='arena_vip_plus'?[1,.35,.72]:(profile.skin==='cosmic'?[.78,.38,1]:[.24,.85,1]);for(const b of duelPredictedBullets)draw(mesh.sphere,b.x,.72,b.z,.20,.20,.20,0,b.color||pc,.78);}else for(const b of bullets)draw(mesh.sphere,b.x,b.y,b.z,b.size,b.size,b.size,0,b.color);
   for(const p of particles)draw(mesh.cube,p.x,p.y,p.z,p.size,p.size,p.size,0,p.color,Math.max(0,p.life*2));
+  updateWorldNameTags();
 }
 let lastRenderedFrame=0;const targetFrameMs=isMobileDevice?1000/45:1000/60;function loop(now){requestAnimationFrame(loop);if(document.hidden||!running){last=now;lastRenderedFrame=now;return;}if(now-lastRenderedFrame<targetFrameMs)return;const dt=Math.min(.033,(now-last)/1000);last=now;lastRenderedFrame=now;update(dt);render();}requestAnimationFrame(loop);
 
 setupMobileControls();
 
-addEventListener('keydown',e=>{keys[e.code]=true;if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();if(e.code==='KeyQ'&&!e.repeat)superAttack();if(e.code==='KeyE'&&!e.repeat)activateHyper();if(e.code==='KeyR'&&!e.repeat&&running)startGame();if(e.code==='Digit1'&&!e.repeat)buyUpgrade('move');if(e.code==='Digit2'&&!e.repeat)buyUpgrade('fire');if(e.code==='Digit3'&&!e.repeat)buyUpgrade('hp');});
+addEventListener('keydown',e=>{keys[e.code]=true;if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();if(e.code==='KeyQ'&&!e.repeat)superAttack();if((e.code==='KeyF'||e.code==='Space')&&!e.repeat&&ballActive)arenaBallSuperKick();if(e.code==='KeyE'&&!e.repeat)activateHyper();if(e.code==='KeyR'&&!e.repeat&&running)startGame();if(e.code==='Digit1'&&!e.repeat)buyUpgrade('move');if(e.code==='Digit2'&&!e.repeat)buyUpgrade('fire');if(e.code==='Digit3'&&!e.repeat)buyUpgrade('hp');});
 addEventListener('keyup',e=>keys[e.code]=false);
 canvas.addEventListener('mousemove',e=>{mouse.x=e.clientX;mouse.y=e.clientY;positionCrosshair(e.clientX,e.clientY);});
-canvas.addEventListener('mousedown',e=>{if(e.button===0){mouse.down=true;playerShoot();}});addEventListener('mouseup',e=>{if(e.button===0)mouse.down=false;});canvas.addEventListener('contextmenu',e=>e.preventDefault());
+canvas.addEventListener('mousedown',e=>{if(e.button===0){mouse.down=true;playerShoot();}else if(e.button===2&&ballActive){e.preventDefault();arenaBallSuperKick();}});addEventListener('mouseup',e=>{if(e.button===0)mouse.down=false;});canvas.addEventListener('contextmenu',e=>e.preventDefault());
 if(ui.versionOneBtn)ui.versionOneBtn.addEventListener('click',buyVersionOne);
 if(ui.saveNameBtn)ui.saveNameBtn.addEventListener('click',saveOnlineName);
 if(ui.nicknameInput){ui.nicknameInput.value=profile.name;ui.nicknameInput.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();saveOnlineName();}});}

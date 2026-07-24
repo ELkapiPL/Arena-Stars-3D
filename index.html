@@ -1546,7 +1546,7 @@
       font-size:11px;
     }
     body.arena-ball-mode #controls::after{
-      content:'PIŁKA: niebieska trasa = zwykły strzał • złota trasa = superkop przez pół mapy • Q = superkop';
+      content:'PIŁKA: niebieska trasa = zwykły strzał • złota trasa = superkop • Q = superatak • F / PPM = superkop';
       display:block;
       margin-top:7px;
       color:#ffe278;
@@ -1648,10 +1648,64 @@
     body.mobile-device #adminOverlay.open,
     body.mobile-device #mobileFullscreenGate.open{align-items:center;justify-content:center}
 
+
+
+    /* ===== V37: nicki nad postaciami + osobny przycisk superkopu ===== */
+    #worldNameTags{
+      position:fixed;
+      inset:0;
+      z-index:4;
+      pointer-events:none;
+      overflow:hidden;
+      font-family:Inter,Segoe UI,Arial,sans-serif;
+    }
+    body.lobby-mode #worldNameTags{display:none}
+    .worldNameTag{
+      position:absolute;
+      transform:translate(-50%,-100%);
+      max-width:180px;
+      padding:4px 9px;
+      border-radius:999px;
+      background:rgba(5,10,24,.78);
+      border:1px solid rgba(255,255,255,.22);
+      color:#fff;
+      font-size:11px;
+      font-weight:1000;
+      line-height:1;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      text-shadow:0 2px 4px rgba(0,0,0,.95);
+      box-shadow:0 5px 14px rgba(0,0,0,.34);
+      backdrop-filter:blur(4px);
+    }
+    .worldNameTag.blue{border-color:rgba(78,220,255,.68);box-shadow:0 0 14px rgba(42,204,255,.18),0 5px 14px rgba(0,0,0,.34)}
+    .worldNameTag.red{border-color:rgba(255,84,124,.68);box-shadow:0 0 14px rgba(255,62,112,.18),0 5px 14px rgba(0,0,0,.34)}
+    .worldNameTag.bot::before{content:'🤖 ';font-size:9px}
+    #mobileSuperKickBtn{
+      display:none;
+      right:max(202px,calc(env(safe-area-inset-right) + 194px));
+      bottom:max(20px,calc(env(safe-area-inset-bottom) + 12px));
+      background:rgba(230,154,10,.62);
+      border-color:rgba(255,228,126,.66);
+    }
+    body.mobile-device.arena-ball-mode #mobileSuperKickBtn.available{display:block}
+    #mobileSuperKickBtn.ready{
+      background:#ffb51f;
+      color:#251600;
+      border-color:#fff3ad;
+      box-shadow:0 0 18px rgba(255,190,40,.92),0 0 42px rgba(255,153,10,.45);
+      animation:mobileReadyPulse 1s ease-in-out infinite alternate;
+    }
+    @media (pointer:coarse) and (orientation:landscape) and (max-height:520px){
+      #mobileSuperKickBtn{right:max(184px,calc(env(safe-area-inset-right) + 176px));width:56px;height:56px;font-size:8px}
+    }
+
   </style>
 </head>
 <body class="lobby-mode">
   <canvas id="game"></canvas>
+  <div id="worldNameTags" aria-hidden="true"></div>
   <div id="hud">
     <div class="top">
       <div id="stats" class="card">Punkty: <span id="score">0</span><br>Monety: <span id="coins">0</span> 🪙<br>Pucharki: <span id="trophies">0</span> 🏆<br>Fala: <span id="wave">1</span><br><span class="small">Pokonani: <span id="kills">0</span></span></div>
@@ -1670,7 +1724,7 @@
       <div id="ammoWrap" class="card"><div class="labelRow"><span>AMUNICJA <span class="small">30 strzałów</span></span><span id="ammoText">30 / 30</span></div><div id="ammoBar" class="bar"><div id="ammoFill" class="fill"></div></div><div class="small" style="margin-top:6px;text-align:right">Automatyczne przeładowanie: 1,5 s</div></div>
       <div id="healthWrap" class="card"><div class="labelRow"><span>ZDROWIE</span><span id="healthText">150 / 150</span></div><div class="bar"><div id="healthFill" class="fill"></div></div><div class="labelRow" style="margin-top:7px"><span>SUPER <span class="small">[Q] • ładowanie 60% wolniejsze</span></span><span id="superText">0%</span></div><div id="superBar" class="bar"><div id="superFill" class="fill" style="width:0%"></div></div><div class="labelRow" style="margin-top:7px"><span>HIPERDOŁADOWANIE <span class="small">[E] • 9 s</span></span><span id="hyperText">0%</span></div><div id="hyperBar" class="bar"><div id="hyperFill" class="fill" style="width:0%"></div></div></div>
     </div>
-    <div id="controls" class="card"><kbd>WASD</kbd> ruch<br><kbd>MYSZ</kbd> celowanie i strzał<br><span class="small">Magazynek: 30 • przeładowanie: 1,5 s</span><br><kbd>Q</kbd> superatak<br><kbd>E</kbd> hiperdoładowanie (9 s)<br><kbd>1/2/3</kbd> kup stałe ulepszenie<br><kbd>R</kbd> restart</div>
+    <div id="controls" class="card"><kbd>WASD</kbd> ruch<br><kbd>MYSZ</kbd> celowanie i strzał<br><span class="small">Magazynek: 30 • przeładowanie: 1,5 s</span><br><kbd>Q</kbd> superatak z pociskami<br><kbd>F</kbd> / PPM superkop z piłką<br><kbd>E</kbd> hiperdoładowanie (9 s)<br><kbd>1/2/3</kbd> kup stałe ulepszenie<br><kbd>R</kbd> restart</div>
   </div>
 
 
@@ -1678,6 +1732,7 @@
     <div id="mobileMoveStick" class="mobileStick" aria-label="Gałka ruchu"><div id="mobileMoveKnob" class="mobileStickKnob"></div><div class="mobileStickLabel">RUCH</div></div>
     <button id="mobileHyperBtn" class="mobilePowerBtn" type="button" aria-label="Hiperdoładowanie"><span>HIPER</span></button>
     <button id="mobileSuperBtn" class="mobilePowerBtn" type="button" aria-label="Superatak"><span>SUPER</span></button>
+    <button id="mobileSuperKickBtn" class="mobilePowerBtn" type="button" aria-label="Superkopnięcie"><span>SUPER<br>KOP</span></button>
     <div id="mobileAttackStick" class="mobileStick" aria-label="Gałka ataku"><div id="mobileAttackKnob" class="mobileStickKnob"></div><div class="mobileStickLabel">ATAK</div></div>
   </div>
   <div id="rotatePhoneOverlay" role="dialog" aria-modal="true" aria-label="Obróć telefon poziomo">
@@ -2429,6 +2484,6 @@
 </script>
 
 
-<script src="game.js?v=arena-ball-super-hyper-kick-v36"></script>
+<script src="game.js?v=arena-ball-super-names-v37"></script>
 </body>
 </html>
