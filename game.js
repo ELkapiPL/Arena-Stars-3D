@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-window.__arenaBuild='arena-bot-view-crosshair-fire-v47';
+window.__arenaBuild='arena-bot-view-sensitivity-guide-v48';
 
 const canvas = document.getElementById('game');
 const earlyMobileHint=((navigator.maxTouchPoints||0)>0&&matchMedia('(pointer: coarse)').matches)||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
@@ -367,7 +367,7 @@ function loadProgress(){
 let profile=loadProgress();
 profile.name=persistNickname(profile.name);
 let profileDirty=false,profileSyncBusy=false,profileChangeSeq=0,lastConfigRevision=0,backgroundSyncBusy=false;
-const CLIENT_VERSION='arena-bot-view-crosshair-fire-v47';
+const CLIENT_VERSION='arena-bot-view-sensitivity-guide-v48';
 const CAMERA_MODE_KEY='arenaStars3D_camera_mode_v1';
 let botPerspectiveEnabled=false;
 try{botPerspectiveEnabled=localStorage.getItem(CAMERA_MODE_KEY)==='bot';}catch(_){}
@@ -403,8 +403,8 @@ function movementFromBotPerspective(dx,dz){
   const forward=-dz,right=dx,a=Number(player.angle)||0;
   return {x:Math.sin(a)*forward-Math.cos(a)*right,z:Math.cos(a)*forward+Math.sin(a)*right};
 }
-const BOT_VIEW_DESKTOP_LOOK_SENSITIVITY=.00135;
-const BOT_VIEW_MOBILE_LOOK_SENSITIVITY=.00110;
+const BOT_VIEW_DESKTOP_LOOK_SENSITIVITY=.00162; // +20% względem v47
+const BOT_VIEW_MOBILE_LOOK_SENSITIVITY=.00132; // +20% względem v47
 const BOT_VIEW_MIN_PITCH=-.48;
 const BOT_VIEW_MAX_PITCH=.34;
 const BOT_VIEW_PROJECTILE_SCALE=.30; // tylko wygląd: pociski gracza są o 70% mniejsze w widoku bota
@@ -1351,12 +1351,34 @@ function simulateArenaBallTrajectory(speed){
 }
 function renderArenaBallAimGuide(){
   if(!ballActive||!player||!['playing','overtime'].includes(ballStatus)||!(player.hasBall||ballVisual.carrierId===playerId))return;
+  const botView=isBotPerspectiveActive();
+  const sizeBoost=botView?1.85:1;
+  const guideY=botView?.34:.15;
+  const superY=botView?.30:.12;
   const superReady=(player.super||0)>=100,superPath=superReady?simulateArenaBallTrajectory(ARENA_BALL_SUPER_KICK_SPEED):[];
   const normalPath=simulateArenaBallTrajectory(ARENA_BALL_NORMAL_KICK_SPEED);
-  for(let i=0;i<superPath.length;i+=2){const p=superPath[i],pulse=.72+Math.sin(performance.now()*.006+i*.55)*.16;draw(mesh.sphere,p.x,.12,p.z,.10*pulse,.055,.10*pulse,0,[1,.78,.10],.56);}
-  for(let i=0;i<normalPath.length;i++){const p=normalPath[i],pulse=.84+Math.sin(performance.now()*.007+i*.65)*.12;draw(mesh.sphere,p.x,.15,p.z,.12*pulse,.065,.12*pulse,0,[.16,.88,1],.72);}
-  const normalEnd=normalPath[normalPath.length-1];if(normalEnd){draw(mesh.cyl,normalEnd.x,.075,normalEnd.z,.46,.025,.46,0,[.14,.90,1],.72);draw(mesh.cyl,normalEnd.x,.08,normalEnd.z,.24,.03,.24,0,[1,1,1],.62);}
-  const superEnd=superPath[superPath.length-1];if(superEnd){const pulse=1+Math.sin(performance.now()*.008)*.12;draw(mesh.cyl,superEnd.x,.07,superEnd.z,.62*pulse,.025,.62*pulse,0,[1,.72,.08],.62);draw(mesh.sphere,superEnd.x,.18,superEnd.z,.17,.10,.17,0,[1,.92,.30],.78);}
+  for(let i=0;i<superPath.length;i+=2){
+    const p=superPath[i],pulse=.72+Math.sin(performance.now()*.006+i*.55)*.16,r=.10*pulse*sizeBoost;
+    if(botView)draw(mesh.sphere,p.x,superY-.015,p.z,r*1.55,.045,r*1.55,0,[1,.52,.02],.30);
+    draw(mesh.sphere,p.x,superY,p.z,r,.075*sizeBoost,r,0,[1,.84,.12],botView?.96:.56);
+    if(botView)draw(mesh.sphere,p.x,superY+.035,p.z,r*.38,.085,r*.38,0,[1,1,.74],1);
+  }
+  for(let i=0;i<normalPath.length;i++){
+    const p=normalPath[i],pulse=.84+Math.sin(performance.now()*.007+i*.65)*.12,r=.12*pulse*sizeBoost;
+    if(botView)draw(mesh.sphere,p.x,guideY-.02,p.z,r*1.55,.05,r*1.55,0,[.02,.42,1],.34);
+    draw(mesh.sphere,p.x,guideY,p.z,r,.085*sizeBoost,r,0,[.12,.94,1],botView?.98:.72);
+    if(botView)draw(mesh.sphere,p.x,guideY+.04,p.z,r*.38,.095,r*.38,0,[1,1,1],1);
+  }
+  const normalEnd=normalPath[normalPath.length-1];if(normalEnd){
+    const endBoost=botView?1.55:1;
+    draw(mesh.cyl,normalEnd.x,botView?.13:.075,normalEnd.z,.46*endBoost,.035,.46*endBoost,0,[.08,.92,1],botView?.96:.72);
+    draw(mesh.cyl,normalEnd.x,botView?.15:.08,normalEnd.z,.24*endBoost,.045,.24*endBoost,0,[1,1,1],botView?.94:.62);
+  }
+  const superEnd=superPath[superPath.length-1];if(superEnd){
+    const pulse=1+Math.sin(performance.now()*.008)*.12,endBoost=botView?1.55:1;
+    draw(mesh.cyl,superEnd.x,botView?.13:.07,superEnd.z,.62*pulse*endBoost,.035,.62*pulse*endBoost,0,[1,.72,.04],botView?.94:.62);
+    draw(mesh.sphere,superEnd.x,botView?.27:.18,superEnd.z,.17*endBoost,.13,.17*endBoost,0,[1,.94,.28],botView?.98:.78);
+  }
 }
 
 function renderArenaBallPlayer(p){
