@@ -1812,6 +1812,21 @@
       body.mobile-device.bot-view:not(.lobby-mode) #crosshair:after{height:22px}
     }
 
+
+    /* ===== V49: pełny ekran + sterowanie myszą jak w grze FPS/Roblox ===== */
+    @media(pointer:fine){
+      body.bot-view.pointer-locked canvas{cursor:none!important}
+      #botViewMouseHint{
+        display:none;position:fixed;z-index:90;left:50%;top:50%;transform:translate(-50%,58px);
+        padding:10px 15px;border-radius:12px;background:rgba(5,12,29,.88);
+        border:1px solid rgba(128,231,255,.48);box-shadow:0 10px 30px rgba(0,0,0,.42);
+        color:#eafaff;font:900 12px/1.25 Inter,Segoe UI,Arial,sans-serif;
+        text-align:center;letter-spacing:.025em;pointer-events:none
+      }
+      body.bot-view:not(.pointer-locked) #botViewMouseHint{display:block}
+      body.pointer-locked #botViewMouseHint{display:none!important}
+    }
+
   </style>
 </head>
 <body class="lobby-mode">
@@ -1835,8 +1850,9 @@
       <div id="ammoWrap" class="card"><div class="labelRow"><span>AMUNICJA <span class="small">30 strzałów</span></span><span id="ammoText">30 / 30</span></div><div id="ammoBar" class="bar"><div id="ammoFill" class="fill"></div></div><div class="small" style="margin-top:6px;text-align:right">Automatyczne przeładowanie: 1,5 s</div></div>
       <div id="healthWrap" class="card"><div class="labelRow"><span>ZDROWIE</span><span id="healthText">150 / 150</span></div><div class="bar"><div id="healthFill" class="fill"></div></div><div class="labelRow" style="margin-top:7px"><span>SUPER <span class="small">[Q] • ładowanie 60% wolniejsze</span></span><span id="superText">0%</span></div><div id="superBar" class="bar"><div id="superFill" class="fill" style="width:0%"></div></div><div class="labelRow" style="margin-top:7px"><span>HIPERDOŁADOWANIE <span class="small">[E] • 9 s</span></span><span id="hyperText">0%</span></div><div id="hyperBar" class="bar"><div id="hyperFill" class="fill" style="width:0%"></div></div></div>
     </div>
-    <div id="controls" class="card"><kbd>WASD</kbd> ruch<br><kbd>MYSZ</kbd> celowanie i strzał<br><span class="small">Magazynek: 30 • przeładowanie: 1,5 s</span><br><kbd>Q</kbd> superatak z pociskami<br><kbd>F</kbd> / PPM superkop z piłką<br><kbd>E</kbd> hiperdoładowanie (9 s)<br><kbd>C</kbd> przełącz widok bota / z góry<br><kbd>1/2/3</kbd> kup stałe ulepszenie<br><kbd>R</kbd> restart</div>
+    <div id="controls" class="card"><kbd>WASD</kbd> ruch<br><kbd>MYSZ</kbd> obrót kamery w widoku bota<br><kbd>LPM</kbd> strzał • <kbd>ESC</kbd> zwolnij kursor<br><span class="small">Magazynek: 30 • przeładowanie: 1,5 s</span><br><kbd>Q</kbd> superatak z pociskami<br><kbd>F</kbd> / PPM superkop z piłką<br><kbd>E</kbd> hiperdoładowanie (9 s)<br><kbd>C</kbd> przełącz widok bota / z góry<br><kbd>1/2/3</kbd> kup stałe ulepszenie<br><kbd>R</kbd> restart</div>
     <button id="cameraModeBtn" type="button" aria-label="Przełącz kamerę">👁 WIDOK BOTA</button>
+    <div id="botViewMouseHint" aria-hidden="true">KLIKNIJ W GRĘ, ABY PRZEJĄĆ MYSZ<br><small>Ruch myszy obraca kamerę • ESC zwalnia kursor</small></div>
   </div>
 
 
@@ -2646,6 +2662,6 @@
 </script>
 
 
-<script src="game.js?v=arena-bot-view-sensitivity-guide-v48"></script>
+<script src="game.js?v=arena-bot-view-fullscreen-pointerlock-v49"></script>
 </body>
 </html>
