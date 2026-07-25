@@ -2967,13 +2967,12 @@ ARENA_BALL_WALLS = (
     (-11.25, 11.625, 1.8, 4.8), (11.25, 11.625, 1.8, 4.8),
     (0.0, -16.875, 4.0, 1.6), (0.0, 16.875, 4.0, 1.6),
     (-21.375, 0.0, 3.4, 1.7), (21.375, 0.0, 3.4, 1.7),
-    # V55: 4 beczki w jednym poziomie + 2 dodatkowe niżej po lewej i prawej stronie,
-    # cały układ przesunięty trochę wyżej zgodnie ze screenem.
-    (-3.6, -29.0, 1.18, 1.18), (-1.2, -29.0, 1.18, 1.18), (1.2, -29.0, 1.18, 1.18), (3.6, -29.0, 1.18, 1.18),
-    (-2.4, -31.2, 1.18, 1.18), (2.4, -31.2, 1.18, 1.18),
-    # Druga bramka: lustrzany układ.
-    (-3.6, 29.0, 1.18, 1.18), (-1.2, 29.0, 1.18, 1.18), (1.2, 29.0, 1.18, 1.18), (3.6, 29.0, 1.18, 1.18),
-    (-2.4, 31.2, 1.18, 1.18), (2.4, 31.2, 1.18, 1.18),
+    # V56: dokładnie 6 beczek w jednym poziomym rzędzie przed każdą bramką.
+    (-6.0, -29.0, 1.18, 1.18), (-3.6, -29.0, 1.18, 1.18), (-1.2, -29.0, 1.18, 1.18),
+    (1.2, -29.0, 1.18, 1.18), (3.6, -29.0, 1.18, 1.18), (6.0, -29.0, 1.18, 1.18),
+    # Druga bramka: identyczny lustrzany rząd.
+    (-6.0, 29.0, 1.18, 1.18), (-3.6, 29.0, 1.18, 1.18), (-1.2, 29.0, 1.18, 1.18),
+    (1.2, 29.0, 1.18, 1.18), (3.6, 29.0, 1.18, 1.18), (6.0, 29.0, 1.18, 1.18),
 )
 ARENA_BALL_BUSHES = (
     (-26.625, -13.875, 2.0), (-19.6875, -10.125, 1.8), (-5.625, -23.625, 1.9), (5.625, -23.625, 1.9),
@@ -3993,7 +3992,7 @@ def duel_tick_loop() -> None:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "ArenaStarsSQL/6.9-arena-bot-view-sensitivity-minus-5-v50"
+    server_version = "ArenaStarsSQL/7.0-arena-ball-six-barrels-row-v56"
     protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt: str, *args: Any) -> None:

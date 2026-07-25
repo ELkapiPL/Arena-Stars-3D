@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-window.__arenaBuild='arena-bot-view-sensitivity-minus-5-v50';
+window.__arenaBuild='arena-ball-six-barrels-row-v56';
 
 const canvas = document.getElementById('game');
 const earlyMobileHint=((navigator.maxTouchPoints||0)>0&&matchMedia('(pointer: coarse)').matches)||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
@@ -367,7 +367,7 @@ function loadProgress(){
 let profile=loadProgress();
 profile.name=persistNickname(profile.name);
 let profileDirty=false,profileSyncBusy=false,profileChangeSeq=0,lastConfigRevision=0,backgroundSyncBusy=false;
-const CLIENT_VERSION='arena-bot-view-sensitivity-minus-5-v50';
+const CLIENT_VERSION='arena-ball-six-barrels-row-v56';
 const CAMERA_MODE_KEY='arenaStars3D_camera_mode_v1';
 let botPerspectiveEnabled=false;
 try{botPerspectiveEnabled=localStorage.getItem(CAMERA_MODE_KEY)==='bot';}catch(_){}
@@ -1226,11 +1226,11 @@ const arenaBallWalls=[
   {x:-11.25,z:11.625,w:1.8,d:4.8,h:1.55,c:[.34,.30,.52]},{x:11.25,z:11.625,w:1.8,d:4.8,h:1.55,c:[.34,.30,.52]},
   {x:0,z:-16.875,w:4,d:1.6,h:1.35,c:[.28,.42,.48]},{x:0,z:16.875,w:4,d:1.6,h:1.35,c:[.28,.42,.48]},
   {x:-21.375,z:0,w:3.4,d:1.7,h:1.4,c:[.38,.31,.50]},{x:21.375,z:0,w:3.4,d:1.7,h:1.4,c:[.38,.31,.50]},
-  // V55: taki sam układ 4+2, ale przesunięty trochę wyżej zgodnie z zaznaczeniem na screenie.
-  {x:-3.6,z:-29.0,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},{x:-1.2,z:-29.0,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},{x:1.2,z:-29.0,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},{x:3.6,z:-29.0,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},
-  {x:-2.4,z:-31.2,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},{x:2.4,z:-31.2,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},
-  {x:-3.6,z:29.0,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},{x:-1.2,z:29.0,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},{x:1.2,z:29.0,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},{x:3.6,z:29.0,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},
-  {x:-2.4,z:31.2,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},{x:2.4,z:31.2,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'}
+  // V56: dokładnie 6 beczek w jednym poziomym rzędzie przed każdą bramką.
+  {x:-6.0,z:-29.0,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},{x:-3.6,z:-29.0,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},{x:-1.2,z:-29.0,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},
+  {x:1.2,z:-29.0,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},{x:3.6,z:-29.0,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},{x:6.0,z:-29.0,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},
+  {x:-6.0,z:29.0,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},{x:-3.6,z:29.0,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},{x:-1.2,z:29.0,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},
+  {x:1.2,z:29.0,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},{x:3.6,z:29.0,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},{x:6.0,z:29.0,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'}
 ];
 const arenaBallBushes=[
   {x:-26.625,z:-13.875,r:2},{x:-19.6875,z:-10.125,r:1.8},{x:-5.625,z:-23.625,r:1.9},{x:5.625,z:-23.625,r:1.9},
