@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-window.__arenaBuild='arena-bot-view-fullscreen-pointerlock-v49';
+window.__arenaBuild='arena-bot-view-sensitivity-minus-5-v50';
 
 const canvas = document.getElementById('game');
 const earlyMobileHint=((navigator.maxTouchPoints||0)>0&&matchMedia('(pointer: coarse)').matches)||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
@@ -367,7 +367,7 @@ function loadProgress(){
 let profile=loadProgress();
 profile.name=persistNickname(profile.name);
 let profileDirty=false,profileSyncBusy=false,profileChangeSeq=0,lastConfigRevision=0,backgroundSyncBusy=false;
-const CLIENT_VERSION='arena-bot-view-fullscreen-pointerlock-v49';
+const CLIENT_VERSION='arena-bot-view-sensitivity-minus-5-v50';
 const CAMERA_MODE_KEY='arenaStars3D_camera_mode_v1';
 let botPerspectiveEnabled=false;
 try{botPerspectiveEnabled=localStorage.getItem(CAMERA_MODE_KEY)==='bot';}catch(_){}
@@ -467,8 +467,8 @@ function movementFromBotPerspective(dx,dz){
   const forward=-dz,right=dx,a=Number(player.angle)||0;
   return {x:Math.sin(a)*forward-Math.cos(a)*right,z:Math.cos(a)*forward+Math.sin(a)*right};
 }
-const BOT_VIEW_DESKTOP_LOOK_SENSITIVITY=.00162; // +20% względem v47
-const BOT_VIEW_MOBILE_LOOK_SENSITIVITY=.00132; // +20% względem v47
+const BOT_VIEW_DESKTOP_LOOK_SENSITIVITY=.001539; // v50: 5% mniej niż v49
+const BOT_VIEW_MOBILE_LOOK_SENSITIVITY=.001254; // v50: 5% mniej niż v49
 const BOT_VIEW_MIN_PITCH=-.48;
 const BOT_VIEW_MAX_PITCH=.34;
 const BOT_VIEW_PROJECTILE_SCALE=.30; // tylko wygląd: pociski gracza są o 70% mniejsze w widoku bota
