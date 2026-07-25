@@ -1226,13 +1226,11 @@ const arenaBallWalls=[
   {x:-11.25,z:11.625,w:1.8,d:4.8,h:1.55,c:[.34,.30,.52]},{x:11.25,z:11.625,w:1.8,d:4.8,h:1.55,c:[.34,.30,.52]},
   {x:0,z:-16.875,w:4,d:1.6,h:1.35,c:[.28,.42,.48]},{x:0,z:16.875,w:4,d:1.6,h:1.35,c:[.28,.42,.48]},
   {x:-21.375,z:0,w:3.4,d:1.7,h:1.4,c:[.38,.31,.50]},{x:21.375,z:0,w:3.4,d:1.7,h:1.4,c:[.38,.31,.50]},
-  // V53: beczki są bliżej bramek i poza punktami odrodzenia.
-  // Góra: 4 na jednym poziomie + jedna bliżej bramki po lewej.
+  // V54: beczki ustawione jak na screenie — 4 w rzędzie i 2 niżej po lewej i prawej stronie.
   {x:-3.6,z:-31.0,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},{x:-1.2,z:-31.0,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},{x:1.2,z:-31.0,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},{x:3.6,z:-31.0,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},
-  {x:-3.6,z:-33.2,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},
-  // Dół: ten sam układ obrócony o 180 stopni — dodatkowa po prawej.
+  {x:-2.4,z:-33.2,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},{x:2.4,z:-33.2,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},
   {x:-3.6,z:31.0,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},{x:-1.2,z:31.0,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},{x:1.2,z:31.0,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},{x:3.6,z:31.0,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},
-  {x:3.6,z:33.2,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'}
+  {x:-2.4,z:33.2,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},{x:2.4,z:33.2,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'}
 ];
 const arenaBallBushes=[
   {x:-26.625,z:-13.875,r:2},{x:-19.6875,z:-10.125,r:1.8},{x:-5.625,z:-23.625,r:1.9},{x:5.625,z:-23.625,r:1.9},

@@ -2967,13 +2967,12 @@ ARENA_BALL_WALLS = (
     (-11.25, 11.625, 1.8, 4.8), (11.25, 11.625, 1.8, 4.8),
     (0.0, -16.875, 4.0, 1.6), (0.0, 16.875, 4.0, 1.6),
     (-21.375, 0.0, 3.4, 1.7), (21.375, 0.0, 3.4, 1.7),
-    # V53: formacje odsunięte od punktów odrodzenia, aby gracze nie pojawiali się w przeszkodach.
-    # Górna bramka: 4 beczki w jednym poziomie + dodatkowa po stronie lewej, bliżej bramki.
+    # V54: 4 beczki w jednym poziomie + 2 dodatkowe niżej po lewej i prawej stronie.
     (-3.6, -31.0, 1.18, 1.18), (-1.2, -31.0, 1.18, 1.18), (1.2, -31.0, 1.18, 1.18), (3.6, -31.0, 1.18, 1.18),
-    (-3.6, -33.2, 1.18, 1.18),
-    # Dolna bramka: układ obrócony o 180 stopni — dodatkowa beczka po prawej stronie.
+    (-2.4, -33.2, 1.18, 1.18), (2.4, -33.2, 1.18, 1.18),
+    # Druga bramka: lustrzany układ.
     (-3.6, 31.0, 1.18, 1.18), (-1.2, 31.0, 1.18, 1.18), (1.2, 31.0, 1.18, 1.18), (3.6, 31.0, 1.18, 1.18),
-    (3.6, 33.2, 1.18, 1.18),
+    (-2.4, 33.2, 1.18, 1.18), (2.4, 33.2, 1.18, 1.18),
 )
 ARENA_BALL_BUSHES = (
     (-26.625, -13.875, 2.0), (-19.6875, -10.125, 1.8), (-5.625, -23.625, 1.9), (5.625, -23.625, 1.9),
