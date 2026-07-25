@@ -1226,11 +1226,13 @@ const arenaBallWalls=[
   {x:-11.25,z:11.625,w:1.8,d:4.8,h:1.55,c:[.34,.30,.52]},{x:11.25,z:11.625,w:1.8,d:4.8,h:1.55,c:[.34,.30,.52]},
   {x:0,z:-16.875,w:4,d:1.6,h:1.35,c:[.28,.42,.48]},{x:0,z:16.875,w:4,d:1.6,h:1.35,c:[.28,.42,.48]},
   {x:-21.375,z:0,w:3.4,d:1.7,h:1.4,c:[.38,.31,.50]},{x:21.375,z:0,w:3.4,d:1.7,h:1.4,c:[.38,.31,.50]},
-  // Przed obiema bramkami: 4 beczki w jednej linii i 1 dodatkowa poniżej po lewej stronie.
-  {x:-3.3,z:-27.0,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},{x:-1.1,z:-27.0,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},{x:1.1,z:-27.0,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},{x:3.3,z:-27.0,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},
-  {x:-3.3,z:-24.8,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},
-  {x:-3.3,z:27.0,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},{x:-1.1,z:27.0,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},{x:1.1,z:27.0,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},{x:3.3,z:27.0,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},
-  {x:-3.3,z:29.2,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'}
+  // V53: beczki są bliżej bramek i poza punktami odrodzenia.
+  // Góra: 4 na jednym poziomie + jedna bliżej bramki po lewej.
+  {x:-3.6,z:-31.0,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},{x:-1.2,z:-31.0,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},{x:1.2,z:-31.0,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},{x:3.6,z:-31.0,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},
+  {x:-3.6,z:-33.2,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},
+  // Dół: ten sam układ obrócony o 180 stopni — dodatkowa po prawej.
+  {x:-3.6,z:31.0,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},{x:-1.2,z:31.0,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},{x:1.2,z:31.0,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},{x:3.6,z:31.0,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'},
+  {x:3.6,z:33.2,w:1.18,d:1.18,h:1.08,c:[.68,.47,.22],shape:'barrel'}
 ];
 const arenaBallBushes=[
   {x:-26.625,z:-13.875,r:2},{x:-19.6875,z:-10.125,r:1.8},{x:-5.625,z:-23.625,r:1.9},{x:5.625,z:-23.625,r:1.9},
@@ -1325,7 +1327,7 @@ function processBallState(data,initial=false){
   const previous=new Map(ballPlayers.map(p=>[p.id,p])),list=Array.isArray(data.players)?data.players:[],me=list.find(p=>p.id===playerId);
   if(me&&player){
     if(initial){player.x=Number(me.x)||0;player.z=Number(me.z)||0;player.angle=normalizeDuelAngle(me.angle);}
-    else{const sx=Number(me.x),sz=Number(me.z),err=Math.hypot(sx-player.x,sz-player.z);if(err>4){player.x=sx;player.z=sz;}else if(err>1.6){player.x+=(sx-player.x)*.18;player.z+=(sz-player.z)*.18;}}
+    else{const sx=Number(me.x),sz=Number(me.z),err=Math.hypot(sx-player.x,sz-player.z);if(err>7){player.x=sx;player.z=sz;}else if(err>2.8){player.x+=(sx-player.x)*.08;player.z+=(sz-player.z)*.08;}}
     player.hp=Math.max(0,Number(me.hp)||0);player.maxHp=Math.max(1,Number(me.maxHp)||player.maxHp);player.inBush=!!me.inBush;player.respawnIn=Math.max(0,Number(me.respawnIn)||0);player.hasBall=me.hasBall===true;player.super=Math.max(0,Math.min(100,Number(me.super)||0));player.hyper=Math.max(0,Math.min(100,Number(me.hyper)||0));player.hyperActive=Math.max(0,Number(me.hyperActive)||0);
   }
   ballPlayers=list.filter(p=>p.id!==playerId).map(p=>{
@@ -1370,7 +1372,7 @@ function arenaBallShoot(superKick=false){
   const hasBall=player.hasBall||ballVisual.carrierId===playerId;
   if(hasBall){
     if(superKick&&(player.super||0)<100){showMessage(`SUPER KOP: ${Math.floor(player.super||0)}%`);return;}
-    ballKickQueued=true;ballSuperKickQueued=!!superKick;ballVisual.carrierId=null;
+    ballKickQueued=true;ballSuperKickQueued=!!superKick;ballVisual.carrierId=null;if(!ballNetworkBusy)queueMicrotask(sendBallFrame);
     const a=player.angle,speed=superKick?ARENA_BALL_SUPER_KICK_SPEED:ARENA_BALL_NORMAL_KICK_SPEED;
     ballVisual.vx=Math.sin(a)*speed;ballVisual.vz=Math.cos(a)*speed;
     if(superKick){player.super=0;showMessage('SUPER KOP!');burst(player.x+Math.sin(a),player.z+Math.cos(a),[1,.78,.12],18,7);}
@@ -1380,7 +1382,7 @@ function arenaBallShoot(superKick=false){
   if(superKick){showMessage((player.super||0)>=100?'SUPER KOP GOTOWY — PRZEJMIJ PIŁKĘ':`SUPER KOP: ${Math.floor(player.super||0)}%`);return false;}
   if(player.fire>0||player.reload>0)return;if(player.ammo<=0){startReload();return;}
   const hyper=(player.hyperActive||0)>0;
-  player.fire=player.fireCooldown/(hyper?HYPER_FIRE_MULT:1);player.ammo--;ballKickQueued=true;ballSuperKickQueued=false;
+  player.fire=player.fireCooldown/(hyper?HYPER_FIRE_MULT:1);player.ammo--;ballKickQueued=true;ballSuperKickQueued=false;if(!ballNetworkBusy)queueMicrotask(sendBallFrame);
   burst(player.x+Math.sin(player.angle),player.z+Math.cos(player.angle),hyper?[.30,1,.86]:(ballTeam===0?[.25,.85,1]:[1,.28,.48]),5,2.7);
   if(player.ammo<=0)startReload();else updateUI();
 }
