@@ -2967,6 +2967,11 @@ ARENA_BALL_WALLS = (
     (-11.25, 11.625, 1.8, 4.8), (11.25, 11.625, 1.8, 4.8),
     (0.0, -16.875, 4.0, 1.6), (0.0, 16.875, 4.0, 1.6),
     (-21.375, 0.0, 3.4, 1.7), (21.375, 0.0, 3.4, 1.7),
+    # Przeszkody przed bramkami – środkowe "beczki" oraz dodatkowe blokady z boków.
+    (-2.1, -27.0, 1.45, 1.45), (0.0, -27.0, 1.45, 1.45), (2.1, -27.0, 1.45, 1.45),
+    (-2.1, 27.0, 1.45, 1.45), (0.0, 27.0, 1.45, 1.45), (2.1, 27.0, 1.45, 1.45),
+    (-5.1, -25.8, 1.15, 1.15), (5.1, -25.8, 1.15, 1.15),
+    (-5.1, 25.8, 1.15, 1.15), (5.1, 25.8, 1.15, 1.15),
 )
 ARENA_BALL_BUSHES = (
     (-26.625, -13.875, 2.0), (-19.6875, -10.125, 1.8), (-5.625, -23.625, 1.9), (5.625, -23.625, 1.9),
@@ -3035,7 +3040,7 @@ def arena_ball_spawn(team: int, slot: int) -> tuple[float, float, float]:
 def create_arena_ball_player(payload: dict[str, Any], player_id: str, team: int, slot: int, is_bot: bool = False, bot_number: int = 1) -> dict[str, Any]:
     x, z, angle = arena_ball_spawn(team, slot)
     base_hp = clean_float(payload.get("maxHp"), 100, 500, 150)
-    max_hp = int(round(base_hp * float(game_config.get("duelHpMultiplier", DUEL_HP_MULTIPLIER))))
+    max_hp = int(round(base_hp * float(game_config.get("duelHpMultiplier", DUEL_HP_MULTIPLIER)) * 0.5))
     name = clean_name(payload.get("name"))
     if is_bot:
         name = f"Bot {bot_number}"

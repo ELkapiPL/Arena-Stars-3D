@@ -1225,7 +1225,12 @@ const arenaBallWalls=[
   {x:-11.25,z:-11.625,w:1.8,d:4.8,h:1.55,c:[.34,.30,.52]},{x:11.25,z:-11.625,w:1.8,d:4.8,h:1.55,c:[.34,.30,.52]},
   {x:-11.25,z:11.625,w:1.8,d:4.8,h:1.55,c:[.34,.30,.52]},{x:11.25,z:11.625,w:1.8,d:4.8,h:1.55,c:[.34,.30,.52]},
   {x:0,z:-16.875,w:4,d:1.6,h:1.35,c:[.28,.42,.48]},{x:0,z:16.875,w:4,d:1.6,h:1.35,c:[.28,.42,.48]},
-  {x:-21.375,z:0,w:3.4,d:1.7,h:1.4,c:[.38,.31,.50]},{x:21.375,z:0,w:3.4,d:1.7,h:1.4,c:[.38,.31,.50]}
+  {x:-21.375,z:0,w:3.4,d:1.7,h:1.4,c:[.38,.31,.50]},{x:21.375,z:0,w:3.4,d:1.7,h:1.4,c:[.38,.31,.50]},
+  // Przeszkody przed bramkami – trzy beczki na środku oraz dodatkowe blokady z boków.
+  {x:-2.1,z:-27.0,w:1.45,d:1.45,h:1.18,c:[.68,.47,.22],shape:'barrel'},{x:0,z:-27.0,w:1.45,d:1.45,h:1.18,c:[.68,.47,.22],shape:'barrel'},{x:2.1,z:-27.0,w:1.45,d:1.45,h:1.18,c:[.68,.47,.22],shape:'barrel'},
+  {x:-2.1,z:27.0,w:1.45,d:1.45,h:1.18,c:[.68,.47,.22],shape:'barrel'},{x:0,z:27.0,w:1.45,d:1.45,h:1.18,c:[.68,.47,.22],shape:'barrel'},{x:2.1,z:27.0,w:1.45,d:1.45,h:1.18,c:[.68,.47,.22],shape:'barrel'},
+  {x:-5.1,z:-25.8,w:1.15,d:1.15,h:1.1,c:[.77,.60,.28]},{x:5.1,z:-25.8,w:1.15,d:1.15,h:1.1,c:[.77,.60,.28]},
+  {x:-5.1,z:25.8,w:1.15,d:1.15,h:1.1,c:[.77,.60,.28]},{x:5.1,z:25.8,w:1.15,d:1.15,h:1.1,c:[.77,.60,.28]}
 ];
 const arenaBallBushes=[
   {x:-26.625,z:-13.875,r:2},{x:-19.6875,z:-10.125,r:1.8},{x:-5.625,z:-23.625,r:1.9},{x:5.625,z:-23.625,r:1.9},
@@ -1667,7 +1672,7 @@ function render(){
   if(duelActive)for(const o of duelWalls){draw(mesh.cube,o.x,o.h/2-.02,o.z,o.w/2,o.h/2,o.d/2,0,o.c);draw(mesh.cube,o.x,o.h+.04,o.z,o.w*.43,.07,o.d*.42,0,[.48,.53,.68]);}
   if(!duelActive&&!ballActive)for(const b of bushes){for(let k=0;k<5;k++){const a=k/5*Math.PI*2;draw(mesh.sphere,b[0]+Math.cos(a)*.55,.45,b[1]+Math.sin(a)*.55,.7,.55,.7,0,[.08,.48,.22]);}}
   if(duelActive)for(const b of duelBushes){for(let k=0;k<7;k++){const a=k/7*Math.PI*2,r=k%2?.75:.42;draw(mesh.sphere,b.x+Math.cos(a)*r,.43,b.z+Math.sin(a)*r,.72,.53,.72,0,[.06,.48,.20],.90);}draw(mesh.sphere,b.x,.45,b.z,.82,.56,.82,0,[.08,.56,.24],.88);}
-  if(ballActive&&ballWallsActive)for(const o of arenaBallWalls){draw(mesh.cube,o.x,o.h/2-.02,o.z,o.w/2,o.h/2,o.d/2,0,o.c);draw(mesh.cube,o.x,o.h+.04,o.z,o.w*.43,.07,o.d*.42,0,[.50,.58,.78]);}
+  if(ballActive&&ballWallsActive)for(const o of arenaBallWalls){if(o.shape==='barrel'){const r=Math.min(o.w,o.d)*.52;draw(mesh.cyl,o.x,o.h*.45,o.z,r,o.h*.45,r,0,o.c,.98);draw(mesh.cyl,o.x,o.h*.90,o.z,r*1.05,o.h*.08,r*1.05,0,[.88,.72,.38],.98);draw(mesh.cyl,o.x,o.h*.20,o.z,r*1.04,o.h*.06,r*1.04,0,[.54,.35,.16],.98);draw(mesh.cyl,o.x,o.h*.56,o.z,r*1.02,o.h*.06,r*1.02,0,[.54,.35,.16],.98);}else{draw(mesh.cube,o.x,o.h/2-.02,o.z,o.w/2,o.h/2,o.d/2,0,o.c);draw(mesh.cube,o.x,o.h+.04,o.z,o.w*.43,.07,o.d*.42,0,[Math.min(1,o.c[0]+.16),Math.min(1,o.c[1]+.16),Math.min(1,o.c[2]+.16)]);}}
   if(ballActive&&!ballOvertime)for(const b of arenaBallBushes){for(let k=0;k<7;k++){const a=k/7*Math.PI*2,r=k%2?b.r*.42:b.r*.72;draw(mesh.sphere,b.x+Math.cos(a)*r,.43,b.z+Math.sin(a)*r,.72,.53,.72,0,[.06,.49,.22],.90);}draw(mesh.sphere,b.x,.45,b.z,b.r*.46,.58,b.r*.46,0,[.08,.58,.25],.88);}
   if(!duelActive&&!ballActive)for(const s of stars){const bob=Math.sin(s.t)*.15;draw(mesh.sphere,s.x,.55+bob,s.z,.36,.15,.36,s.t,[1,.85,.12]);draw(mesh.sphere,s.x,.55+bob,s.z,.15,.42,.15,s.t,[1,.65,.05]);}
   if(!duelActive&&!ballActive)for(const p of pickups){const bob=Math.sin(p.t)*.13;draw(mesh.cube,p.x,.55+bob,p.z,.42,.42,.42,p.t*.5,[.2,.95,.4]);draw(mesh.cube,p.x,.57+bob,p.z,.12,.47,.13,0,[1,1,1]);draw(mesh.cube,p.x,.57+bob,p.z,.47,.12,.13,0,[1,1,1]);}
