@@ -2829,6 +2829,7 @@ def finish_duel(match: dict[str, Any], winner_id: str | None, reason: str) -> No
     match["reason"] = reason
     match["finished_at"] = now()
     match["bullets"] = []
+    match["pending_super_waves"] = []
     match["state_seq"] = int(match.get("state_seq", 0)) + 1
 
 
@@ -3340,6 +3341,7 @@ ARENA_BALL_COSMIC_DASH_COOLDOWN = 10.0
 ARENA_BALL_COSMIC_DASH_DISTANCE = 5.4
 ARENA_BALL_NEON_SUPER_MAX = 2
 ARENA_BALL_NEON_SUPER_COOLDOWN = 12.0
+ARENA_BALL_SUPER_COMBO_INTERVAL = 0.17
 
 # Symetryczna, gęsta mapa. W dogrywce wszystkie przeszkody i krzaki znikają.
 # V34: boisko większe o 25% względem v33. Pozycje przeszkód zostały
@@ -3499,7 +3501,7 @@ def create_arena_ball_match(entries: list[tuple[str, dict[str, Any], bool]]) -> 
     match = {
         "id": match_id, "status": "countdown", "created_at": current,
         "start_at": current + 3.0, "phase_end_at": 0.0, "last_tick": current,
-        "players": players, "bullets": [], "bullet_seq": 0,
+        "players": players, "bullets": [], "bullet_seq": 0, "pending_super_waves": [],
         "ball": {"x": 0.0, "z": 0.0, "vx": 0.0, "vz": 0.0, "carrier_id": None, "last_touch_team": None, "pickup_block_until": 0.0, "last_kicker_id": None},
         "scores": [0, 0], "overtime": False, "winner_team": None,
         "reason": "", "finished_at": 0.0, "resume_at": 0.0,
@@ -3687,9 +3689,45 @@ def spawn_arena_ball_super(match: dict[str, Any], owner: dict[str, Any]) -> bool
     owner["revealed_until"] = current + 1.0
     spawn_arena_ball_super_wave(match, owner, 1.0, 0.0)
     if double_super:
-        # Drugi super z tego samego kliknięcia zadaje 25% mniej obrażeń.
-        spawn_arena_ball_super_wave(match, owner, .75, math.pi / 24.0)
+        # Drugi super jest osobnym wystrzałem po takim samym odstępie jak kolejne
+        # fale superataku podczas hiperdoładowania: 0,17 s. Zadaje 25% mniej obrażeń.
+        match.setdefault("pending_super_waves", []).append({
+            "owner_id": owner["id"],
+            "fire_at": current + ARENA_BALL_SUPER_COMBO_INTERVAL,
+            "damage_scale": .75,
+            "angle_offset": math.pi / 24.0,
+        })
     return True
+
+
+def arena_ball_fire_pending_super_waves(match: dict[str, Any], current: float | None = None) -> int:
+    """Wystrzeliwuje zaplanowane kolejne fale podwójnego superataku Neonowego Władcy."""
+    current = now() if current is None else current
+    pending = list(match.get("pending_super_waves") or [])
+    if not pending:
+        return 0
+    remaining: list[dict[str, Any]] = []
+    fired = 0
+    players = match.get("players") or {}
+    for event in pending:
+        if current + 1e-9 < float(event.get("fire_at", current)):
+            remaining.append(event)
+            continue
+        owner = players.get(str(event.get("owner_id") or ""))
+        if owner is None:
+            continue
+        spawn_arena_ball_super_wave(
+            match,
+            owner,
+            float(event.get("damage_scale", .75)),
+            float(event.get("angle_offset", math.pi / 24.0)),
+        )
+        owner["revealed_until"] = max(float(owner.get("revealed_until", 0.0)), current + .8)
+        fired += 1
+    match["pending_super_waves"] = remaining
+    if fired:
+        match["state_seq"] = int(match.get("state_seq", 0)) + 1
+    return fired
 
 
 def finish_arena_ball(match: dict[str, Any], winner_team: int | None, reason: str) -> None:
@@ -4350,6 +4388,10 @@ def advance_arena_ball(match: dict[str, Any]) -> None:
     if status not in {"playing", "overtime"}:
         return
 
+    # Druga fala Neonowego Władcy jest obsługiwana autorytatywnie przez serwer,
+    # dzięki czemu rzeczywiście pojawia się 0,17 s po pierwszej również online.
+    arena_ball_fire_pending_super_waves(match, current)
+
     for player in match["players"].values():
         arena_ball_update_skin_power(player, current)
         if not player.get("is_bot") and current - float(player.get("last_seen", current)) > ARENA_BALL_PLAYER_TIMEOUT:
@@ -4607,7 +4649,7 @@ def duel_tick_loop() -> None:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "ArenaStarsSQL/7.7-neon-full-power-double-super-v63"
+    server_version = "ArenaStarsSQL/7.8-neon-double-super-timed-v64"
     protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt: str, *args: Any) -> None:

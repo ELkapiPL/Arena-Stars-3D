@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-window.__arenaBuild='neon-full-power-double-super-v63';
+window.__arenaBuild='neon-double-super-timed-v64';
 
 const canvas = document.getElementById('game');
 const earlyMobileHint=((navigator.maxTouchPoints||0)>0&&matchMedia('(pointer: coarse)').matches)||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
@@ -318,7 +318,7 @@ function setupMobileControls(){
 const BASE_HP=150,BASE_SPEED=8.2,BASE_FIRE_COOLDOWN=.19,MAG_SIZE=30,RELOAD_TIME=1.5,UPGRADE_COSTS=[100,200,400,800,1600];
 const SUPER_CHARGE_MULTIPLIER=.1333333333; // v38: superatak i hiperdoładowanie ładują się 3 razy wolniej niż w v37
 const HYPER_CHARGE_RATIO=3,HYPER_DURATION=9,HYPER_SPEED_MULT=1.05,HYPER_FIRE_MULT=1.04,HYPER_DAMAGE_MULT=.93;
-const COSMIC_DASH_MAX=2,COSMIC_DASH_COOLDOWN=10,COSMIC_DASH_DISTANCE=5.4,NEON_SUPER_MAX=2,NEON_SUPER_COOLDOWN=12;
+const COSMIC_DASH_MAX=2,COSMIC_DASH_COOLDOWN=10,COSMIC_DASH_DISTANCE=5.4,NEON_SUPER_MAX=2,NEON_SUPER_COOLDOWN=12,SUPER_COMBO_INTERVAL_MS=170;
 const COSMIC_SKIN_COST=1250,VERSION_ONE_COST=150,VERSION_ONE_SPEED=1.03,VERSION_ONE_FIRE=1.02,VERSION_ONE_HP=1.10;
 const SAVE_KEY='arenaStars3D_save_v3';
 const PLAYER_ID_KEY='arenaStars3D_online_player_id_v1';
@@ -369,7 +369,7 @@ function loadProgress(){
 let profile=loadProgress();
 profile.name=persistNickname(profile.name);
 let profileDirty=false,profileSyncBusy=false,profileChangeSeq=0,lastConfigRevision=0,backgroundSyncBusy=false;
-const CLIENT_VERSION='neon-full-power-double-super-v63';
+const CLIENT_VERSION='neon-double-super-timed-v64';
 const CAMERA_MODE_KEY='arenaStars3D_camera_mode_v1';
 let botPerspectiveEnabled=false;
 try{botPerspectiveEnabled=localStorage.getItem(CAMERA_MODE_KEY)==='bot';}catch(_){}
@@ -960,7 +960,7 @@ function duelUseSuper(owner,isBot=false){
   const pulses=(owner.hyperActive||0)>0?3:1;
   const castCharge=(chargeIndex)=>{
     const damageScale=chargeIndex===0?1:.75;
-    const baseDelay=chargeIndex*220;
+    const baseDelay=chargeIndex*SUPER_COMBO_INTERVAL_MS;
     setTimeout(()=>{if(duelActive&&!duelEnded)spawnLocalDuelRadial(owner,isBot,1,pulses,damageScale);},baseDelay);
     if(pulses>1){
       setTimeout(()=>{if(duelActive&&!duelEnded)spawnLocalDuelRadial(owner,isBot,2,3,damageScale);},baseDelay+170);
@@ -968,7 +968,7 @@ function duelUseSuper(owner,isBot=false){
     }
   };
   for(let i=0;i<chargeCount;i++)castCharge(i);
-  if(neon&&!isBot)showMessage(doubleSuper?'PODWÓJNY SUPER! DRUGI: 75% OBRAŻEŃ':'SUPER! MOC SKINA JESZCZE SIĘ ŁADUJE');
+  if(neon&&!isBot)showMessage(doubleSuper?'PODWÓJNY SUPER! DRUGI ZA 0,17 s • 75% OBRAŻEŃ':'SUPER! MOC SKINA JESZCZE SIĘ ŁADUJE');
   return true;
 }
 function duelActivateHyper(owner,isBot=false){
@@ -1382,7 +1382,7 @@ function arenaBallUseProjectileSuper(){
   const doubleSuper=neon&&consumeNeonSkinPower(player);
   player.super=0;
   ballSuperAttackQueued=true;
-  showMessage(doubleSuper?'PODWÓJNY SUPER! DRUGI: 75% OBRAŻEŃ':'SUPERATAK!');
+  showMessage(doubleSuper?'PODWÓJNY SUPER! DRUGI ZA 0,17 s • 75% OBRAŻEŃ':'SUPERATAK!');
   if(!ballNetworkBusy)queueMicrotask(sendBallFrame);
   burst(player.x,player.z,[1,.28,.86],34,9);shake=.35;updateUI();
   return true;
@@ -1703,12 +1703,12 @@ function superAttack(){
   player.super=0;player.inv=.6;
   const pulses=(player.hyperActive||0)>0?3:1,caster=player;
   const castCharge=(chargeIndex)=>{
-    const damageScale=chargeIndex===0?1:.75,baseDelay=chargeIndex*220;
+    const damageScale=chargeIndex===0?1:.75,baseDelay=chargeIndex*SUPER_COMBO_INTERVAL_MS;
     setTimeout(()=>{if(running&&player===caster)superPulse(1,pulses,damageScale);},baseDelay);
     if(pulses>1){setTimeout(()=>{if(running&&player===caster)superPulse(2,3,damageScale);},baseDelay+170);setTimeout(()=>{if(running&&player===caster)superPulse(3,3,damageScale);},baseDelay+340);}
   };
   for(let i=0;i<chargeCount;i++)castCharge(i);
-  if(neon)showMessage(doubleSuper?'PODWÓJNY SUPER! DRUGI: 75% OBRAŻEŃ':'SUPER! MOC SKINA JESZCZE SIĘ ŁADUJE');else if(pulses===1)showMessage('SUPER!');
+  if(neon)showMessage(doubleSuper?'PODWÓJNY SUPER! DRUGI ZA 0,17 s • 75% OBRAŻEŃ':'SUPER! MOC SKINA JESZCZE SIĘ ŁADUJE');else if(pulses===1)showMessage('SUPER!');
   updateUI();
 }
 function activateHyper(){if(ballActive){if(!player||player.hyperActive>0)return;if((player.hyper||0)<100){showMessage(`HIPERDOŁADOWANIE: ${Math.floor(player.hyper||0)}%`);return;}player.hyper=0;player.hyperActive=HYPER_DURATION;ballHyperQueued=true;showMessage('HIPERDOŁADOWANIE: 9 SEKUND!');burst(player.x,player.z,[.25,1,.82],34,9);shake=.35;updateUI();return;}if(duelActive){if(duelLocalBotMode&&duelMatchStatus==='playing'){duelActivateHyper(player,false);updateUI();}else showMessage('HIPER ONLINE BĘDZIE DODANY PÓŹNIEJ');return;}if(!running||!player||player.hyper<100||player.hyperActive>0)return;player.hyper=0;player.hyperActive=HYPER_DURATION;player.inv=Math.max(player.inv,.45);showMessage('HIPERDOŁADOWANIE: 9 SEKUND!');burst(player.x,player.z,[.25,1,.82],40,10);shake=.4;updateUI();}
