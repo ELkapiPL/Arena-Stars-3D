@@ -3338,7 +3338,8 @@ ARENA_BALL_HYPER_DAMAGE_TAKEN_MULTIPLIER = 0.93
 ARENA_BALL_COSMIC_DASH_MAX = 2
 ARENA_BALL_COSMIC_DASH_COOLDOWN = 10.0
 ARENA_BALL_COSMIC_DASH_DISTANCE = 5.4
-ARENA_BALL_NEON_DOUBLE_SUPER_COOLDOWN = 12.0
+ARENA_BALL_NEON_SUPER_MAX = 2
+ARENA_BALL_NEON_SUPER_COOLDOWN = 12.0
 
 # Symetryczna, gęsta mapa. W dogrywce wszystkie przeszkody i krzaki znikają.
 # V34: boisko większe o 25% względem v33. Pozycje przeszkód zostały
@@ -3429,16 +3430,18 @@ def create_arena_ball_player(payload: dict[str, Any], player_id: str, team: int,
     name = clean_name(payload.get("name"))
     if is_bot:
         name = f"Bot {bot_number}"
+    skin = clean_skin(payload.get("skin"))
     player_speed = clean_float(payload.get("speed"), 3.0, 12.0, 6.3) * ARENA_BALL_SPEED_MULTIPLIER
     return {
-        "id": player_id, "name": name, "skin": clean_skin(payload.get("skin")),
+        "id": player_id, "name": name, "skin": skin,
         "team": int(team), "slot": int(slot), "is_bot": bool(is_bot),
         "x": x, "z": z, "angle": angle, "spawn_x": x, "spawn_z": z, "spawn_angle": angle,
         "hp": max_hp, "max_hp": max_hp,
         "speed": player_speed,
         "super": 0.0, "hyper": 0.0, "hyper_active_until": 0.0,
         "dash_charges": 0, "dash_next_at": now() + ARENA_BALL_COSMIC_DASH_COOLDOWN,
-        "neon_double_ready_at": now() + ARENA_BALL_NEON_DOUBLE_SUPER_COOLDOWN,
+        "neon_super_charges": ARENA_BALL_NEON_SUPER_MAX if skin == "arena_vip_plus" else 0,
+        "neon_super_next_at": 0.0,
         "fire_cooldown": max(.72, clean_float(payload.get("fireCooldown"), 0.08, 0.9, 0.25)) if is_bot else clean_float(payload.get("fireCooldown"), 0.08, 0.9, 0.25),
         "last_shot": 0.0, "last_seen": now(), "last_move": now(),
         "vx": 0.0, "vz": 0.0, "revealed_until": 0.0,
@@ -3553,9 +3556,19 @@ def arena_ball_kick(match: dict[str, Any], player: dict[str, Any], angle: float,
         return False
     angle = normalize_duel_angle(angle, player.get("angle", 0.0))
     if super_kick:
-        if float(player.get("super", 0.0)) < 100.0:
-            return False
-        player["super"] = 0.0
+        if player.get("skin") == "arena_vip_plus":
+            current = now()
+            arena_ball_update_skin_power(player, current)
+            charges = max(0, min(ARENA_BALL_NEON_SUPER_MAX, int(player.get("neon_super_charges", 0))))
+            if charges <= 0:
+                return False
+            player["neon_super_charges"] = charges - 1
+            if player["neon_super_charges"] < ARENA_BALL_NEON_SUPER_MAX and float(player.get("neon_super_next_at", 0.0)) <= 0.0:
+                player["neon_super_next_at"] = current + ARENA_BALL_NEON_SUPER_COOLDOWN
+        else:
+            if float(player.get("super", 0.0)) < 100.0:
+                return False
+            player["super"] = 0.0
     speed = ARENA_BALL_SUPER_KICK_SPEED if super_kick else ARENA_BALL_KICK_SPEED
     ball.update({
         "carrier_id": None,
@@ -3604,7 +3617,28 @@ def arena_ball_update_skin_power(player: dict[str, Any], current: float | None =
             next_at = 0.0
         player["dash_charges"] = charges
         player["dash_next_at"] = next_at
+    if skin == "arena_vip_plus":
+        charges = max(0, min(ARENA_BALL_NEON_SUPER_MAX, int(player.get("neon_super_charges", 0))))
+        next_at = float(player.get("neon_super_next_at", 0.0))
+        if charges < ARENA_BALL_NEON_SUPER_MAX:
+            if next_at <= 0.0:
+                next_at = current + ARENA_BALL_NEON_SUPER_COOLDOWN
+            while charges < ARENA_BALL_NEON_SUPER_MAX and current >= next_at:
+                charges += 1
+                next_at = next_at + ARENA_BALL_NEON_SUPER_COOLDOWN if charges < ARENA_BALL_NEON_SUPER_MAX else 0.0
+        else:
+            next_at = 0.0
+        player["neon_super_charges"] = charges
+        player["neon_super_next_at"] = next_at
 
+
+
+def arena_ball_super_kick_ready(player: dict[str, Any], current: float | None = None) -> bool:
+    current = now() if current is None else current
+    if player.get("skin") == "arena_vip_plus":
+        arena_ball_update_skin_power(player, current)
+        return int(player.get("neon_super_charges", 0)) > 0
+    return float(player.get("super", 0.0)) >= 100.0
 
 def arena_ball_use_cosmic_dash(match: dict[str, Any], player: dict[str, Any], current: float | None = None) -> bool:
     current = now() if current is None else current
@@ -3653,18 +3687,27 @@ def spawn_arena_ball_super(match: dict[str, Any], owner: dict[str, Any]) -> bool
     current = now()
     if owner.get("hp", 0) <= 0 or current < float(owner.get("respawn_at", 0.0)):
         return False
-    if float(owner.get("super", 0.0)) < 100.0:
-        return False
-    owner["super"] = 0.0
+    neon = owner.get("skin") == "arena_vip_plus"
+    charge_count = 1
+    if neon:
+        arena_ball_update_skin_power(owner, current)
+        charge_count = max(0, min(ARENA_BALL_NEON_SUPER_MAX, int(owner.get("neon_super_charges", 0))))
+        if charge_count <= 0:
+            return False
+        # Superatak pociskowy zużywa wszystkie dostępne ładunki naraz.
+        owner["neon_super_charges"] = 0
+        if float(owner.get("neon_super_next_at", 0.0)) <= 0.0:
+            owner["neon_super_next_at"] = current + ARENA_BALL_NEON_SUPER_COOLDOWN
+    else:
+        if float(owner.get("super", 0.0)) < 100.0:
+            return False
+        owner["super"] = 0.0
     owner["revealed_until"] = current + 1.0
-    double_neon = owner.get("skin") == "arena_vip_plus" and current >= float(owner.get("neon_double_ready_at", current + 1.0))
     spawn_arena_ball_super_wave(match, owner, 1.0, 0.0)
-    if double_neon:
-        # Drugi pierścień jest lekko obrócony, żeby oba ataki były widoczne osobno.
+    if neon and charge_count >= 2:
+        # Drugi super z tego samego kliknięcia zadaje 25% mniej obrażeń.
         spawn_arena_ball_super_wave(match, owner, .75, math.pi / 24.0)
-        owner["neon_double_ready_at"] = current + ARENA_BALL_NEON_DOUBLE_SUPER_COOLDOWN
     return True
-
 
 def finish_arena_ball(match: dict[str, Any], winner_team: int | None, reason: str) -> None:
     if match.get("status") == "finished":
@@ -4059,7 +4102,7 @@ def arena_ball_make_bot_pass(
     match: dict[str, Any], bot: dict[str, Any], mate: dict[str, Any], angle: float, distance: float, current: float
 ) -> bool:
     # Zwykłe podanie wystarcza na większość boiska; dłuższe przerzuty używają mocniejszego kopnięcia.
-    kicked = arena_ball_kick(match, bot, angle, super_kick=distance > 20.0 and float(bot.get("super", 0.0)) >= 100.0)
+    kicked = arena_ball_kick(match, bot, angle, super_kick=distance > 20.0 and arena_ball_super_kick_ready(bot))
     if not kicked:
         return False
     bot["bot_last_pass_at"] = current
@@ -4123,7 +4166,7 @@ def update_arena_ball_bots(match: dict[str, Any], step: float, current: float) -
             # Strzał tylko wtedy, gdy pełny tor piłki jest naprawdę wolny.
             shooting_zone = attack_progress >= ARENA_BALL_GOAL_LINE * .52
             if clear_shot and (shooting_zone or distance_goal < 18.0):
-                if arena_ball_kick(match, bot, goal_aim, super_kick=distance_goal > 11.0 and float(bot.get("super", 0.0)) >= 100.0):
+                if arena_ball_kick(match, bot, goal_aim, super_kick=distance_goal > 11.0 and arena_ball_super_kick_ready(bot)):
                     bot["bot_stuck_for"] = 0.0
                     bot.pop("nav_x", None); bot.pop("nav_z", None)
                     continue
@@ -4223,14 +4266,15 @@ def update_arena_ball_bots(match: dict[str, Any], step: float, current: float) -
                 arena_ball_kick(
                     match, bot, goal_aim,
                     super_kick=math.hypot(goal_x - float(bot["x"]), opponent_goal_z - float(bot["z"])) > 11.0
-                    and float(bot.get("super", 0.0)) >= 100.0,
+                    and arena_ball_super_kick_ready(bot),
                 )
 
         if enemies and ball.get("carrier_id") != bot["id"]:
             # Superatak jest używany jak przez gracza: dopiero przy otoczeniu,
             # a nie natychmiast po naładowaniu.
             nearby = [enemy for enemy in enemies if math.hypot(float(enemy["x"]) - float(bot["x"]), float(enemy["z"]) - float(bot["z"])) < 5.4]
-            if float(bot.get("super", 0.0)) >= 100.0 and len(nearby) >= 2:
+            neon_super_ready = bot.get("skin") == "arena_vip_plus" and int(bot.get("neon_super_charges", 0)) > 0
+            if (neon_super_ready or float(bot.get("super", 0.0)) >= 100.0) and len(nearby) >= 2:
                 if spawn_arena_ball_super(match, bot):
                     continue
             target = next((enemy for enemy in enemies if carrier and enemy["id"] == carrier.get("id")), None)
@@ -4265,7 +4309,8 @@ def arena_ball_public_player(match: dict[str, Any], player: dict[str, Any], view
         "hyperActive": round(max(0.0, float(player.get("hyper_active_until", 0.0)) - now()), 2),
         "dashCharges": int(player.get("dash_charges", 0)),
         "dashNextIn": round(max(0.0, float(player.get("dash_next_at", 0.0)) - now()), 2) if int(player.get("dash_charges", 0)) < ARENA_BALL_COSMIC_DASH_MAX else 0.0,
-        "neonDoubleReadyIn": round(max(0.0, float(player.get("neon_double_ready_at", 0.0)) - now()), 2),
+        "neonSuperCharges": int(player.get("neon_super_charges", 0)),
+        "neonSuperNextIn": round(max(0.0, float(player.get("neon_super_next_at", 0.0)) - now()), 2) if int(player.get("neon_super_charges", 0)) < ARENA_BALL_NEON_SUPER_MAX else 0.0,
     }
     if not hidden:
         row.update({
@@ -4580,7 +4625,7 @@ def duel_tick_loop() -> None:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "ArenaStarsSQL/7.4-skin-powers-v60"
+    server_version = "ArenaStarsSQL/7.6-neon-shared-super-pool-v62"
     protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt: str, *args: Any) -> None:

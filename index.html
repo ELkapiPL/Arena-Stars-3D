@@ -1852,7 +1852,7 @@
     <div id="centerMsg"></div>
     <div id="playerHudStack">
       <div id="ammoWrap" class="card"><div class="labelRow"><span>AMUNICJA <span class="small">30 strzałów</span></span><span id="ammoText">30 / 30</span></div><div id="ammoBar" class="bar"><div id="ammoFill" class="fill"></div></div><div class="small" style="margin-top:6px;text-align:right">Automatyczne przeładowanie: 1,5 s</div></div>
-      <div id="healthWrap" class="card"><div class="labelRow"><span>ZDROWIE</span><span id="healthText">150 / 150</span></div><div class="bar"><div id="healthFill" class="fill"></div></div><div class="labelRow" style="margin-top:7px"><span>SUPER <span class="small">[SPACJA] • ładowanie 60% wolniejsze</span></span><span id="superText">0%</span></div><div id="superBar" class="bar"><div id="superFill" class="fill" style="width:0%"></div></div><div class="labelRow" style="margin-top:7px"><span>HIPERDOŁADOWANIE <span class="small">[Q] • 9 s</span></span><span id="hyperText">0%</span></div><div id="hyperBar" class="bar"><div id="hyperFill" class="fill" style="width:0%"></div></div><div class="labelRow" style="margin-top:7px"><span>MOC SKINA <span class="small">[E]</span></span><span id="skinPowerText">—</span></div><div id="skinPowerBar" class="bar"><div id="skinPowerFill" class="fill" style="width:0%;background:linear-gradient(90deg,#4ed8ff,#7b61ff)"></div></div></div>
+      <div id="healthWrap" class="card"><div class="labelRow"><span>ZDROWIE</span><span id="healthText">150 / 150</span></div><div class="bar"><div id="healthFill" class="fill"></div></div><div class="labelRow" style="margin-top:7px"><span>SUPER <span class="small">[SPACJA] • ładowanie 60% wolniejsze</span></span><span id="superText">0%</span></div><div id="superBar" class="bar"><div id="superFill" class="fill" style="width:0%"></div></div><div class="labelRow" style="margin-top:7px"><span>HIPERDOŁADOWANIE <span class="small">[Q] • 9 s</span></span><span id="hyperText">0%</span></div><div id="hyperBar" class="bar"><div id="hyperFill" class="fill" style="width:0%"></div></div><div class="labelRow" style="margin-top:7px"><span>MOC SKINA <span class="small">[E: DASH • NEON: AUTO]</span></span><span id="skinPowerText">—</span></div><div id="skinPowerBar" class="bar"><div id="skinPowerFill" class="fill" style="width:0%;background:linear-gradient(90deg,#4ed8ff,#7b61ff)"></div></div></div>
     </div>
     <div id="controls" class="card"><kbd>WASD</kbd> ruch<br><kbd>MYSZ</kbd> obrót kamery w widoku bota<br><kbd>LPM</kbd> strzał • <kbd>ESC</kbd> zwolnij kursor<br><span class="small">Magazynek: 30 • przeładowanie: 1,5 s</span><br><kbd>SPACJA</kbd> superatak z pociskami<br><kbd>F</kbd> superkop z piłką<br><kbd>E</kbd> moc wybranego skina<br><kbd>Q</kbd> hiperdoładowanie (9 s)<br><kbd>C</kbd> przełącz widok bota / z góry<br><kbd>1/2/3</kbd> kup stałe ulepszenie<br><kbd>R</kbd> restart</div>
     <button id="cameraModeBtn" type="button" aria-label="Przełącz kamerę">👁 WIDOK BOTA</button>
@@ -2023,7 +2023,7 @@
           <div class="skinList storeSkinList">
             <div class="skinCard" data-skin="classic" role="button" tabindex="0"><div class="skinPreview">💧</div><div><div class="skinName">Błękitny Bohater</div><div class="skinDesc">Klasyczny wygląd wojownika.</div><span class="skinState">WYBIERZ</span></div></div>
             <div class="skinCard" data-skin="cosmic" role="button" tabindex="0"><div class="skinPreview">🪐</div><div><div class="skinName">Kosmiczny Strażnik</div><div class="skinDesc">Pancerz, wizjer i orbitujące gwiazdy. Moc: 2 dashe, po 1 co 10 s. <span class="skinPrice">Cena: 1250 monet</span></div><span class="skinState">🔒 1250 🪙</span></div></div>
-            <div class="skinCard" data-skin="arena_vip_plus" role="button" tabindex="0"><div class="skinPreview">🔥</div><div><div class="skinName">Neonowy Władca Areny</div><div class="skinDesc">Ekskluzywna skórka VIP+. Co 12 s następny superatak wystrzeli dwa razy; drugi zadaje 25% mniej obrażeń.</div><span class="skinState">🔒 VIP+ POZIOM 20</span></div></div>
+            <div class="skinCard" data-skin="arena_vip_plus" role="button" tabindex="0"><div class="skinPreview">🔥</div><div><div class="skinName">Neonowy Władca Areny</div><div class="skinDesc">Ekskluzywna skórka VIP+. Automatycznie przechowuje 2 superataki. Każde użycie spacji zużywa 1; drugi z pary zadaje 25% mniej obrażeń. Ładunki odnawiają się pojedynczo co 12 s.</div><span class="skinState">🔒 VIP+ POZIOM 20</span></div></div>
           </div>
           <div id="skinNotice" class="storeMessage" aria-live="polite"></div>
         </section>
@@ -2667,6 +2667,6 @@
 </script>
 
 
-<script src="game.js?v=skin-powers-v60"></script>
+<script src="game.js?v=neon-shared-super-pool-v62"></script>
 </body>
 </html>
