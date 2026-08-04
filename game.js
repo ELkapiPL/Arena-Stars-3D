@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-window.__arenaBuild='neon-double-super-timed-v64';
+window.__arenaBuild='performance-countdown-v65';
 
 const canvas = document.getElementById('game');
 const earlyMobileHint=((navigator.maxTouchPoints||0)>0&&matchMedia('(pointer: coarse)').matches)||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
@@ -17,7 +17,7 @@ const ui = {
   overlay:$('overlay'), lobbyView:$('lobbyView'), gameOverView:$('gameOverView'), playBtn:$('playBtn'), retryBtn:$('retryBtn'), lobbyBtn:$('lobbyBtn'),
   score:$('score'), wave:$('wave'), kills:$('kills'), coins:$('coins'), trophies:$('trophies'), healthText:$('healthText'), healthFill:$('healthFill'), ammoText:$('ammoText'), ammoFill:$('ammoFill'),
   superText:$('superText'), superFill:$('superFill'), hyperText:$('hyperText'), hyperFill:$('hyperFill'), skinPowerText:$('skinPowerText'), skinPowerFill:$('skinPowerFill'), finalScore:$('finalScore'), finalKills:$('finalKills'), finalCoins:$('finalCoins'), finalTrophies:$('finalTrophies'),
-  savedTrophies:$('savedTrophies'), savedPoints:$('savedPoints'), savedCoins:$('savedCoins'), skinNotice:$('skinNotice'), versionOneBtn:$('versionOneBtn'), versionNotice:$('versionNotice'), rankingBody:$('rankingBody'), rankingPosition:$('rankingPosition'), rankingLive:$('rankingLive'), rankingTotal:$('rankingTotal'), nicknameInput:$('nicknameInput'), saveNameBtn:$('saveNameBtn'), onlineStatus:$('onlineStatus'), onlineHudCount:$('onlineHudCount'), modeBtn:$('modeBtn'), modeMenu:$('modeMenu'), soloModeOption:$('soloModeOption'), duelModeOption:$('duelModeOption'), ballModeOption:$('ballModeOption'), duelQueueView:$('duelQueueView'), duelQueueText:$('duelQueueText'), duelCancelBtn:$('duelCancelBtn'), duelOpponentName:$('duelOpponentName'), duelOpponentHp:$('duelOpponentHp'), arenaBallScore:$('arenaBallScore'), arenaBallClock:$('arenaBallClock'), hudModeText:$('hudModeText'), gameOverTitle:$('gameOverTitle'), gameOverBadge:$('gameOverBadge'), endStats:$('endStats'),
+  savedTrophies:$('savedTrophies'), savedPoints:$('savedPoints'), savedCoins:$('savedCoins'), skinNotice:$('skinNotice'), versionOneBtn:$('versionOneBtn'), versionNotice:$('versionNotice'), rankingBody:$('rankingBody'), rankingPosition:$('rankingPosition'), rankingLive:$('rankingLive'), rankingTotal:$('rankingTotal'), nicknameInput:$('nicknameInput'), saveNameBtn:$('saveNameBtn'), onlineStatus:$('onlineStatus'), onlineHudCount:$('onlineHudCount'), modeBtn:$('modeBtn'), modeMenu:$('modeMenu'), soloModeOption:$('soloModeOption'), duelModeOption:$('duelModeOption'), ballModeOption:$('ballModeOption'), duelQueueView:$('duelQueueView'), duelQueueText:$('duelQueueText'), duelCancelBtn:$('duelCancelBtn'), duelOpponentName:$('duelOpponentName'), duelOpponentHp:$('duelOpponentHp'), arenaBallScore:$('arenaBallScore'), arenaBallClock:$('arenaBallClock'), arenaBallFinalCountdown:$('arenaBallFinalCountdown'), hudModeText:$('hudModeText'), gameOverTitle:$('gameOverTitle'), gameOverBadge:$('gameOverBadge'), endStats:$('endStats'),
   crosshair:$('crosshair'), centerMsg:$('centerMsg'), mobileControls:$('mobileControls'), cameraModeBtn:$('cameraModeBtn'), botViewMouseHint:$('botViewMouseHint'), mobileMoveStick:$('mobileMoveStick'), mobileMoveKnob:$('mobileMoveKnob'), mobileAttackStick:$('mobileAttackStick'), mobileAttackKnob:$('mobileAttackKnob'), mobileSuperBtn:$('mobileSuperBtn'), mobileSuperKickBtn:$('mobileSuperKickBtn'), mobileHyperBtn:$('mobileHyperBtn'), mobileSkinPowerBtn:$('mobileSkinPowerBtn'), rotatePhoneOverlay:$('rotatePhoneOverlay'), rotateLockBtn:$('rotateLockBtn'), mobileFullscreenGate:$('mobileFullscreenGate'), mobileFullscreenStartBtn:$('mobileFullscreenStartBtn'), mobileFullscreenTitle:$('mobileFullscreenTitle'), mobileFullscreenText:$('mobileFullscreenText'), lobbyFullscreenBtn:$('lobbyFullscreenBtn'), passOpenBtn:$('passOpenBtn'), passOverlay:$('passOverlay'), passCloseBtn:$('passCloseBtn'), passGrid:$('passGrid'), passPointsText:$('passPointsText'), passTierBadge:$('passTierBadge'), passProgressFill:$('passProgressFill'), passNextText:$('passNextText'), passBuyVipBtn:$('passBuyVipBtn'), passBuyVipPlusBtn:$('passBuyVipPlusBtn'), passClaimAllBtn:$('passClaimAllBtn'), passMessage:$('passMessage'), storeOpenBtn:$('storeOpenBtn'), storeOverlay:$('storeOverlay'), storeCloseBtn:$('storeCloseBtn'), coinShopMessage:$('coinShopMessage'), blikOverlay:$('blikOverlay'), blikForm:$('blikForm'), blikProductName:$('blikProductName'), blikProductPrice:$('blikProductPrice'), blikCodeInput:$('blikCodeInput'), blikPayBtn:$('blikPayBtn'), blikCancelBtn:$('blikCancelBtn'), blikStatus:$('blikStatus'),
   upgradeButtons:[...document.querySelectorAll('[data-upgrade]')],
   persistentLevelEls:[...document.querySelectorAll('[data-persistent-level]')],
@@ -369,7 +369,7 @@ function loadProgress(){
 let profile=loadProgress();
 profile.name=persistNickname(profile.name);
 let profileDirty=false,profileSyncBusy=false,profileChangeSeq=0,lastConfigRevision=0,backgroundSyncBusy=false;
-const CLIENT_VERSION='neon-double-super-timed-v64';
+const CLIENT_VERSION='performance-countdown-v65';
 const CAMERA_MODE_KEY='arenaStars3D_camera_mode_v1';
 let botPerspectiveEnabled=false;
 try{botPerspectiveEnabled=localStorage.getItem(CAMERA_MODE_KEY)==='bot';}catch(_){}
@@ -1169,7 +1169,7 @@ let upgrades={...profile.upgrades};
 let running=false,runCommitted=false,last=performance.now(),score=0,wave=1,kills=0,walletCoins=profile.coins,runCoins=0,trophies=0,survivalTime=0,waveClock=0,spawnClock=0,shake=0,messageClock=0;
 let player,enemies=[],bullets=[],particles=[],stars=[],pickups=[],coins=[];
 let selectedMode=profile.mode||'solo',duelSearching=false,duelActive=false,duelEnded=false,duelMatchId='',duelOpponent=null,duelServerBullets=[],duelPredictedBullets=[],duelShotQueue=[],duelVisualHitSeqs=new Set(),duelLocalShotSeq=0,duelNetworkBusy=false,duelNetworkTimer=0,duelJoinTimer=0,duelNetworkFailures=0,duelMatchStatus='',duelStartIn=0,duelStartDeadline=0,duelLastStateAt=performance.now(),duelRtt=0,duelFrameSeq=0,duelLocalBotMode=false,duelBotBullets=[],duelBotTurnTimer=0,duelBotShotTimer=.8,duelBotStrafe=1,duelBotStuck=0,duelBotReveal=0,duelRound=1,duelYourWins=0,duelOpponentWins=0,duelRoundDraws=0,duelRoundEventSeq=0,duelRoundResolving=false,duelMirrorView=false,duelShotFlushBusy=false,duelShotFlushTimer=0;
-let ballSearching=false,ballActive=false,ballEnded=false,ballMatchId='',ballPlayers=[],ballBullets=[],ballVisual={x:0,z:0,targetX:0,targetZ:0,vx:0,vz:0,carrierId:null},ballNetworkBusy=false,ballNetworkTimer=0,ballJoinTimer=0,ballNetworkFailures=0,ballStatus='',ballTeam=0,ballMirrorView=false,ballActionSeq=0,ballKickQueued=false,ballSuperKickQueued=false,ballSuperAttackQueued=false,ballHyperQueued=false,ballSkinPowerQueued=false,ballScores=[0,0],ballTimeRemaining=120,ballOvertime=false,ballWallsActive=true,ballGoalEventSeq=0,ballLastStateAt=performance.now();
+let ballSearching=false,ballActive=false,ballEnded=false,ballMatchId='',ballPlayers=[],ballBullets=[],ballVisual={x:0,z:0,targetX:0,targetZ:0,vx:0,vz:0,carrierId:null},ballNetworkBusy=false,ballNetworkTimer=0,ballJoinTimer=0,ballNetworkFailures=0,ballStatus='',ballTeam=0,ballMirrorView=false,ballActionSeq=0,ballKickQueued=false,ballSuperKickQueued=false,ballSuperAttackQueued=false,ballHyperQueued=false,ballSkinPowerQueued=false,ballScores=[0,0],ballTimeRemaining=120,ballOvertime=false,ballWallsActive=true,ballGoalEventSeq=0,ballFinalCountdownValue=-1,ballLastStateAt=performance.now();
 queueMicrotask(()=>{try{scheduleSqlSync(false);}catch(error){console.error('SQL sync startup error',error);}});
 window.__arenaDebug=()=>({duelActive,duelLocalBotMode,duelMatchStatus,duelRound,duelYourWins,duelOpponentWins,duelRoundDraws,player:player?{x:player.x,z:player.z,hp:player.hp}:null,opponent:duelOpponent?{x:duelOpponent.renderX??duelOpponent.x,z:duelOpponent.renderZ??duelOpponent.z,hp:duelOpponent.hp,hidden:duelOpponent.hidden,isBot:duelOpponent.isBot}:null,playerBullets:duelPredictedBullets.length,botBullets:duelBotBullets.length,botAmmo:duelOpponent?.ammo,botReload:duelOpponent?.reload,botSuper:duelOpponent?.super,botHyper:duelOpponent?.hyper,botHyperActive:duelOpponent?.hyperActive,mirrorView:duelMirrorView,shotQueue:duelShotQueue.length,shotFlushBusy:duelShotFlushBusy});
 
@@ -1285,6 +1285,23 @@ function ballQueueCard(mode){
     if(icon)icon.textContent='⚔️';if(title)title.textContent='POJEDYNEK 1V1';
   }
 }
+function updateArenaBallFinalCountdown(){
+  const box=ui.arenaBallFinalCountdown;
+  if(!box)return;
+  const seconds=Math.max(0,Math.ceil(ballTimeRemaining));
+  const visible=ballActive&&['playing','overtime'].includes(ballStatus)&&seconds>=1&&seconds<=15;
+  box.classList.toggle('show',visible);
+  if(!visible){ballFinalCountdownValue=-1;return;}
+  if(seconds===ballFinalCountdownValue)return;
+  ballFinalCountdownValue=seconds;
+  const number=box.querySelector('strong');
+  const label=box.querySelector('small');
+  if(number)number.textContent=String(seconds);
+  if(label)label.textContent=ballOvertime?'KONIEC DOGRYWKI ZA':'DO KOŃCA';
+  box.classList.remove('tick');
+  void box.offsetWidth;
+  box.classList.add('tick');
+}
 function setBallHud(){
   if(ui.arenaBallScore)ui.arenaBallScore.textContent=`${ballScores[0]} : ${ballScores[1]}`;
   if(ui.arenaBallClock){
@@ -1292,12 +1309,13 @@ function setBallHud(){
     ui.arenaBallClock.textContent=ballOvertime?`DOGRYWKA 00:${s}`:`${String(m).padStart(2,'0')}:${s}`;
     ui.arenaBallClock.classList.toggle('overtime',ballOvertime);
   }
+  updateArenaBallFinalCountdown();
   if(ui.hudModeText)ui.hudModeText.textContent=`Arena Ball 3v3 • ${ballTeam===0?'NIEBIESCY':'CZERWONI'}`;
 }
 function clearBallTimers(){clearTimeout(ballJoinTimer);ballJoinTimer=0;clearInterval(ballNetworkTimer);ballNetworkTimer=0;ballNetworkBusy=false;}
 function stopBallSession(notify=true){
   const oldMatch=ballMatchId;clearBallTimers();
-  ballSearching=false;ballActive=false;ballEnded=false;ballMatchId='';ballPlayers=[];ballBullets=[];ballVisual={x:0,z:0,targetX:0,targetZ:0,vx:0,vz:0,carrierId:null};ballNetworkFailures=0;ballStatus='';ballKickQueued=false;ballSuperKickQueued=false;ballSuperAttackQueued=false;ballHyperQueued=false;ballSkinPowerQueued=false;ballScores=[0,0];ballTimeRemaining=120;ballOvertime=false;ballWallsActive=true;ballGoalEventSeq=0;
+  ballSearching=false;ballActive=false;ballEnded=false;ballMatchId='';ballPlayers=[];ballBullets=[];ballVisual={x:0,z:0,targetX:0,targetZ:0,vx:0,vz:0,carrierId:null};ballNetworkFailures=0;ballStatus='';ballKickQueued=false;ballSuperKickQueued=false;ballSuperAttackQueued=false;ballHyperQueued=false;ballSkinPowerQueued=false;ballScores=[0,0];ballTimeRemaining=120;ballOvertime=false;ballWallsActive=true;ballGoalEventSeq=0;ballFinalCountdownValue=-1;if(ui.arenaBallFinalCountdown)ui.arenaBallFinalCountdown.classList.remove('show','tick');
   document.body.classList.remove('arena-ball-mode');
   if(location.hash==='#arena-ball')history.replaceState(null,'',location.pathname+location.search);
   if(notify&&(oldMatch||playerId)){
@@ -1326,7 +1344,7 @@ async function requestBallJoin(){
 function startBallQueue(){
   if(ballSearching||ballActive)return;chooseBallMode();
   if(duelSearching||duelActive)stopDuelSession(true);if(running&&!duelActive)commitRun();
-  reset();running=false;ballSearching=true;ballEnded=false;ballMatchId='';ballPlayers=[];ballBullets=[];ballNetworkFailures=0;ballActionSeq=0;ballKickQueued=false;ballSuperKickQueued=false;ballSuperAttackQueued=false;ballHyperQueued=false;ballSkinPowerQueued=false;ballScores=[0,0];ballTimeRemaining=120;ballOvertime=false;ballWallsActive=true;ballGoalEventSeq=0;
+  reset();running=false;ballSearching=true;ballEnded=false;ballMatchId='';ballPlayers=[];ballBullets=[];ballNetworkFailures=0;ballActionSeq=0;ballKickQueued=false;ballSuperKickQueued=false;ballSuperAttackQueued=false;ballHyperQueued=false;ballSkinPowerQueued=false;ballScores=[0,0];ballTimeRemaining=120;ballOvertime=false;ballWallsActive=true;ballGoalEventSeq=0;ballFinalCountdownValue=-1;if(ui.arenaBallFinalCountdown)ui.arenaBallFinalCountdown.classList.remove('show','tick');
   document.body.classList.add('lobby-mode');document.body.classList.remove('duel-mode','arena-ball-mode');
   ui.lobbyView.style.display='none';ui.gameOverView.style.display='none';ui.duelQueueView.style.display='grid';ui.overlay.style.display='block';
   ballQueueCard('ball');setDuelQueueText('Łączenie z kolejką Arena Ball 3v3…');requestBallJoin();
@@ -1340,7 +1358,7 @@ function beginBallMatch(data){
   document.body.classList.add('arena-playing','arena-ball-mode');document.body.classList.remove('lobby-mode','duel-mode');
   ui.duelQueueView.style.display='none';ui.lobbyView.style.display='block';ui.gameOverView.style.display='none';ui.overlay.style.display='none';
   history.replaceState(null,'','#arena-ball');processBallState(data,true);last=performance.now();
-  clearInterval(ballNetworkTimer);ballNetworkTimer=setInterval(sendBallFrame,85);
+  clearInterval(ballNetworkTimer);ballNetworkTimer=setInterval(sendBallFrame,100);
 }
 function processBallState(data,initial=false){
   if(!data||data.matchId!==ballMatchId)return;
@@ -1384,7 +1402,7 @@ function arenaBallUseProjectileSuper(){
   ballSuperAttackQueued=true;
   showMessage(doubleSuper?'PODWÓJNY SUPER! DRUGI ZA 0,17 s • 75% OBRAŻEŃ':'SUPERATAK!');
   if(!ballNetworkBusy)queueMicrotask(sendBallFrame);
-  burst(player.x,player.z,[1,.28,.86],34,9);shake=.35;updateUI();
+  playerAttackBurst(player.x,player.z,[1,.28,.86],12,5.2);shake=.20;updateUI();
   return true;
 }
 function arenaBallSuperKick(){
@@ -1607,7 +1625,7 @@ function enemyDirection(e,tx,tz,dt){e.navTime=Math.max(0,(e.navTime||0)-dt);cons
   let gx=directBlocked&&e.navTime>0?e.navX:tx,gz=directBlocked&&e.navTime>0?e.navZ:tz,dx=gx-e.x,dz=gz-e.z,l=Math.hypot(dx,dz)||1;dx/=l;dz/=l;
   if(hitsWall(e.x+dx*.48,e.z+dz*.48,e.r+.04)){const base=Math.atan2(dx,dz),side=e.avoidSide||1;let best=null,bestCost=Infinity;for(const off of [side*.55,-side*.55,side*1.0,-side*1.0,side*1.45,-side*1.45]){const a=base+off,cx=Math.sin(a),cz=Math.cos(a);if(hitsWall(e.x+cx*.62,e.z+cz*.62,e.r+.03))continue;const cost=Math.hypot(tx-(e.x+cx),tz-(e.z+cz));if(cost<bestCost){bestCost=cost;best=[cx,cz];}}if(best){dx=best[0];dz=best[1];}}
   return [dx,dz];}
-function burst(x,z,color,count=12,power=5,sizeScale=1,lifeScale=1){const maxParticles=isMobileDevice?110:240,actual=isMobileDevice?Math.max(2,Math.ceil(count*.62)):count;if(particles.length>maxParticles)particles.splice(0,particles.length-maxParticles);for(let i=0;i<actual&&particles.length<maxParticles;i++){const a=Math.random()*Math.PI*2,s=rnd(power*.35,power);particles.push({x,y:rnd(.25,1.1),z,vx:Math.cos(a)*s,vy:rnd(1.5,5),vz:Math.sin(a)*s,life:rnd(.35,.75)*lifeScale,size:rnd(.06,.16)*sizeScale,color});}}
+function burst(x,z,color,count=12,power=5,sizeScale=1,lifeScale=1){const heavyBallLoad=ballActive&&ballBullets.length>28,maxParticles=heavyBallLoad?(isMobileDevice?58:115):(isMobileDevice?100:210),actual=isMobileDevice?Math.max(2,Math.ceil(count*.56)):count;if(particles.length>maxParticles)particles.splice(0,particles.length-maxParticles);for(let i=0;i<actual&&particles.length<maxParticles;i++){const a=Math.random()*Math.PI*2,s=rnd(power*.35,power);particles.push({x,y:rnd(.25,1.1),z,vx:Math.cos(a)*s,vy:rnd(1.5,5),vz:Math.sin(a)*s,life:rnd(.35,.75)*lifeScale,size:rnd(.06,.16)*sizeScale,color});}}
 function playerAttackBurst(x,z,color,count=5,power=2.7){if(isBotPerspectiveActive()){burst(x,z,color,Math.max(1,Math.round(count*.30)),power*.34,.30,.48);return;}burst(x,z,color,count,power);}
 function spawnEnemy(){
   let a=Math.random()*Math.PI*2,x=Math.cos(a)*(ARENA-1),z=Math.sin(a)*(ARENA-1);if(Math.hypot(x-player.x,z-player.z)<10){a+=Math.PI;x=Math.cos(a)*(ARENA-1);z=Math.sin(a)*(ARENA-1);}
@@ -1871,8 +1889,9 @@ function render(){
   }
   if(!duelActive&&!ballActive)for(const e of enemies){draw(mesh.cyl,e.x,.11,e.z,e.r*1.18,.04,e.r*1.18,0,e.color,.65);const c=e.hit>0?[1,1,1]:e.color;draw(mesh.sphere,e.x,e.r*.95,e.z,e.r,e.r*1.05,e.r,0,c);draw(mesh.sphere,e.x,e.r*1.14,e.z,e.r*.62,e.r*.63,e.r*.62,0,[Math.min(1,c[0]+.22),Math.min(1,c[1]+.22),Math.min(1,c[2]+.22)]);if(e.type==='shooter')draw(mesh.cube,e.x+Math.sin(e.angle)*e.r*.95,e.r*.95,e.z+Math.cos(e.angle)*e.r*.95,.16,.16,.58,e.angle,[.18,.16,.19]);if(e.type==='tank'){draw(mesh.cube,e.x,e.r*1.05,e.z,e.r*.95,.24,e.r*.95,0,[.25,.11,.31]);}for(let lv=0;lv<(e.level||1);lv++)draw(mesh.sphere,e.x+(lv-((e.level||1)-1)/2)*.24,e.r*2.28,e.z,.08,.08,.08,0,[1,.78,.12]);healthBar(e.x,e.z,e.hp,e.maxHp,e.r*2.35,e.r*.9);}
   if(ballActive){
-    for(const b of ballBullets){
-      const c=Number(b.team)===0?[.20,.82,1]:[1,.24,.46],scale=botViewProjectileScale(b.ownerId===playerId);
+    const bulletStep=ballBullets.length>38?(isMobileDevice?3:2):1;
+    for(let bi=0;bi<ballBullets.length;bi+=bulletStep){
+      const b=ballBullets[bi],c=Number(b.team)===0?[.20,.82,1]:[1,.24,.46],scale=botViewProjectileScale(b.ownerId===playerId);
       draw(mesh.sphere,b.renderX??b.x,.72,b.renderZ??b.z,.21*scale,.21*scale,.21*scale,0,c);
     }
   }else if(duelActive){

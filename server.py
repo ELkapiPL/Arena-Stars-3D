@@ -2999,6 +2999,9 @@ def advance_duel(match: dict[str, Any]) -> None:
         changed = changed or before != after
 
         kept: list[dict[str, Any]] = []
+        active_team_0 = [p for p in players if int(p.get("team", -1)) == 0 and p.get("hp", 0) > 0 and current >= float(p.get("respawn_at", 0.0))]
+        active_team_1 = [p for p in players if int(p.get("team", -1)) == 1 and p.get("hp", 0) > 0 and current >= float(p.get("respawn_at", 0.0))]
+        targets_by_shooter_team = {0: active_team_1, 1: active_team_0}
         for bullet in match["bullets"]:
             x0, z0 = float(bullet["x"]), float(bullet["z"])
             x1 = x0 + float(bullet["vx"]) * step
@@ -3501,7 +3504,7 @@ def create_arena_ball_match(entries: list[tuple[str, dict[str, Any], bool]]) -> 
     match = {
         "id": match_id, "status": "countdown", "created_at": current,
         "start_at": current + 3.0, "phase_end_at": 0.0, "last_tick": current,
-        "players": players, "bullets": [], "bullet_seq": 0, "pending_super_waves": [],
+        "players": players, "bullets": [], "bullet_seq": 0, "pending_super_waves": [], "bot_ai_elapsed": 0.0,
         "ball": {"x": 0.0, "z": 0.0, "vx": 0.0, "vz": 0.0, "carrier_id": None, "last_touch_team": None, "pickup_block_until": 0.0, "last_kicker_id": None},
         "scores": [0, 0], "overtime": False, "winner_team": None,
         "reason": "", "finished_at": 0.0, "resume_at": 0.0,
@@ -4400,14 +4403,22 @@ def advance_arena_ball(match: dict[str, Any]) -> None:
         if player.get("hp", 0) <= 0 and current >= float(player.get("respawn_at", current + 1)):
             arena_ball_respawn_player(player)
 
-    remaining = min(.30, max(0.0, current - float(match.get("last_tick", current))))
+    # Nie nadrabiamy bardzo długiego zastoju w jednym żądaniu, bo powodował
+    # nagłe skoki CPU i cofanie graczy. Fizyka nadal działa małymi krokami.
+    remaining = min(.18, max(0.0, current - float(match.get("last_tick", current))))
     match["last_tick"] = current
     players = list(match["players"].values())
     changed = False
+    bot_ai_elapsed = max(0.0, min(.16, float(match.get("bot_ai_elapsed", 0.0))))
     while remaining > 1e-7:
         step = min(.025, remaining)
         remaining -= step
-        update_arena_ball_bots(match, step, current)
+        # Pełne planowanie tras, podań i uników jest najcięższą częścią serwera.
+        # Wystarczy ok. 13 razy/s; ruch klientów jest nadal płynnie interpolowany.
+        bot_ai_elapsed = min(.16, bot_ai_elapsed + step)
+        if bot_ai_elapsed >= .075:
+            update_arena_ball_bots(match, bot_ai_elapsed, current)
+            bot_ai_elapsed = 0.0
         ball = match["ball"]
         carrier = match["players"].get(ball.get("carrier_id"))
         if carrier and carrier.get("hp", 0) > 0:
@@ -4458,7 +4469,7 @@ def advance_arena_ball(match: dict[str, Any]) -> None:
             if bullet["life"] <= 0 or arena_ball_line_blocked(match, x0, z0, x1, z1, float(bullet.get("radius", .19))):
                 changed = True
                 continue
-            targets = [p for p in players if p["team"] != bullet["team"] and p.get("hp", 0) > 0 and current >= float(p.get("respawn_at", 0.0))]
+            targets = targets_by_shooter_team.get(int(bullet.get("team", -1)), ())
             best_target = None; best_t = None
             for target in targets:
                 hit_t = segment_circle_hit_t(x0, z0, x1, z1, target["x"], target["z"], ARENA_BALL_RADIUS + float(bullet.get("radius", .19)))
@@ -4482,6 +4493,8 @@ def advance_arena_ball(match: dict[str, Any]) -> None:
             kept.append(bullet)
         match["bullets"] = kept
         changed = True
+
+    match["bot_ai_elapsed"] = bot_ai_elapsed
 
     if match.get("status") in {"playing", "overtime"} and current >= float(match.get("phase_end_at", current + 1)):
         if match["scores"][0] != match["scores"][1]:
@@ -4649,7 +4662,7 @@ def duel_tick_loop() -> None:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "ArenaStarsSQL/7.8-neon-double-super-timed-v64"
+    server_version = "ArenaStarsSQL/7.9-performance-countdown-v65"
     protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt: str, *args: Any) -> None:

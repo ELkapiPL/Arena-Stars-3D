@@ -1545,6 +1545,58 @@
       animation:arenaBallClockPulse .8s ease-in-out infinite alternate;
     }
     @keyframes arenaBallClockPulse{to{filter:brightness(1.25);transform:scale(1.03)}}
+
+    /* V65: duże odliczanie ostatnich 15 sekund jak w Brawl Stars */
+    #arenaBallFinalCountdown{
+      display:none;
+      position:fixed;
+      z-index:18;
+      left:50%;
+      top:43%;
+      transform:translate(-50%,-50%);
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      pointer-events:none;
+      user-select:none;
+      text-align:center;
+      filter:drop-shadow(0 12px 14px rgba(0,0,0,.58));
+    }
+    body.arena-ball-mode #arenaBallFinalCountdown.show{display:flex}
+    #arenaBallFinalCountdown small{
+      margin-bottom:-8px;
+      padding:5px 13px;
+      border-radius:999px;
+      background:rgba(8,13,31,.78);
+      border:1px solid rgba(255,255,255,.20);
+      color:#fff3bd;
+      font-size:clamp(12px,1.5vw,19px);
+      font-weight:1000;
+      letter-spacing:.14em;
+      text-shadow:0 2px 5px #000;
+    }
+    #arenaBallFinalCountdown strong{
+      display:block;
+      min-width:1.4em;
+      color:#fff;
+      font-size:clamp(84px,13vw,168px);
+      font-weight:1000;
+      line-height:.86;
+      letter-spacing:-.07em;
+      -webkit-text-stroke:clamp(2px,.42vw,6px) #b52032;
+      text-shadow:0 8px 0 #721321,0 0 22px rgba(255,63,78,.80),0 18px 32px rgba(0,0,0,.58);
+    }
+    #arenaBallFinalCountdown.tick{animation:arenaFinalTick .36s cubic-bezier(.2,1.5,.32,1)}
+    @keyframes arenaFinalTick{
+      0%{transform:translate(-50%,-50%) scale(1.42);opacity:.22}
+      58%{transform:translate(-50%,-50%) scale(.92);opacity:1}
+      100%{transform:translate(-50%,-50%) scale(1);opacity:1}
+    }
+    @media(max-width:800px),(pointer:coarse){
+      #arenaBallFinalCountdown{top:42%}
+      #arenaBallFinalCountdown small{margin-bottom:-4px;font-size:10px;padding:4px 9px}
+      #arenaBallFinalCountdown strong{font-size:clamp(64px,18vh,112px);-webkit-text-stroke:3px #b52032}
+    }
     body.arena-ball-mode #controls{
       max-width:235px;
       font-size:11px;
@@ -1842,6 +1894,7 @@
       <div id="duelOpponentHud" class="card"><div class="duelHudName" id="duelOpponentName">SZUKANIE PRZECIWNIKA</div><div class="duelHudHp" id="duelOpponentHp">—</div></div><div class="card"><b>Arena Stars 3D</b><div class="small"><span id="hudModeText">Online</span> • <span id="onlineHudCount">0</span> online</div></div>
     </div>
     <div id="arenaBallHud" aria-label="Wynik Arena Ball"><span class="arenaBallTeam blue">NIEBIESCY</span><span id="arenaBallScore">0 : 0</span><span class="arenaBallTeam red">CZERWONI</span><span id="arenaBallClock">02:00</span></div>
+    <div id="arenaBallFinalCountdown" aria-live="polite" aria-atomic="true"><small>DO KOŃCA</small><strong>15</strong></div>
     <div id="crosshair"></div>
     <div id="shop" class="card">
       <div id="shopTitle">STAŁE ULEPSZENIA ZA MONETY</div>
@@ -2667,6 +2720,6 @@
 </script>
 
 
-<script src="game.js?v=neon-double-super-timed-v64"></script>
+<script src="game.js?v=performance-countdown-v65"></script>
 </body>
 </html>
