@@ -3440,8 +3440,8 @@ def create_arena_ball_player(payload: dict[str, Any], player_id: str, team: int,
         "speed": player_speed,
         "super": 0.0, "hyper": 0.0, "hyper_active_until": 0.0,
         "dash_charges": 0, "dash_next_at": now() + ARENA_BALL_COSMIC_DASH_COOLDOWN,
-        "neon_super_charges": ARENA_BALL_NEON_SUPER_MAX if skin == "arena_vip_plus" else 0,
-        "neon_super_next_at": 0.0,
+        "neon_super_charges": 0,
+        "neon_super_next_at": now() + ARENA_BALL_NEON_SUPER_COOLDOWN if skin == "arena_vip_plus" else 0.0,
         "fire_cooldown": max(.72, clean_float(payload.get("fireCooldown"), 0.08, 0.9, 0.25)) if is_bot else clean_float(payload.get("fireCooldown"), 0.08, 0.9, 0.25),
         "last_shot": 0.0, "last_seen": now(), "last_move": now(),
         "vx": 0.0, "vz": 0.0, "revealed_until": 0.0,
@@ -3556,19 +3556,10 @@ def arena_ball_kick(match: dict[str, Any], player: dict[str, Any], angle: float,
         return False
     angle = normalize_duel_angle(angle, player.get("angle", 0.0))
     if super_kick:
-        if player.get("skin") == "arena_vip_plus":
-            current = now()
-            arena_ball_update_skin_power(player, current)
-            charges = max(0, min(ARENA_BALL_NEON_SUPER_MAX, int(player.get("neon_super_charges", 0))))
-            if charges <= 0:
-                return False
-            player["neon_super_charges"] = charges - 1
-            if player["neon_super_charges"] < ARENA_BALL_NEON_SUPER_MAX and float(player.get("neon_super_next_at", 0.0)) <= 0.0:
-                player["neon_super_next_at"] = current + ARENA_BALL_NEON_SUPER_COOLDOWN
-        else:
-            if float(player.get("super", 0.0)) < 100.0:
-                return False
-            player["super"] = 0.0
+        if float(player.get("super", 0.0)) < 100.0:
+            return False
+        # Superkop zużywa zwykły superatak. Naładowana moc skina Neon pozostaje.
+        player["super"] = 0.0
     speed = ARENA_BALL_SUPER_KICK_SPEED if super_kick else ARENA_BALL_KICK_SPEED
     ball.update({
         "carrier_id": None,
@@ -3618,27 +3609,22 @@ def arena_ball_update_skin_power(player: dict[str, Any], current: float | None =
         player["dash_charges"] = charges
         player["dash_next_at"] = next_at
     if skin == "arena_vip_plus":
-        charges = max(0, min(ARENA_BALL_NEON_SUPER_MAX, int(player.get("neon_super_charges", 0))))
+        ready = int(player.get("neon_super_charges", 0)) >= ARENA_BALL_NEON_SUPER_MAX
         next_at = float(player.get("neon_super_next_at", 0.0))
-        if charges < ARENA_BALL_NEON_SUPER_MAX:
+        if not ready:
             if next_at <= 0.0:
                 next_at = current + ARENA_BALL_NEON_SUPER_COOLDOWN
-            while charges < ARENA_BALL_NEON_SUPER_MAX and current >= next_at:
-                charges += 1
-                next_at = next_at + ARENA_BALL_NEON_SUPER_COOLDOWN if charges < ARENA_BALL_NEON_SUPER_MAX else 0.0
-        else:
-            next_at = 0.0
-        player["neon_super_charges"] = charges
+            if current >= next_at:
+                ready = True
+                next_at = 0.0
+        player["neon_super_charges"] = ARENA_BALL_NEON_SUPER_MAX if ready else 0
         player["neon_super_next_at"] = next_at
 
 
 
 def arena_ball_super_kick_ready(player: dict[str, Any], current: float | None = None) -> bool:
-    current = now() if current is None else current
-    if player.get("skin") == "arena_vip_plus":
-        arena_ball_update_skin_power(player, current)
-        return int(player.get("neon_super_charges", 0)) > 0
     return float(player.get("super", 0.0)) >= 100.0
+
 
 def arena_ball_use_cosmic_dash(match: dict[str, Any], player: dict[str, Any], current: float | None = None) -> bool:
     current = now() if current is None else current
@@ -3687,27 +3673,24 @@ def spawn_arena_ball_super(match: dict[str, Any], owner: dict[str, Any]) -> bool
     current = now()
     if owner.get("hp", 0) <= 0 or current < float(owner.get("respawn_at", 0.0)):
         return False
+    if float(owner.get("super", 0.0)) < 100.0:
+        return False
+    owner["super"] = 0.0
     neon = owner.get("skin") == "arena_vip_plus"
-    charge_count = 1
+    double_super = False
     if neon:
         arena_ball_update_skin_power(owner, current)
-        charge_count = max(0, min(ARENA_BALL_NEON_SUPER_MAX, int(owner.get("neon_super_charges", 0))))
-        if charge_count <= 0:
-            return False
-        # Superatak pociskowy zużywa wszystkie dostępne ładunki naraz.
-        owner["neon_super_charges"] = 0
-        if float(owner.get("neon_super_next_at", 0.0)) <= 0.0:
+        double_super = int(owner.get("neon_super_charges", 0)) >= ARENA_BALL_NEON_SUPER_MAX
+        if double_super:
+            owner["neon_super_charges"] = 0
             owner["neon_super_next_at"] = current + ARENA_BALL_NEON_SUPER_COOLDOWN
-    else:
-        if float(owner.get("super", 0.0)) < 100.0:
-            return False
-        owner["super"] = 0.0
     owner["revealed_until"] = current + 1.0
     spawn_arena_ball_super_wave(match, owner, 1.0, 0.0)
-    if neon and charge_count >= 2:
+    if double_super:
         # Drugi super z tego samego kliknięcia zadaje 25% mniej obrażeń.
         spawn_arena_ball_super_wave(match, owner, .75, math.pi / 24.0)
     return True
+
 
 def finish_arena_ball(match: dict[str, Any], winner_team: int | None, reason: str) -> None:
     if match.get("status") == "finished":
@@ -4273,8 +4256,7 @@ def update_arena_ball_bots(match: dict[str, Any], step: float, current: float) -
             # Superatak jest używany jak przez gracza: dopiero przy otoczeniu,
             # a nie natychmiast po naładowaniu.
             nearby = [enemy for enemy in enemies if math.hypot(float(enemy["x"]) - float(bot["x"]), float(enemy["z"]) - float(bot["z"])) < 5.4]
-            neon_super_ready = bot.get("skin") == "arena_vip_plus" and int(bot.get("neon_super_charges", 0)) > 0
-            if (neon_super_ready or float(bot.get("super", 0.0)) >= 100.0) and len(nearby) >= 2:
+            if float(bot.get("super", 0.0)) >= 100.0 and len(nearby) >= 2:
                 if spawn_arena_ball_super(match, bot):
                     continue
             target = next((enemy for enemy in enemies if carrier and enemy["id"] == carrier.get("id")), None)
@@ -4625,7 +4607,7 @@ def duel_tick_loop() -> None:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "ArenaStarsSQL/7.6-neon-shared-super-pool-v62"
+    server_version = "ArenaStarsSQL/7.7-neon-full-power-double-super-v63"
     protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt: str, *args: Any) -> None:
