@@ -1597,6 +1597,32 @@
       #arenaBallFinalCountdown small{margin-bottom:-4px;font-size:10px;padding:4px 9px}
       #arenaBallFinalCountdown strong{font-size:clamp(64px,18vh,112px);-webkit-text-stroke:3px #b52032}
     }
+
+    /* V66: osobna, czytelna skala odliczania dla telefonów i tabletów */
+    @media(pointer:coarse){
+      body.mobile-device #arenaBallFinalCountdown{
+        top:40.5%;
+        width:min(48vw,240px);
+        max-width:calc(100vw - 28px);
+        filter:drop-shadow(0 8px 12px rgba(0,0,0,.62));
+      }
+      body.mobile-device #arenaBallFinalCountdown small{
+        margin-bottom:-5px;
+        padding:5px 11px;
+        font-size:clamp(11px,3.1vmin,14px);
+        letter-spacing:.12em;
+        white-space:nowrap;
+      }
+      body.mobile-device #arenaBallFinalCountdown strong{
+        font-size:clamp(78px,23vmin,108px);
+        line-height:.88;
+        -webkit-text-stroke:clamp(3px,.9vmin,5px) #b52032;
+        text-shadow:0 6px 0 #721321,0 0 18px rgba(255,63,78,.82),0 12px 24px rgba(0,0,0,.62);
+      }
+    }
+    @media(pointer:coarse) and (orientation:portrait){
+      body.mobile-device #arenaBallFinalCountdown{top:39%}
+    }
     body.arena-ball-mode #controls{
       max-width:235px;
       font-size:11px;
@@ -2720,6 +2746,6 @@
 </script>
 
 
-<script src="game.js?v=performance-countdown-v65"></script>
+<script src="game.js?v=mobile-countdown-v66"></script>
 </body>
 </html>

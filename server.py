@@ -4662,7 +4662,7 @@ def duel_tick_loop() -> None:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "ArenaStarsSQL/7.9-performance-countdown-v65"
+    server_version = "ArenaStarsSQL/8.0-mobile-countdown-v66"
     protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt: str, *args: Any) -> None:
