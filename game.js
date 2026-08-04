@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-window.__arenaBuild='arena-ball-humanlike-bots-v58';
+window.__arenaBuild='skin-powers-v60';
 
 const canvas = document.getElementById('game');
 const earlyMobileHint=((navigator.maxTouchPoints||0)>0&&matchMedia('(pointer: coarse)').matches)||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
@@ -16,9 +16,9 @@ const $ = id => document.getElementById(id);
 const ui = {
   overlay:$('overlay'), lobbyView:$('lobbyView'), gameOverView:$('gameOverView'), playBtn:$('playBtn'), retryBtn:$('retryBtn'), lobbyBtn:$('lobbyBtn'),
   score:$('score'), wave:$('wave'), kills:$('kills'), coins:$('coins'), trophies:$('trophies'), healthText:$('healthText'), healthFill:$('healthFill'), ammoText:$('ammoText'), ammoFill:$('ammoFill'),
-  superText:$('superText'), superFill:$('superFill'), hyperText:$('hyperText'), hyperFill:$('hyperFill'), finalScore:$('finalScore'), finalKills:$('finalKills'), finalCoins:$('finalCoins'), finalTrophies:$('finalTrophies'),
+  superText:$('superText'), superFill:$('superFill'), hyperText:$('hyperText'), hyperFill:$('hyperFill'), skinPowerText:$('skinPowerText'), skinPowerFill:$('skinPowerFill'), finalScore:$('finalScore'), finalKills:$('finalKills'), finalCoins:$('finalCoins'), finalTrophies:$('finalTrophies'),
   savedTrophies:$('savedTrophies'), savedPoints:$('savedPoints'), savedCoins:$('savedCoins'), skinNotice:$('skinNotice'), versionOneBtn:$('versionOneBtn'), versionNotice:$('versionNotice'), rankingBody:$('rankingBody'), rankingPosition:$('rankingPosition'), rankingLive:$('rankingLive'), rankingTotal:$('rankingTotal'), nicknameInput:$('nicknameInput'), saveNameBtn:$('saveNameBtn'), onlineStatus:$('onlineStatus'), onlineHudCount:$('onlineHudCount'), modeBtn:$('modeBtn'), modeMenu:$('modeMenu'), soloModeOption:$('soloModeOption'), duelModeOption:$('duelModeOption'), ballModeOption:$('ballModeOption'), duelQueueView:$('duelQueueView'), duelQueueText:$('duelQueueText'), duelCancelBtn:$('duelCancelBtn'), duelOpponentName:$('duelOpponentName'), duelOpponentHp:$('duelOpponentHp'), arenaBallScore:$('arenaBallScore'), arenaBallClock:$('arenaBallClock'), hudModeText:$('hudModeText'), gameOverTitle:$('gameOverTitle'), gameOverBadge:$('gameOverBadge'), endStats:$('endStats'),
-  crosshair:$('crosshair'), centerMsg:$('centerMsg'), mobileControls:$('mobileControls'), cameraModeBtn:$('cameraModeBtn'), botViewMouseHint:$('botViewMouseHint'), mobileMoveStick:$('mobileMoveStick'), mobileMoveKnob:$('mobileMoveKnob'), mobileAttackStick:$('mobileAttackStick'), mobileAttackKnob:$('mobileAttackKnob'), mobileSuperBtn:$('mobileSuperBtn'), mobileSuperKickBtn:$('mobileSuperKickBtn'), mobileHyperBtn:$('mobileHyperBtn'), rotatePhoneOverlay:$('rotatePhoneOverlay'), rotateLockBtn:$('rotateLockBtn'), mobileFullscreenGate:$('mobileFullscreenGate'), mobileFullscreenStartBtn:$('mobileFullscreenStartBtn'), mobileFullscreenTitle:$('mobileFullscreenTitle'), mobileFullscreenText:$('mobileFullscreenText'), lobbyFullscreenBtn:$('lobbyFullscreenBtn'), passOpenBtn:$('passOpenBtn'), passOverlay:$('passOverlay'), passCloseBtn:$('passCloseBtn'), passGrid:$('passGrid'), passPointsText:$('passPointsText'), passTierBadge:$('passTierBadge'), passProgressFill:$('passProgressFill'), passNextText:$('passNextText'), passBuyVipBtn:$('passBuyVipBtn'), passBuyVipPlusBtn:$('passBuyVipPlusBtn'), passClaimAllBtn:$('passClaimAllBtn'), passMessage:$('passMessage'), storeOpenBtn:$('storeOpenBtn'), storeOverlay:$('storeOverlay'), storeCloseBtn:$('storeCloseBtn'), coinShopMessage:$('coinShopMessage'),
+  crosshair:$('crosshair'), centerMsg:$('centerMsg'), mobileControls:$('mobileControls'), cameraModeBtn:$('cameraModeBtn'), botViewMouseHint:$('botViewMouseHint'), mobileMoveStick:$('mobileMoveStick'), mobileMoveKnob:$('mobileMoveKnob'), mobileAttackStick:$('mobileAttackStick'), mobileAttackKnob:$('mobileAttackKnob'), mobileSuperBtn:$('mobileSuperBtn'), mobileSuperKickBtn:$('mobileSuperKickBtn'), mobileHyperBtn:$('mobileHyperBtn'), mobileSkinPowerBtn:$('mobileSkinPowerBtn'), rotatePhoneOverlay:$('rotatePhoneOverlay'), rotateLockBtn:$('rotateLockBtn'), mobileFullscreenGate:$('mobileFullscreenGate'), mobileFullscreenStartBtn:$('mobileFullscreenStartBtn'), mobileFullscreenTitle:$('mobileFullscreenTitle'), mobileFullscreenText:$('mobileFullscreenText'), lobbyFullscreenBtn:$('lobbyFullscreenBtn'), passOpenBtn:$('passOpenBtn'), passOverlay:$('passOverlay'), passCloseBtn:$('passCloseBtn'), passGrid:$('passGrid'), passPointsText:$('passPointsText'), passTierBadge:$('passTierBadge'), passProgressFill:$('passProgressFill'), passNextText:$('passNextText'), passBuyVipBtn:$('passBuyVipBtn'), passBuyVipPlusBtn:$('passBuyVipPlusBtn'), passClaimAllBtn:$('passClaimAllBtn'), passMessage:$('passMessage'), storeOpenBtn:$('storeOpenBtn'), storeOverlay:$('storeOverlay'), storeCloseBtn:$('storeCloseBtn'), coinShopMessage:$('coinShopMessage'), blikOverlay:$('blikOverlay'), blikForm:$('blikForm'), blikProductName:$('blikProductName'), blikProductPrice:$('blikProductPrice'), blikCodeInput:$('blikCodeInput'), blikPayBtn:$('blikPayBtn'), blikCancelBtn:$('blikCancelBtn'), blikStatus:$('blikStatus'),
   upgradeButtons:[...document.querySelectorAll('[data-upgrade]')],
   persistentLevelEls:[...document.querySelectorAll('[data-persistent-level]')],
   skinCards:[...document.querySelectorAll('[data-skin]')],
@@ -302,6 +302,7 @@ function setupMobileControls(){
   mobilePowerPress(ui.mobileSuperBtn,superAttack,25);
   mobilePowerPress(ui.mobileSuperKickBtn,arenaBallSuperKick,25);
   mobilePowerPress(ui.mobileHyperBtn,activateHyper,[25,25,25]);
+  mobilePowerPress(ui.mobileSkinPowerBtn,useSkinPower,20);
   ui.rotateLockBtn?.addEventListener('click',()=>requestLandscapeOrientation(true));
   ui.lobbyFullscreenBtn?.addEventListener('click',async e=>{e.preventDefault();await requestLandscapeOrientation(true);hideMobileFullscreenGate();});
   ui.mobileFullscreenStartBtn?.addEventListener('click',continueFromMobileFullscreenGate,{passive:false});
@@ -317,6 +318,7 @@ function setupMobileControls(){
 const BASE_HP=150,BASE_SPEED=8.2,BASE_FIRE_COOLDOWN=.19,MAG_SIZE=30,RELOAD_TIME=1.5,UPGRADE_COSTS=[100,200,400,800,1600];
 const SUPER_CHARGE_MULTIPLIER=.1333333333; // v38: superatak i hiperdoładowanie ładują się 3 razy wolniej niż w v37
 const HYPER_CHARGE_RATIO=3,HYPER_DURATION=9,HYPER_SPEED_MULT=1.05,HYPER_FIRE_MULT=1.04,HYPER_DAMAGE_MULT=.93;
+const COSMIC_DASH_MAX=2,COSMIC_DASH_COOLDOWN=10,COSMIC_DASH_DISTANCE=5.4,NEON_DOUBLE_SUPER_COOLDOWN=12;
 const COSMIC_SKIN_COST=1250,VERSION_ONE_COST=150,VERSION_ONE_SPEED=1.03,VERSION_ONE_FIRE=1.02,VERSION_ONE_HP=1.10;
 const SAVE_KEY='arenaStars3D_save_v3';
 const PLAYER_ID_KEY='arenaStars3D_online_player_id_v1';
@@ -367,7 +369,7 @@ function loadProgress(){
 let profile=loadProgress();
 profile.name=persistNickname(profile.name);
 let profileDirty=false,profileSyncBusy=false,profileChangeSeq=0,lastConfigRevision=0,backgroundSyncBusy=false;
-const CLIENT_VERSION='arena-ball-humanlike-bots-v58';
+const CLIENT_VERSION='skin-powers-v60';
 const CAMERA_MODE_KEY='arenaStars3D_camera_mode_v1';
 let botPerspectiveEnabled=false;
 try{botPerspectiveEnabled=localStorage.getItem(CAMERA_MODE_KEY)==='bot';}catch(_){}
@@ -853,7 +855,7 @@ function processDuelState(data,initial=false){
     }
   }else duelOpponent=null;
   if(duelLocalBotMode&&duelOpponent&&player){
-    Object.assign(duelOpponent,{skin:profile.skin,speed:player.speed,fireCooldown:player.fireCooldown,ammo:Number.isFinite(duelOpponent.ammo)?duelOpponent.ammo:MAG_SIZE,reload:Number.isFinite(duelOpponent.reload)?duelOpponent.reload:0,fire:Number.isFinite(duelOpponent.fire)?duelOpponent.fire:0,super:Number.isFinite(duelOpponent.super)?duelOpponent.super:0,hyper:Number.isFinite(duelOpponent.hyper)?duelOpponent.hyper:0,hyperActive:Number.isFinite(duelOpponent.hyperActive)?duelOpponent.hyperActive:0});
+    Object.assign(duelOpponent,{skin:profile.skin,speed:player.speed,fireCooldown:player.fireCooldown,ammo:Number.isFinite(duelOpponent.ammo)?duelOpponent.ammo:MAG_SIZE,reload:Number.isFinite(duelOpponent.reload)?duelOpponent.reload:0,fire:Number.isFinite(duelOpponent.fire)?duelOpponent.fire:0,super:Number.isFinite(duelOpponent.super)?duelOpponent.super:0,hyper:Number.isFinite(duelOpponent.hyper)?duelOpponent.hyper:0,hyperActive:Number.isFinite(duelOpponent.hyperActive)?duelOpponent.hyperActive:0,dashCharges:Number.isFinite(duelOpponent.dashCharges)?duelOpponent.dashCharges:0,dashRecharge:Number.isFinite(duelOpponent.dashRecharge)?duelOpponent.dashRecharge:COSMIC_DASH_COOLDOWN,neonDoubleCooldown:Number.isFinite(duelOpponent.neonDoubleCooldown)?duelOpponent.neonDoubleCooldown:NEON_DOUBLE_SUPER_COOLDOWN});
   }
   updateDuelRoundHud();
   if(ui.duelOpponentName)ui.duelOpponentName.textContent=other?(other.hidden?'PRZECIWNIK W KRZAKACH':`${other.name.toUpperCase()}${other.isBot?' • BOT':''}`):'OCZEKIWANIE NA PRZECIWNIKA';
@@ -926,24 +928,27 @@ function localBotDamagePlayer(amount){
   if((player.hyperActive||0)>0)amount*=HYPER_DAMAGE_MULT;
   player.hp=Math.max(0,player.hp-amount);shake=Math.max(shake,.28);burst(player.x,player.z,[1,.18,.28],10,4.8);updateUI();
 }
-function spawnLocalDuelRadial(owner,isBot,pulse,total){
-  if(!owner)return;const ox=owner.renderX??owner.x,oz=owner.renderZ??owner.z,color=duelBulletColor(owner,isBot);
+function spawnLocalDuelRadial(owner,isBot,pulse,total,damageScale=1){
+  if(!owner)return;const ox=owner.renderX??owner.x,oz=owner.renderZ??owner.z,color=damageScale<1?[1,.62,.18]:duelBulletColor(owner,isBot);
   const target=isBot?duelBotBullets:duelPredictedBullets;
   for(let i=0;i<24;i++){
-    const a=i/24*Math.PI*2,entry={x:ox+Math.sin(a)*1.0,z:oz+Math.cos(a)*1.0,vx:Math.sin(a)*14,vz:Math.cos(a)*14,life:2.5,damage:28,color,superShot:true,owner:isBot?'bot':'player'};
+    const a=i/24*Math.PI*2,entry={x:ox+Math.sin(a)*1.0,z:oz+Math.cos(a)*1.0,vx:Math.sin(a)*14,vz:Math.cos(a)*14,life:2.5,damage:28*damageScale,color,superShot:true,owner:isBot?'bot':'player'};
     if(!isBot){entry.clientSeq=++duelLocalShotSeq;entry.createdAt=performance.now();}
     target.push(entry);
   }
-  if(isBot)burst(ox,oz,color,30,8);else playerAttackBurst(ox,oz,color,30,8);if(!isBot)showMessage(total>1?`HIPER SUPER ${pulse}/${total}!`:'SUPER!');
+  if(isBot)burst(ox,oz,color,30,8);else playerAttackBurst(ox,oz,color,30,8);if(!isBot)showMessage(damageScale<1?'DRUGI SUPER — 75% OBRAŻEŃ':(total>1?`HIPER SUPER ${pulse}/${total}!`:'SUPER!'));
 }
 function duelUseSuper(owner,isBot=false){
-  if(!owner||(owner.super||0)<100)return false;owner.super=0;
+  if(!owner||(owner.super||0)<100)return false;
+  const doubleNeon=neonDoubleReady(owner);if(doubleNeon)owner.neonDoubleCooldown=NEON_DOUBLE_SUPER_COOLDOWN;
+  owner.super=0;
   const pulses=(owner.hyperActive||0)>0?3:1;
-  spawnLocalDuelRadial(owner,isBot,1,pulses);
+  spawnLocalDuelRadial(owner,isBot,1,pulses,1);
   if(pulses>1){
-    setTimeout(()=>{if(duelActive&&!duelEnded)spawnLocalDuelRadial(owner,isBot,2,3);},170);
-    setTimeout(()=>{if(duelActive&&!duelEnded)spawnLocalDuelRadial(owner,isBot,3,3);},340);
+    setTimeout(()=>{if(duelActive&&!duelEnded)spawnLocalDuelRadial(owner,isBot,2,3,1);},170);
+    setTimeout(()=>{if(duelActive&&!duelEnded)spawnLocalDuelRadial(owner,isBot,3,3,1);},340);
   }
+  if(doubleNeon)setTimeout(()=>{if(duelActive&&!duelEnded)spawnLocalDuelRadial(owner,isBot,2,2,.75);},240);
   return true;
 }
 function duelActivateHyper(owner,isBot=false){
@@ -955,8 +960,8 @@ function duelActivateHyper(owner,isBot=false){
 }
 function resetLocalDuelRound(){
   if(!player||!duelOpponent)return;
-  player.x=0;player.z=12;player.angle=Math.PI;player.netX=0;player.netZ=12;player.hp=player.maxHp;player.ammo=MAG_SIZE;player.reload=0;player.fire=0;
-  Object.assign(duelOpponent,{x:0,z:-12,renderX:0,renderZ:-12,targetX:0,targetZ:-12,angle:0,renderAngle:0,targetAngle:0,hp:duelOpponent.maxHp,hidden:false,vx:0,vz:0,ammo:MAG_SIZE,reload:0,fire:0});
+  player.x=0;player.z=12;player.angle=Math.PI;player.netX=0;player.netZ=12;player.hp=player.maxHp;player.ammo=MAG_SIZE;player.reload=0;player.fire=0;resetSkinPowerAfterDeath(player);
+  Object.assign(duelOpponent,{x:0,z:-12,renderX:0,renderZ:-12,targetX:0,targetZ:-12,angle:0,renderAngle:0,targetAngle:0,hp:duelOpponent.maxHp,hidden:false,vx:0,vz:0,ammo:MAG_SIZE,reload:0,fire:0});resetSkinPowerAfterDeath(duelOpponent);
   duelPredictedBullets=[];duelServerBullets=[];duelBotBullets=[];duelShotQueue=[];duelVisualHitSeqs.clear();
   duelBotShotTimer=.8;duelBotTurnTimer=.4;duelBotStuck=0;duelBotReveal=0;duelRoundResolving=false;
   duelMatchStatus='countdown';duelStartIn=3;duelStartDeadline=performance.now()+3000;updateDuelRoundHud();updateUI();
@@ -1015,7 +1020,7 @@ function updateLocalDuelBot(dt){
 function updateDuel(dt){
   if(!duelActive||!player)return;
   if(isMobileDevice&&mobilePortraitBlocked){mouse.down=false;return;}
-  player.fire=Math.max(0,player.fire-dt);
+  player.fire=Math.max(0,player.fire-dt);updateSkinPowerTimers(player,dt);if(duelOpponent)updateSkinPowerTimers(duelOpponent,dt);
   if(player.reload>0){player.reload=Math.max(0,player.reload-dt);if(player.reload===0){player.ammo=MAG_SIZE;showMessage('AMUNICJA GOTOWA!');}updateUI();}
   if((player.hyperActive||0)>0){player.hyperActive=Math.max(0,player.hyperActive-dt);if(player.hyperActive===0)showMessage('HIPERDOŁADOWANIE ZAKOŃCZONE');updateUI();}
   if(duelMatchStatus==='countdown'){
@@ -1144,7 +1149,7 @@ let upgrades={...profile.upgrades};
 let running=false,runCommitted=false,last=performance.now(),score=0,wave=1,kills=0,walletCoins=profile.coins,runCoins=0,trophies=0,survivalTime=0,waveClock=0,spawnClock=0,shake=0,messageClock=0;
 let player,enemies=[],bullets=[],particles=[],stars=[],pickups=[],coins=[];
 let selectedMode=profile.mode||'solo',duelSearching=false,duelActive=false,duelEnded=false,duelMatchId='',duelOpponent=null,duelServerBullets=[],duelPredictedBullets=[],duelShotQueue=[],duelVisualHitSeqs=new Set(),duelLocalShotSeq=0,duelNetworkBusy=false,duelNetworkTimer=0,duelJoinTimer=0,duelNetworkFailures=0,duelMatchStatus='',duelStartIn=0,duelStartDeadline=0,duelLastStateAt=performance.now(),duelRtt=0,duelFrameSeq=0,duelLocalBotMode=false,duelBotBullets=[],duelBotTurnTimer=0,duelBotShotTimer=.8,duelBotStrafe=1,duelBotStuck=0,duelBotReveal=0,duelRound=1,duelYourWins=0,duelOpponentWins=0,duelRoundDraws=0,duelRoundEventSeq=0,duelRoundResolving=false,duelMirrorView=false,duelShotFlushBusy=false,duelShotFlushTimer=0;
-let ballSearching=false,ballActive=false,ballEnded=false,ballMatchId='',ballPlayers=[],ballBullets=[],ballVisual={x:0,z:0,targetX:0,targetZ:0,vx:0,vz:0,carrierId:null},ballNetworkBusy=false,ballNetworkTimer=0,ballJoinTimer=0,ballNetworkFailures=0,ballStatus='',ballTeam=0,ballMirrorView=false,ballActionSeq=0,ballKickQueued=false,ballSuperKickQueued=false,ballSuperAttackQueued=false,ballHyperQueued=false,ballScores=[0,0],ballTimeRemaining=120,ballOvertime=false,ballWallsActive=true,ballGoalEventSeq=0,ballLastStateAt=performance.now();
+let ballSearching=false,ballActive=false,ballEnded=false,ballMatchId='',ballPlayers=[],ballBullets=[],ballVisual={x:0,z:0,targetX:0,targetZ:0,vx:0,vz:0,carrierId:null},ballNetworkBusy=false,ballNetworkTimer=0,ballJoinTimer=0,ballNetworkFailures=0,ballStatus='',ballTeam=0,ballMirrorView=false,ballActionSeq=0,ballKickQueued=false,ballSuperKickQueued=false,ballSuperAttackQueued=false,ballHyperQueued=false,ballSkinPowerQueued=false,ballScores=[0,0],ballTimeRemaining=120,ballOvertime=false,ballWallsActive=true,ballGoalEventSeq=0,ballLastStateAt=performance.now();
 queueMicrotask(()=>{try{scheduleSqlSync(false);}catch(error){console.error('SQL sync startup error',error);}});
 window.__arenaDebug=()=>({duelActive,duelLocalBotMode,duelMatchStatus,duelRound,duelYourWins,duelOpponentWins,duelRoundDraws,player:player?{x:player.x,z:player.z,hp:player.hp}:null,opponent:duelOpponent?{x:duelOpponent.renderX??duelOpponent.x,z:duelOpponent.renderZ??duelOpponent.z,hp:duelOpponent.hp,hidden:duelOpponent.hidden,isBot:duelOpponent.isBot}:null,playerBullets:duelPredictedBullets.length,botBullets:duelBotBullets.length,botAmmo:duelOpponent?.ammo,botReload:duelOpponent?.reload,botSuper:duelOpponent?.super,botHyper:duelOpponent?.hyper,botHyperActive:duelOpponent?.hyperActive,mirrorView:duelMirrorView,shotQueue:duelShotQueue.length,shotFlushBusy:duelShotFlushBusy});
 
@@ -1272,7 +1277,7 @@ function setBallHud(){
 function clearBallTimers(){clearTimeout(ballJoinTimer);ballJoinTimer=0;clearInterval(ballNetworkTimer);ballNetworkTimer=0;ballNetworkBusy=false;}
 function stopBallSession(notify=true){
   const oldMatch=ballMatchId;clearBallTimers();
-  ballSearching=false;ballActive=false;ballEnded=false;ballMatchId='';ballPlayers=[];ballBullets=[];ballVisual={x:0,z:0,targetX:0,targetZ:0,vx:0,vz:0,carrierId:null};ballNetworkFailures=0;ballStatus='';ballKickQueued=false;ballSuperKickQueued=false;ballSuperAttackQueued=false;ballHyperQueued=false;ballScores=[0,0];ballTimeRemaining=120;ballOvertime=false;ballWallsActive=true;ballGoalEventSeq=0;
+  ballSearching=false;ballActive=false;ballEnded=false;ballMatchId='';ballPlayers=[];ballBullets=[];ballVisual={x:0,z:0,targetX:0,targetZ:0,vx:0,vz:0,carrierId:null};ballNetworkFailures=0;ballStatus='';ballKickQueued=false;ballSuperKickQueued=false;ballSuperAttackQueued=false;ballHyperQueued=false;ballSkinPowerQueued=false;ballScores=[0,0];ballTimeRemaining=120;ballOvertime=false;ballWallsActive=true;ballGoalEventSeq=0;
   document.body.classList.remove('arena-ball-mode');
   if(location.hash==='#arena-ball')history.replaceState(null,'',location.pathname+location.search);
   if(notify&&(oldMatch||playerId)){
@@ -1301,7 +1306,7 @@ async function requestBallJoin(){
 function startBallQueue(){
   if(ballSearching||ballActive)return;chooseBallMode();
   if(duelSearching||duelActive)stopDuelSession(true);if(running&&!duelActive)commitRun();
-  reset();running=false;ballSearching=true;ballEnded=false;ballMatchId='';ballPlayers=[];ballBullets=[];ballNetworkFailures=0;ballActionSeq=0;ballKickQueued=false;ballSuperKickQueued=false;ballSuperAttackQueued=false;ballHyperQueued=false;ballScores=[0,0];ballTimeRemaining=120;ballOvertime=false;ballWallsActive=true;ballGoalEventSeq=0;
+  reset();running=false;ballSearching=true;ballEnded=false;ballMatchId='';ballPlayers=[];ballBullets=[];ballNetworkFailures=0;ballActionSeq=0;ballKickQueued=false;ballSuperKickQueued=false;ballSuperAttackQueued=false;ballHyperQueued=false;ballSkinPowerQueued=false;ballScores=[0,0];ballTimeRemaining=120;ballOvertime=false;ballWallsActive=true;ballGoalEventSeq=0;
   document.body.classList.add('lobby-mode');document.body.classList.remove('duel-mode','arena-ball-mode');
   ui.lobbyView.style.display='none';ui.gameOverView.style.display='none';ui.duelQueueView.style.display='grid';ui.overlay.style.display='block';
   ballQueueCard('ball');setDuelQueueText('Łączenie z kolejką Arena Ball 3v3…');requestBallJoin();
@@ -1326,7 +1331,7 @@ function processBallState(data,initial=false){
   if(me&&player){
     if(initial){player.x=Number(me.x)||0;player.z=Number(me.z)||0;player.angle=normalizeDuelAngle(me.angle);}
     else{const sx=Number(me.x),sz=Number(me.z),err=Math.hypot(sx-player.x,sz-player.z);if(err>7){player.x=sx;player.z=sz;}else if(err>2.8){player.x+=(sx-player.x)*.08;player.z+=(sz-player.z)*.08;}}
-    player.hp=Math.max(0,Number(me.hp)||0);player.maxHp=Math.max(1,Number(me.maxHp)||player.maxHp);player.inBush=!!me.inBush;player.respawnIn=Math.max(0,Number(me.respawnIn)||0);player.hasBall=me.hasBall===true;player.super=Math.max(0,Math.min(100,Number(me.super)||0));player.hyper=Math.max(0,Math.min(100,Number(me.hyper)||0));player.hyperActive=Math.max(0,Number(me.hyperActive)||0);
+    player.hp=Math.max(0,Number(me.hp)||0);player.maxHp=Math.max(1,Number(me.maxHp)||player.maxHp);player.inBush=!!me.inBush;player.respawnIn=Math.max(0,Number(me.respawnIn)||0);player.hasBall=me.hasBall===true;player.super=Math.max(0,Math.min(100,Number(me.super)||0));player.hyper=Math.max(0,Math.min(100,Number(me.hyper)||0));player.hyperActive=Math.max(0,Number(me.hyperActive)||0);player.dashCharges=Math.max(0,Math.min(COSMIC_DASH_MAX,Number(me.dashCharges)||0));player.dashRecharge=Math.max(0,Number(me.dashNextIn)||0);player.neonDoubleCooldown=Math.max(0,Number(me.neonDoubleReadyIn)||0);
   }
   ballPlayers=list.filter(p=>p.id!==playerId).map(p=>{
     const old=previous.get(p.id),x=Number(p.x)||old?.targetX||0,z=Number(p.z)||old?.targetZ||0,a=normalizeDuelAngle(p.angle);
@@ -1343,18 +1348,18 @@ function processBallState(data,initial=false){
 }
 async function sendBallFrame(){
   if(!ballActive||!ballMatchId||!player||ballNetworkBusy)return;
-  ballNetworkBusy=true;const seq=++ballActionSeq,kick=ballKickQueued,superKick=ballSuperKickQueued,superAttack=ballSuperAttackQueued,activateHyper=ballHyperQueued;
+  ballNetworkBusy=true;const seq=++ballActionSeq,kick=ballKickQueued,superKick=ballSuperKickQueued,superAttack=ballSuperAttackQueued,activateHyper=ballHyperQueued,skinPower=ballSkinPowerQueued;
   try{
-    const data=await api('/api/arena-ball/action',{method:'POST',timeoutMs:2600,body:JSON.stringify({matchId:ballMatchId,playerId,x:player.x,z:player.z,angle:normalizeDuelAngle(player.angle),kick,superKick,superAttack,activateHyper,seq})});
-    ballNetworkFailures=0;if(Number(data.ackActionSeq)>=seq){if(kick)ballKickQueued=false;if(superKick)ballSuperKickQueued=false;if(superAttack)ballSuperAttackQueued=false;if(activateHyper)ballHyperQueued=false;}processBallState(data,false);
+    const data=await api('/api/arena-ball/action',{method:'POST',timeoutMs:2600,body:JSON.stringify({matchId:ballMatchId,playerId,x:player.x,z:player.z,angle:normalizeDuelAngle(player.angle),kick,superKick,superAttack,activateHyper,skinPower,seq})});
+    ballNetworkFailures=0;if(Number(data.ackActionSeq)>=seq){if(kick)ballKickQueued=false;if(superKick)ballSuperKickQueued=false;if(superAttack)ballSuperAttackQueued=false;if(activateHyper)ballHyperQueued=false;if(skinPower)ballSkinPowerQueued=false;}processBallState(data,false);
   }catch(_){ballNetworkFailures++;if(ballNetworkFailures===3)showMessage('PONOWNE ŁĄCZENIE…');if(ballNetworkFailures>18&&!ballEnded)finishBall({winnerTeam:null,reason:'Utracono połączenie z serwerem Arena Ball.'});}
   finally{ballNetworkBusy=false;}
 }
 function arenaBallUseProjectileSuper(){
   if(!ballActive||!['playing','overtime'].includes(ballStatus)||!player||player.hp<=0||player.respawnIn>0)return false;
   if((player.super||0)<100){showMessage(`SUPERATAK: ${Math.floor(player.super||0)}%`);return false;}
-  player.super=0;ballSuperAttackQueued=true;
-  showMessage('SUPERATAK!');
+  const doubleNeon=profile.skin==='arena_vip_plus'&&(player.neonDoubleCooldown||0)<=0;player.super=0;ballSuperAttackQueued=true;if(doubleNeon)player.neonDoubleCooldown=NEON_DOUBLE_SUPER_COOLDOWN;
+  showMessage(doubleNeon?'PODWÓJNY SUPERATAK!':'SUPERATAK!');
   burst(player.x,player.z,[1,.28,.86],34,9);shake=.35;updateUI();
   return true;
 }
@@ -1461,7 +1466,7 @@ function reset(){
   upgrades={...profile.upgrades};runCommitted=false;walletCoins=profile.coins;runCoins=0;
   const versionOwned=profile.heroVersion1===true;
   const maxHp=Math.round((BASE_HP+20*upgrades.hp)*(versionOwned?VERSION_ONE_HP:1));
-  player={x:0,z:11,hp:maxHp,maxHp,r:0.75,speed:BASE_SPEED*Math.pow(1.10,upgrades.move)*(versionOwned?VERSION_ONE_SPEED:1),fireCooldown:BASE_FIRE_COOLDOWN/(Math.pow(1.07,upgrades.fire)*(versionOwned?VERSION_ONE_FIRE:1)),angle:Math.PI,fire:0,ammo:MAG_SIZE,reload:0,inv:0,super:0,hyper:0,hyperActive:0,regen:0};
+  player={skin:profile.skin,x:0,z:11,hp:maxHp,maxHp,r:0.75,speed:BASE_SPEED*Math.pow(1.10,upgrades.move)*(versionOwned?VERSION_ONE_SPEED:1),fireCooldown:BASE_FIRE_COOLDOWN/(Math.pow(1.07,upgrades.fire)*(versionOwned?VERSION_ONE_FIRE:1)),angle:Math.PI,fire:0,ammo:MAG_SIZE,reload:0,inv:0,super:0,hyper:0,hyperActive:0,regen:0,dashCharges:0,dashRecharge:COSMIC_DASH_COOLDOWN,neonDoubleCooldown:NEON_DOUBLE_SUPER_COOLDOWN};
   enemies=[];bullets=[];particles=[];stars=[];pickups=[];coins=[];score=0;wave=1;kills=0;trophies=0;survivalTime=0;waveClock=0;spawnClock=.4;shake=0;updateUI();showMessage('FALA 1');
 }
 function recordMatchResult(payload){if(!currentAccount)return;api('/api/match/result',{method:'POST',body:JSON.stringify({...payload,clientVersion:CLIENT_VERSION})}).catch(()=>{});}
@@ -1518,6 +1523,23 @@ function updateUI(){
   if(ui.mobileSuperBtn){const superValue=Math.max(0,Math.min(100,player?.super||0));ui.mobileSuperBtn.style.setProperty('--charge',`${superValue*3.6}deg`);ui.mobileSuperBtn.classList.toggle('ready',superValue>=100);ui.mobileSuperBtn.setAttribute('aria-label',superValue>=100?'Superatak gotowy':'Superatak '+Math.floor(superValue)+' procent');}
   if(ui.mobileSuperKickBtn){const superValue=Math.max(0,Math.min(100,player?.super||0)),hasBall=ballActive&&(player?.hasBall||ballVisual.carrierId===playerId),available=ballActive&&hasBall&&superValue>=100;ui.mobileSuperKickBtn.classList.toggle('available',available);ui.mobileSuperKickBtn.classList.toggle('ready',available);ui.mobileSuperKickBtn.style.setProperty('--charge',`${superValue*3.6}deg`);ui.mobileSuperKickBtn.setAttribute('aria-label',available?'Superkopnięcie gotowe':'Superkopnięcie niedostępne');}
   if(ui.mobileHyperBtn){const hyperCharge=Math.max(0,Math.min(100,player?.hyper||0));ui.mobileHyperBtn.style.setProperty('--charge',`${hyperCharge*3.6}deg`);ui.mobileHyperBtn.classList.toggle('ready',hyperCharge>=100&&!hyperActive);ui.mobileHyperBtn.classList.toggle('active',hyperActive);ui.mobileHyperBtn.setAttribute('aria-label',hyperActive?'Hiperdoładowanie aktywne':(hyperCharge>=100?'Hiperdoładowanie gotowe':'Hiperdoładowanie '+Math.floor(hyperCharge)+' procent'));}
+  const activeSkin=profile.skin;
+  let powerText='BRAK',powerPercent=0,powerReady=false;
+  if(activeSkin==='cosmic'){
+    const charges=Math.max(0,Math.min(COSMIC_DASH_MAX,Math.floor(player?.dashCharges||0))),next=Math.max(0,Number(player?.dashRecharge)||0);
+    powerText=charges>=COSMIC_DASH_MAX?`${charges}/${COSMIC_DASH_MAX} GOTOWE`:`${charges}/${COSMIC_DASH_MAX} • ${next.toFixed(1)} s`;
+    powerPercent=charges>=COSMIC_DASH_MAX?100:(1-Math.min(1,next/COSMIC_DASH_COOLDOWN))*100;
+    powerReady=charges>0;
+  }else if(activeSkin==='arena_vip_plus'){
+    const left=Math.max(0,Number(player?.neonDoubleCooldown)||0);powerText=left<=0?'PODWÓJNY SUPER GOTOWY':`${left.toFixed(1)} s`;powerPercent=(1-Math.min(1,left/NEON_DOUBLE_SUPER_COOLDOWN))*100;powerReady=left<=0;
+  }
+  if(ui.skinPowerText)ui.skinPowerText.textContent=powerText;
+  if(ui.skinPowerFill)ui.skinPowerFill.style.width=`${Math.max(0,Math.min(100,powerPercent))}%`;
+  if(ui.mobileSkinPowerBtn){
+    const visible=activeSkin==='cosmic';ui.mobileSkinPowerBtn.classList.toggle('visible',visible);ui.mobileSkinPowerBtn.classList.toggle('ready',visible&&powerReady);ui.mobileSkinPowerBtn.style.setProperty('--charge',`${Math.max(0,Math.min(100,powerPercent))*3.6}deg`);
+    const span=ui.mobileSkinPowerBtn.querySelector('span');if(span)span.innerHTML=visible?`DASH<br>${Math.max(0,Math.floor(player?.dashCharges||0))}`:'MOC';
+    ui.mobileSkinPowerBtn.setAttribute('aria-label',visible?(powerReady?'Dash gotowy':`Dash za ${Math.max(0,Number(player?.dashRecharge)||0).toFixed(1)} sekundy`):'Moc skina działa automatycznie');
+  }
   for(const button of ui.upgradeButtons){
     const type=button.dataset.upgrade,level=upgrades[type]||0,cost=shopCost(UPGRADE_COSTS[level]);
     const levelEl=button.querySelector('[data-level]'),costEl=button.querySelector('[data-cost]');
@@ -1572,9 +1594,85 @@ function spawnEnemy(){
 function shoot(owner,x,z,angle,speed,damage,color,size=.18,spread=0){angle+=rnd(-spread,spread);bullets.push({owner,x,y:.72,z,vx:Math.sin(angle)*speed,vz:Math.cos(angle)*speed,life:2.2,damage,color,size});}
 function startReload(){if(!running||!player||player.reload>0||player.ammo>=MAG_SIZE)return;player.reload=RELOAD_TIME;player.fire=0;showMessage('PRZEŁADOWANIE...');updateUI();}
 function playerShoot(){syncBotViewAimBeforeShot();if(ballActive){arenaBallShoot(false);return;}if(duelActive){duelPlayerShoot();return;}if(!running||player.fire>0||player.reload>0)return;if(player.ammo<=0){startReload();return;}const hyper=(player.hyperActive||0)>0;player.fire=player.fireCooldown/(hyper?HYPER_FIRE_MULT:1);player.ammo--;const cosmic=profile.skin==='cosmic',shotColor=hyper?[.35,1,.92]:(cosmic?[.78,.38,1]:[.24,.85,1]),flashColor=hyper?[1,.95,.35]:(cosmic?[.35,1,1]:[.35,.9,1]);shoot('player',player.x+Math.sin(player.angle)*1.05,player.z+Math.cos(player.angle)*1.05,player.angle,18,22,shotColor,.21,.025);playerAttackBurst(player.x+Math.sin(player.angle),player.z+Math.cos(player.angle),flashColor,4,2.5);if(player.ammo<=0)startReload();else updateUI();}
+
+function skinForEntity(entity){return entity?.skin||(entity===player?profile.skin:'classic');}
+function resetSkinPowerAfterDeath(entity){
+  if(!entity)return;
+  entity.dashCharges=0;
+  entity.dashRecharge=COSMIC_DASH_COOLDOWN;
+}
+function updateSkinPowerTimers(entity,dt){
+  if(!entity||dt<=0)return;
+  const skin=skinForEntity(entity);
+  if(skin==='cosmic'&&(entity.hp??1)>0){
+    entity.dashCharges=Math.max(0,Math.min(COSMIC_DASH_MAX,Number(entity.dashCharges)||0));
+    if(entity.dashCharges<COSMIC_DASH_MAX){
+      entity.dashRecharge=Math.max(0,Number(entity.dashRecharge)||COSMIC_DASH_COOLDOWN)-dt;
+      if(entity.dashRecharge<=0){entity.dashCharges=COSMIC_DASH_MAX;entity.dashRecharge=0;}
+    }else entity.dashRecharge=0;
+  }
+  if(skin==='arena_vip_plus')entity.neonDoubleCooldown=Math.max(0,(Number(entity.neonDoubleCooldown)||0)-dt);
+  if(entity===player){entity._skinPowerUiClock=(Number(entity._skinPowerUiClock)||0)+dt;if(entity._skinPowerUiClock>=.12){entity._skinPowerUiClock=0;updateUI();}}
+}
+function localDashVector(){
+  let dx=isMobileDevice?mobileInput.moveX:(keys.KeyD?1:0)-(keys.KeyA?1:0),dz=isMobileDevice?mobileInput.moveZ:(keys.KeyS?1:0)-(keys.KeyW?1:0);
+  if(isBotPerspectiveActive()){const relative=movementFromBotPerspective(dx,dz);dx=relative.x;dz=relative.z;}
+  else if(duelActive&&duelMirrorView){dx=-dx;dz=-dz;}
+  let len=Math.hypot(dx,dz);
+  if(len<.12){dx=Math.sin(player?.angle||0);dz=Math.cos(player?.angle||0);len=Math.hypot(dx,dz)||1;}
+  return {x:dx/len,z:dz/len};
+}
+function performLocalCosmicDash(entity){
+  if(!entity)return false;
+  const dir=localDashVector(),steps=18,step=COSMIC_DASH_DISTANCE/steps,oldX=entity.x,oldZ=entity.z;
+  for(let i=0;i<steps;i++){
+    if(duelActive)moveDuelEntity(entity,dir.x*step,dir.z*step);
+    else{entity.x+=dir.x*step;entity.z+=dir.z*step;resolve(entity);}
+  }
+  const moved=Math.hypot(entity.x-oldX,entity.z-oldZ);
+  burst(entity.x,entity.z,[.32,.84,1],18,7,.72,.65);shake=Math.max(shake,.22);
+  return moved>.15;
+}
+function useSkinPower(){
+  if(!player)return false;
+  const skin=profile.skin;
+  if(skin==='arena_vip_plus'){
+    showMessage((player.neonDoubleCooldown||0)<=0?'PODWÓJNY SUPER GOTOWY — UŻYJ SPACJI':`PODWÓJNY SUPER ZA ${(player.neonDoubleCooldown||0).toFixed(1)} s`);
+    return false;
+  }
+  if(skin!=='cosmic'){showMessage('TEN SKIN NIE MA DODATKOWEJ MOCY');return false;}
+  if(ballActive&&(!['playing','overtime'].includes(ballStatus)||player.hp<=0||player.respawnIn>0))return false;
+  if(duelActive&&!duelLocalBotMode){showMessage('DASH ONLINE 1V1 BĘDZIE DODANY PÓŹNIEJ');return false;}
+  if(duelActive&&duelMatchStatus!=='playing')return false;
+  if(!ballActive&&!duelActive&&!running)return false;
+  const charges=Math.max(0,Math.floor(player.dashCharges||0));
+  if(charges<=0){showMessage(`DASH ZA ${Math.max(0,player.dashRecharge||0).toFixed(1)} s`);return false;}
+  player.dashCharges=charges-1;if(player.dashCharges<COSMIC_DASH_MAX&&(player.dashRecharge||0)<=0)player.dashRecharge=COSMIC_DASH_COOLDOWN;
+  if(ballActive){
+    ballSkinPowerQueued=true;if(!ballNetworkBusy)queueMicrotask(sendBallFrame);
+    burst(player.x,player.z,[.32,.84,1],16,7,.7,.6);showMessage(`DASH! ZOSTAŁO ${player.dashCharges}`);updateUI();return true;
+  }
+  performLocalCosmicDash(player);showMessage(`DASH! ZOSTAŁO ${player.dashCharges}`);updateUI();return true;
+}
+function neonDoubleReady(entity){return skinForEntity(entity)==='arena_vip_plus'&&(Number(entity?.neonDoubleCooldown)||0)<=0;}
 function addCharge(baseAmount){if(!player)return;const amount=Math.max(0,Number(baseAmount)||0)*SUPER_CHARGE_MULTIPLIER;player.super=Math.min(100,Math.max(0,Number(player.super)||0)+amount);if((player.hyperActive||0)<=0)player.hyper=Math.min(100,Math.max(0,Number(player.hyper)||0)+amount/HYPER_CHARGE_RATIO);updateUI();}
-function superPulse(pulse,total){if(!running||!player)return;const color=total>1?[.25,1,.88]:[1,.35,.93];for(let i=0;i<24;i++)shoot('player',player.x,player.z,i/24*Math.PI*2,14,28,color,.24,0);for(const e of enemies){const d=Math.hypot(e.x-player.x,e.z-player.z);if(d<5.5){e.hp-=45;const k=(5.5-d)/5.5;e.x+=(e.x-player.x)/(d||1)*k*3;e.z+=(e.z-player.z)/(d||1)*k*3;}}playerAttackBurst(player.x,player.z,color,32,9);shake=Math.max(shake,isBotPerspectiveActive()?.18:.55);if(total>1)showMessage(`HIPER SUPER ${pulse}/${total}!`);}
-function superAttack(){if(ballActive){arenaBallUseProjectileSuper();return;}if(duelActive){if(duelLocalBotMode&&duelMatchStatus==='playing'){duelUseSuper(player,false);updateUI();}else showMessage('SUPER ONLINE BĘDZIE DODANY PÓŹNIEJ');return;}if(!running||player.super<100)return;player.super=0;player.inv=.6;const pulses=(player.hyperActive||0)>0?3:1,caster=player;if(pulses===1){showMessage('SUPER!');superPulse(1,1);}else{/* Liczba fal jest ustalana w chwili użycia. Koniec hiperdoładowania nie anuluje fal 2 i 3. */superPulse(1,3);setTimeout(()=>{if(running&&player===caster)superPulse(2,3);},170);setTimeout(()=>{if(running&&player===caster)superPulse(3,3);},340);}updateUI();}
+function superPulse(pulse,total,damageScale=1){if(!running||!player)return;const color=damageScale<1?[1,.62,.18]:(total>1?[.25,1,.88]:[1,.35,.93]);for(let i=0;i<24;i++)shoot('player',player.x,player.z,i/24*Math.PI*2,14,28*damageScale,color,.24,0);for(const e of enemies){const d=Math.hypot(e.x-player.x,e.z-player.z);if(d<5.5){e.hp-=45*damageScale;const k=(5.5-d)/5.5;e.x+=(e.x-player.x)/(d||1)*k*3;e.z+=(e.z-player.z)/(d||1)*k*3;}}playerAttackBurst(player.x,player.z,color,32,9);shake=Math.max(shake,isBotPerspectiveActive()?.18:.55);if(total>1)showMessage(`HIPER SUPER ${pulse}/${total}!`);}
+function superAttack(){
+  if(ballActive){arenaBallUseProjectileSuper();return;}
+  if(duelActive){
+    if(duelLocalBotMode&&duelMatchStatus==='playing'){duelUseSuper(player,false);updateUI();}
+    else showMessage('SUPER ONLINE BĘDZIE DODANY PÓŹNIEJ');
+    return;
+  }
+  if(!running||player.super<100)return;
+  const doubleNeon=neonDoubleReady(player);if(doubleNeon)player.neonDoubleCooldown=NEON_DOUBLE_SUPER_COOLDOWN;
+  player.super=0;player.inv=.6;
+  const pulses=(player.hyperActive||0)>0?3:1,caster=player;
+  if(pulses===1){showMessage(doubleNeon?'PODWÓJNY SUPER!':'SUPER!');superPulse(1,1,1);}
+  else{superPulse(1,3,1);setTimeout(()=>{if(running&&player===caster)superPulse(2,3,1);},170);setTimeout(()=>{if(running&&player===caster)superPulse(3,3,1);},340);}
+  if(doubleNeon)setTimeout(()=>{if(running&&player===caster){superPulse(2,2,.75);showMessage('DRUGI SUPER — 75% OBRAŻEŃ');}},240);
+  updateUI();
+}
 function activateHyper(){if(ballActive){if(!player||player.hyperActive>0)return;if((player.hyper||0)<100){showMessage(`HIPERDOŁADOWANIE: ${Math.floor(player.hyper||0)}%`);return;}player.hyper=0;player.hyperActive=HYPER_DURATION;ballHyperQueued=true;showMessage('HIPERDOŁADOWANIE: 9 SEKUND!');burst(player.x,player.z,[.25,1,.82],34,9);shake=.35;updateUI();return;}if(duelActive){if(duelLocalBotMode&&duelMatchStatus==='playing'){duelActivateHyper(player,false);updateUI();}else showMessage('HIPER ONLINE BĘDZIE DODANY PÓŹNIEJ');return;}if(!running||!player||player.hyper<100||player.hyperActive>0)return;player.hyper=0;player.hyperActive=HYPER_DURATION;player.inv=Math.max(player.inv,.45);showMessage('HIPERDOŁADOWANIE: 9 SEKUND!');burst(player.x,player.z,[.25,1,.82],40,10);shake=.4;updateUI();}
 function spawnCoins(x,z,count){for(let i=0;i<count;i++){const a=(i/count)*Math.PI*2+rnd(-.3,.3),power=rnd(1.8,4.2);coins.push({x,z,r:.22,vx:Math.cos(a)*power,vz:Math.sin(a)*power,t:rnd(0,6.28),life:25});}}
 function enemyDeath(e){score+=e.type==='tank'?350:e.type==='shooter'?180:120;kills++;addCharge(e.type==='tank'?18:10);burst(e.x,e.z,e.color,e.type==='tank'?24:15,e.type==='tank'?8:5);spawnCoins(e.x,e.z,e.coinReward||1);stars.push({x:e.x,z:e.z,y:.45,t:Math.random()*6.28,life:10});if(kills%7===0)pickups.push({x:e.x,z:e.z,type:'heal',life:14,t:0});updateUI();}
@@ -1585,7 +1683,7 @@ function update(dt){
   if(isMobileDevice&&mobilePortraitBlocked){mouse.down=false;return;}
   if(ballActive){updateArenaBall(dt);return;}
   if(duelActive){updateDuel(dt);return;}
-  survivalTime+=dt;const earnedTrophies=Math.floor(survivalTime/4);if(earnedTrophies>trophies){trophies=earnedTrophies;showMessage(`PUCHAREK ${trophies} 🏆`);updateUI();}
+  updateSkinPowerTimers(player,dt);survivalTime+=dt;const earnedTrophies=Math.floor(survivalTime/4);if(earnedTrophies>trophies){trophies=earnedTrophies;showMessage(`PUCHAREK ${trophies} 🏆`);updateUI();}
   player.fire=Math.max(0,player.fire-dt);if(player.reload>0){player.reload=Math.max(0,player.reload-dt);if(player.reload===0){player.ammo=MAG_SIZE;showMessage('AMUNICJA GOTOWA!');}updateUI();}player.inv=Math.max(0,player.inv-dt);player.regen=Math.max(0,player.regen-dt);const wasHyper=(player.hyperActive||0)>0;if(wasHyper){player.hyperActive=Math.max(0,player.hyperActive-dt);updateUI();if(player.hyperActive===0)showMessage('HIPERDOŁADOWANIE ZAKOŃCZONE');}if(player.regen<=0&&player.hp<player.maxHp){player.hp=Math.min(player.maxHp,player.hp+5*dt);updateUI();}
   let dx=isMobileDevice?mobileInput.moveX:(keys.KeyD?1:0)-(keys.KeyA?1:0),dz=isMobileDevice?mobileInput.moveZ:(keys.KeyS?1:0)-(keys.KeyW?1:0);if(isBotPerspectiveActive()){const relative=movementFromBotPerspective(dx,dz);dx=relative.x;dz=relative.z;}const l=Math.hypot(dx,dz);if(l){dx/=l;dz/=l;const moveSpeed=player.speed*((player.hyperActive||0)>0?HYPER_SPEED_MULT:1);player.x+=dx*moveSpeed*dt;player.z+=dz*moveSpeed*dt;resolve(player);}
   if(!updateBotPerspectiveAngle(dt))player.angle=Math.atan2(mouse.worldX-player.x,mouse.worldZ-player.z);if(mouse.down)playerShoot();
@@ -1757,7 +1855,7 @@ let lastRenderedFrame=0;const targetFrameMs=isMobileDevice?1000/45:1000/60;funct
 
 setupMobileControls();
 
-addEventListener('keydown',e=>{keys[e.code]=true;if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();if(e.code==='KeyQ'&&!e.repeat)superAttack();if((e.code==='KeyF'||e.code==='Space')&&!e.repeat&&ballActive)arenaBallSuperKick();if(e.code==='KeyE'&&!e.repeat)activateHyper();if(e.code==='KeyC'&&!e.repeat)toggleBotPerspective();if(e.code==='KeyR'&&!e.repeat&&running)startGame();if(e.code==='Digit1'&&!e.repeat)buyUpgrade('move');if(e.code==='Digit2'&&!e.repeat)buyUpgrade('fire');if(e.code==='Digit3'&&!e.repeat)buyUpgrade('hp');});
+addEventListener('keydown',e=>{keys[e.code]=true;if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();if(e.code==='Space'&&!e.repeat)superAttack();if(e.code==='KeyF'&&!e.repeat&&ballActive)arenaBallSuperKick();if(e.code==='KeyE'&&!e.repeat)useSkinPower();if(e.code==='KeyQ'&&!e.repeat)activateHyper();if(e.code==='KeyC'&&!e.repeat)toggleBotPerspective();if(e.code==='KeyR'&&!e.repeat&&running)startGame();if(e.code==='Digit1'&&!e.repeat)buyUpgrade('move');if(e.code==='Digit2'&&!e.repeat)buyUpgrade('fire');if(e.code==='Digit3'&&!e.repeat)buyUpgrade('hp');});
 addEventListener('keyup',e=>keys[e.code]=false);
 canvas.addEventListener('mousemove',e=>{if(isBotPerspectiveActive()){centerBotViewCrosshair();return;}mouse.x=e.clientX;mouse.y=e.clientY;positionCrosshair(e.clientX,e.clientY);});
 document.addEventListener('mousemove',handleLockedBotMouseMove,{passive:true});
@@ -1847,13 +1945,74 @@ async function loadCoinShopCatalog(){
   try{renderCoinShopCatalog(await api('/api/shop/catalog'));}
   catch(e){setCoinShopMessage(e?.message||'Nie udało się wczytać sklepu.',true);}
 }
+let blikPaymentProduct=null,blikPaymentPollTimer=0,blikPaymentBusy=false;
+function setBlikStatus(text='',kind=''){
+  if(!ui.blikStatus)return;ui.blikStatus.textContent=text;ui.blikStatus.className=`blikStatus ${kind}`.trim();
+}
+function blikRiskData(){
+  return {screenWidth:Number(screen?.width)||innerWidth,screenHeight:Number(screen?.height)||innerHeight,colorDepth:Number(screen?.colorDepth)||24,timezoneOffset:new Date().getTimezoneOffset(),javaEnabled:typeof navigator.javaEnabled==='function'&&navigator.javaEnabled(),language:navigator.language||'pl-PL',userAgent:navigator.userAgent||''};
+}
+function closeBlikPayment(force=false){
+  if(blikPaymentBusy&&!force)return;
+  clearTimeout(blikPaymentPollTimer);blikPaymentPollTimer=0;blikPaymentProduct=null;
+  ui.blikOverlay?.classList.remove('open');ui.blikOverlay?.setAttribute('aria-hidden','true');
+  if(ui.blikCodeInput)ui.blikCodeInput.value='';setBlikStatus('');
+}
+function openBlikPayment(product){
+  if(!product)return;
+  const configured=product.paymentConfigured!==false;
+  if(!configured){const message='PayU nie jest jeszcze skonfigurowane na serwerze.';if(product.kind==='pass')setPassMessage(message,true);else setCoinShopMessage(message,true);return;}
+  blikPaymentProduct=product;
+  if(ui.blikProductName)ui.blikProductName.textContent=product.name||'Zakup Arena Stars';
+  if(ui.blikProductPrice)ui.blikProductPrice.textContent=`${(Number(product.priceGrosz||product.pricePln*100)/100).toLocaleString('pl-PL',{minimumFractionDigits:2,maximumFractionDigits:2})} zł`;
+  if(ui.blikCodeInput)ui.blikCodeInput.value='';
+  if(ui.blikPayBtn){ui.blikPayBtn.disabled=false;ui.blikPayBtn.textContent='ZAPŁAĆ BLIK';}
+  setBlikStatus('Wygeneruj kod BLIK w aplikacji banku i wpisz go powyżej.');
+  ui.blikOverlay?.classList.add('open');ui.blikOverlay?.setAttribute('aria-hidden','false');
+  setTimeout(()=>ui.blikCodeInput?.focus(),60);
+}
+function blikPaymentCompleted(result){
+  if(result.profile)applyServerProfile(result.profile);
+  updateLobby();syncProfile(false).catch(()=>{});
+  if(result.pass){renderArenaPass(result.pass);setPassMessage('Płatność zakończona. Karnet został aktywowany.');}
+  else setCoinShopMessage('Płatność zakończona. Monety zostały dodane do konta.');
+  setBlikStatus('Płatność zakończona. Zakup został dodany do konta.','good');
+  if(ui.blikPayBtn){ui.blikPayBtn.disabled=true;ui.blikPayBtn.textContent='ZAPŁACONO';}
+  setTimeout(()=>closeBlikPayment(true),2200);
+}
+async function pollBlikPayment(extOrderId,startedAt=Date.now()){
+  try{
+    const result=await api(`/api/payu/status?extOrderId=${encodeURIComponent(extOrderId)}`);
+    if(result.fulfilled||result.status==='COMPLETED'){blikPaymentBusy=false;blikPaymentCompleted(result);return;}
+    if(['CANCELED','ERROR'].includes(result.status)){blikPaymentBusy=false;setBlikStatus(result.status==='CANCELED'?'Płatność została anulowana.':'Płatność nie została zakończona.','bad');if(ui.blikPayBtn){ui.blikPayBtn.disabled=false;ui.blikPayBtn.textContent='SPRÓBUJ PONOWNIE';}return;}
+    if(Date.now()-startedAt>120000){blikPaymentBusy=false;setBlikStatus('Potwierdzenie trwa dłużej. Zakup zostanie dodany automatycznie po potwierdzeniu przez PayU.');if(ui.blikPayBtn){ui.blikPayBtn.disabled=false;ui.blikPayBtn.textContent='ZAMKNIJ I SPRAWDŹ PÓŹNIEJ';}return;}
+    setBlikStatus('Oczekiwanie na potwierdzenie w aplikacji banku…');
+    blikPaymentPollTimer=setTimeout(()=>pollBlikPayment(extOrderId,startedAt),1500);
+  }catch(e){blikPaymentPollTimer=setTimeout(()=>pollBlikPayment(extOrderId,startedAt),2500);}
+}
+async function submitBlikPayment(event){
+  event?.preventDefault();if(blikPaymentBusy||!blikPaymentProduct)return false;
+  const code=String(ui.blikCodeInput?.value||'').replace(/\D/g,'').slice(0,6);
+  if(!/^\d{6}$/.test(code)){setBlikStatus('Kod BLIK musi mieć dokładnie 6 cyfr.','bad');ui.blikCodeInput?.focus();return false;}
+  blikPaymentBusy=true;if(ui.blikPayBtn){ui.blikPayBtn.disabled=true;ui.blikPayBtn.textContent='ŁĄCZENIE Z PAYU…';}setBlikStatus('Łączenie z PayU…');
+  try{
+    const result=await api('/api/payu/blik',{method:'POST',body:JSON.stringify({productId:blikPaymentProduct.id,blikCode:code,riskData:blikRiskData()})});
+    if(ui.blikCodeInput)ui.blikCodeInput.value='';
+    setBlikStatus(result.message||'Potwierdź płatność w aplikacji banku.');
+    if(ui.blikPayBtn)ui.blikPayBtn.textContent='OCZEKIWANIE NA BANK';
+    pollBlikPayment(result.extOrderId,Date.now());
+  }catch(e){blikPaymentBusy=false;if(ui.blikCodeInput)ui.blikCodeInput.value='';setBlikStatus(e?.message||'Nie udało się rozpocząć płatności.','bad');if(ui.blikPayBtn){ui.blikPayBtn.disabled=false;ui.blikPayBtn.textContent='SPRÓBUJ PONOWNIE';}}
+  return false;
+}
 function buyCoinPackage(packageId){
   const product=(coinShopCatalog?.packages||[]).find(item=>item.id===packageId);
   if(!product){setCoinShopMessage('Oferta nie została jeszcze wczytana.',true);loadCoinShopCatalog();return;}
-  if(!product.paymentUrl){setCoinShopMessage('Ta płatność nie jest jeszcze podłączona. Administrator musi dodać link płatniczy w Renderze.',true);return;}
-  window.open(product.paymentUrl,'_blank','noopener,noreferrer');
-  setCoinShopMessage(`Otwarto płatność: ${Number(product.coins).toLocaleString('pl-PL')} monet za ${product.pricePln} zł.`,false);
+  openBlikPayment({id:product.id,kind:'coins',name:`${Number(product.coins).toLocaleString('pl-PL')} monet`,pricePln:product.pricePln,priceGrosz:Number(product.pricePln)*100,paymentConfigured:product.paymentConfigured});
 }
+ui.blikForm?.addEventListener('submit',submitBlikPayment);
+ui.blikCancelBtn?.addEventListener('click',()=>closeBlikPayment(false));
+ui.blikOverlay?.addEventListener('click',event=>{if(event.target===ui.blikOverlay)closeBlikPayment(false);});
+ui.blikCodeInput?.addEventListener('input',()=>{if(ui.blikCodeInput)ui.blikCodeInput.value=ui.blikCodeInput.value.replace(/\D/g,'').slice(0,6);});
 ui.storeOpenBtn?.addEventListener('click',()=>storeOpen(true,'coins'));
 ui.storeCloseBtn?.addEventListener('click',()=>storeOpen(false));
 ui.storeOverlay?.addEventListener('click',event=>{if(event.target===ui.storeOverlay)storeOpen(false);});
@@ -2193,7 +2352,7 @@ function renderArenaPass(state){
 }
 async function loadArenaPass(){if(arenaPassBusy||!currentAccount)return;arenaPassBusy=true;try{const state=await api('/api/pass/status');renderArenaPass(state);}catch(e){setPassMessage(e?.message||'Nie udało się wczytać Arena Karnetu.',true);}finally{arenaPassBusy=false;}}
 async function claimArenaPass(payload){if(arenaPassBusy)return;arenaPassBusy=true;setPassMessage('Odbieranie nagrody…');try{const result=await api('/api/pass/claim',{method:'POST',body:JSON.stringify(payload)});if(result.profile)applyServerProfile(result.profile);renderArenaPass(result.pass);updateLobby();setPassMessage(`Odebrano ${result.claimed||1} nagrodę/nagrody.`);syncProfile(false).catch(()=>{});}catch(e){setPassMessage(e?.message||'Nie udało się odebrać nagrody.',true);}finally{arenaPassBusy=false;}}
-function openArenaPassPayment(tier){const urls=arenaPassState?.paymentUrls||{},url=urls[tier];if(url){window.open(url,'_blank','noopener,noreferrer');setPassMessage('Po opłaceniu administrator aktywuje karnet na Twoim koncie.');}else setPassMessage('Płatność nie jest jeszcze podłączona. Administrator musi ustawić link płatniczy w Renderze.',true);}
+function openArenaPassPayment(tier){const id=tier==='vip_plus'?'pass_vip_plus':'pass_vip',price=tier==='vip_plus'?21:13,name=tier==='vip_plus'?'Arena Karnet VIP+':'Arena Karnet VIP';openBlikPayment({id,kind:'pass',name,pricePln:price,priceGrosz:price*100,paymentConfigured:arenaPassState?.paymentConfigured===true});}
 ui.passOpenBtn?.addEventListener('click',()=>passOpen(true));ui.passCloseBtn?.addEventListener('click',()=>passOpen(false));ui.passOverlay?.addEventListener('click',e=>{if(e.target===ui.passOverlay)passOpen(false);});ui.passClaimAllBtn?.addEventListener('click',()=>claimArenaPass({claimAll:true}));ui.passBuyVipBtn?.addEventListener('click',()=>openArenaPassPayment('vip'));ui.passBuyVipPlusBtn?.addEventListener('click',()=>openArenaPassPayment('vip_plus'));
 
 const adminUI={overlay:$('adminOverlay'),open:$('adminOpenBtn'),loginCard:$('adminLoginCard'),dashboard:$('adminDashboard'),loginClose:$('adminLoginClose'),close:$('adminCloseBtn'),logout:$('adminLogoutBtn'),password:$('adminPasswordInput'),login:$('adminLoginBtn'),forgot:$('adminForgotBtn'),passwordArea:$('adminPasswordArea'),recoveryArea:$('adminRecoveryArea'),recovery:$('adminRecoveryInput'),recoverBtn:$('adminRecoveryBtn'),back:$('adminBackToPassword'),loginMsg:$('adminLoginMsg'),playerId:$('adminPlayerId'),deployStatus:$('adminDeployStatus'),databaseStatus:$('adminDatabaseStatus'),settingsMsg:$('adminSettingsMsg'),playerMsg:$('adminPlayerMsg'),modesMsg:$('adminModesMsg'),deployMsg:$('adminDeployMsg')};

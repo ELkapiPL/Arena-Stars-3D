@@ -32,7 +32,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, urlparse, unquote, quote
+from urllib.parse import parse_qs, urlparse, unquote, quote, urlencode
 
 ROOT = Path(__file__).resolve().parent
 DATA_FILE = ROOT / "players.json"
@@ -81,7 +81,7 @@ APP_PUBLIC_URL = os.environ.get("APP_PUBLIC_URL", "").strip().rstrip("/")
 CHAT_MAX_MESSAGE = 300
 CHAT_MAX_RECIPIENTS = 20
 CHAT_HISTORY_LIMIT = 160
-DB_SCHEMA_VERSION = 10
+DB_SCHEMA_VERSION = 11
 PROFILE_DATA_VERSION = 2
 ARENA_PASS_SEASON = 1
 ARENA_PASS_LEVELS = 20
@@ -90,12 +90,31 @@ ARENA_VIP_PRICE_PLN = 13
 ARENA_VIP_PLUS_PRICE_PLN = 21
 ARENA_VIP_PAYMENT_URL = os.environ.get("ARENA_VIP_PAYMENT_URL", "").strip()
 ARENA_VIP_PLUS_PAYMENT_URL = os.environ.get("ARENA_VIP_PLUS_PAYMENT_URL", "").strip()
+# PayU REST API 2.1 — wszystkie sekrety wyłącznie w zmiennych środowiskowych Rendera.
+PAYU_ENV = os.environ.get("PAYU_ENV", "sandbox").strip().lower()
+PAYU_BASE_URL = "https://secure.payu.com" if PAYU_ENV == "production" else "https://secure.snd.payu.com"
+PAYU_POS_ID = os.environ.get("PAYU_POS_ID", "").strip()
+PAYU_CLIENT_ID = os.environ.get("PAYU_CLIENT_ID", "").strip()
+PAYU_CLIENT_SECRET = os.environ.get("PAYU_CLIENT_SECRET", "").strip()
+PAYU_SECOND_KEY = os.environ.get("PAYU_SECOND_KEY", "").strip()
+PAYU_HTTP_TIMEOUT = 18
+PAYU_STATUS_POLL_SECONDS = 120
 COIN_PACKAGES = (
     {"id": "coins_5000", "coins": 5000, "pricePln": 4, "paymentUrl": os.environ.get("COIN_PACK_5000_URL", "").strip()},
     {"id": "coins_10000", "coins": 10000, "pricePln": 7, "paymentUrl": os.environ.get("COIN_PACK_10000_URL", "").strip()},
     {"id": "coins_20000", "coins": 20000, "pricePln": 13, "paymentUrl": os.environ.get("COIN_PACK_20000_URL", "").strip()},
     {"id": "coins_40000", "coins": 40000, "pricePln": 25, "paymentUrl": os.environ.get("COIN_PACK_40000_URL", "").strip()},
 )
+PAYU_PRODUCTS: dict[str, dict[str, Any]] = {
+    "coins_5000": {"kind":"coins", "coins":5000, "priceGrosz":400, "name":"Arena Stars — 5000 monet"},
+    "coins_10000": {"kind":"coins", "coins":10000, "priceGrosz":700, "name":"Arena Stars — 10000 monet"},
+    "coins_20000": {"kind":"coins", "coins":20000, "priceGrosz":1300, "name":"Arena Stars — 20000 monet"},
+    "coins_40000": {"kind":"coins", "coins":40000, "priceGrosz":2500, "name":"Arena Stars — 40000 monet"},
+    "pass_vip": {"kind":"pass", "tier":"vip", "priceGrosz":1300, "name":"Arena Stars — Arena Karnet VIP"},
+    "pass_vip_plus": {"kind":"pass", "tier":"vip_plus", "priceGrosz":2100, "name":"Arena Stars — Arena Karnet VIP+"},
+}
+payu_token_cache: dict[str, Any] = {"token":"", "expires":0.0}
+payu_payment_attempts: dict[str, float] = {}
 DUEL_PLAYER_TIMEOUT = 12.0
 DUEL_WAIT_TIMEOUT = 45.0
 DUEL_BOT_WAIT = 30.0
@@ -1659,6 +1678,23 @@ def init_database() -> None:
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )"""
         )
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS payu_orders (
+                id BIGSERIAL PRIMARY KEY,
+                ext_order_id VARCHAR(96) NOT NULL UNIQUE,
+                payu_order_id VARCHAR(96) UNIQUE,
+                account_id VARCHAR(80) NOT NULL REFERENCES accounts(account_id) ON DELETE CASCADE,
+                product_id VARCHAR(48) NOT NULL,
+                amount_grosz INTEGER NOT NULL CHECK (amount_grosz > 0),
+                currency VARCHAR(3) NOT NULL DEFAULT 'PLN',
+                status VARCHAR(40) NOT NULL DEFAULT 'CREATED',
+                fulfilled BOOLEAN NOT NULL DEFAULT FALSE,
+                payu_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                fulfilled_at TIMESTAMPTZ
+            )"""
+        )
         cur.execute("CREATE INDEX IF NOT EXISTS players_ranking_idx ON players (points DESC, trophies DESC, player_id ASC)")
         cur.execute("CREATE INDEX IF NOT EXISTS players_updated_idx ON players (updated_at DESC)")
         cur.execute("CREATE INDEX IF NOT EXISTS account_sessions_expiry_idx ON account_sessions (expires_at)")
@@ -1666,9 +1702,11 @@ def init_database() -> None:
         cur.execute("CREATE INDEX IF NOT EXISTS chat_messages_created_idx ON chat_messages (created_at DESC)")
         cur.execute("CREATE INDEX IF NOT EXISTS match_results_account_idx ON match_results (account_id, created_at DESC)")
         cur.execute("CREATE INDEX IF NOT EXISTS data_audit_account_idx ON data_audit (account_id, created_at DESC)")
+        cur.execute("CREATE INDEX IF NOT EXISTS payu_orders_account_idx ON payu_orders (account_id, created_at DESC)")
+        cur.execute("CREATE INDEX IF NOT EXISTS payu_orders_status_idx ON payu_orders (status, updated_at DESC)")
         cur.execute(
             "INSERT INTO schema_migrations(version,description) VALUES (%s,%s) ON CONFLICT(version) DO NOTHING",
-            (DB_SCHEMA_VERSION, "Mobilne lobby 2.0, samonaprawiający czat i stałe uprawnienia właściciela"),
+            (DB_SCHEMA_VERSION, "PayU BLIK z automatycznym przyznawaniem zakupów"),
         )
         cur.execute(
             """INSERT INTO server_state(key,value,revision,updated_at)
@@ -2009,6 +2047,343 @@ def leaderboard_payload(player_id: str = "") -> dict[str, Any]:
 
 
 
+
+
+def payu_configured() -> bool:
+    return bool(DATABASE_URL and PAYU_POS_ID and PAYU_CLIENT_ID and PAYU_CLIENT_SECRET and PAYU_SECOND_KEY)
+
+
+def payu_public_config() -> dict[str, Any]:
+    return {
+        "configured": payu_configured(),
+        "environment": "production" if PAYU_ENV == "production" else "sandbox",
+        "method": "BLIK_AUTHORIZATION_CODE",
+    }
+
+
+def payu_product(product_id: Any) -> tuple[str, dict[str, Any]]:
+    product_key = str(product_id or "").strip()
+    product = PAYU_PRODUCTS.get(product_key)
+    if not product:
+        raise ValueError("Nieprawidłowy produkt PayU.")
+    return product_key, product
+
+
+def payu_error_message(payload: dict[str, Any] | None, fallback: str = "PayU odrzuciło płatność.") -> str:
+    status = payload.get("status") if isinstance(payload, dict) else None
+    status = status if isinstance(status, dict) else {}
+    literal = str(status.get("codeLiteral") or status.get("statusCode") or "").strip()
+    descriptions = {
+        "AUTH_CODE_EXPIRED": "Kod BLIK wygasł. Wygeneruj nowy kod.",
+        "AUTH_CODE_CANCEL": "Płatność BLIK została anulowana.",
+        "AUTH_CODE_CANCELED": "Płatność BLIK została anulowana.",
+        "AUTH_CODE_USED": "Ten kod BLIK został już wykorzystany.",
+        "AUTH_CODE_INVALID": "Kod BLIK jest nieprawidłowy.",
+        "INVALID_BLIK_CODE": "Kod BLIK musi zawierać dokładnie 6 cyfr.",
+        "MISSING_AUTHORIZATION_CODE": "Wpisz sześciocyfrowy kod BLIK.",
+        "MISSING_BUYER_EMAIL": "Konto musi mieć przypisany adres e-mail.",
+        "UNAUTHORIZED": "PayU odrzuciło dane dostępowe sklepu.",
+    }
+    if literal in descriptions:
+        return descriptions[literal]
+    desc = str(status.get("statusDesc") or "").strip()
+    return desc[:240] if desc else fallback
+
+
+def payu_oauth_token() -> str:
+    if not payu_configured():
+        raise RuntimeError("PayU nie jest jeszcze skonfigurowane na serwerze.")
+    with lock:
+        if str(payu_token_cache.get("token") or "") and float(payu_token_cache.get("expires") or 0) > now() + 60:
+            return str(payu_token_cache["token"])
+    form = urlencode({
+        "grant_type": "client_credentials",
+        "client_id": PAYU_CLIENT_ID,
+        "client_secret": PAYU_CLIENT_SECRET,
+    }).encode("utf-8")
+    request = urllib.request.Request(
+        PAYU_BASE_URL + "/pl/standard/user/oauth/authorize",
+        data=form,
+        headers={"Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=PAYU_HTTP_TIMEOUT) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        try:
+            payload = json.loads(exc.read().decode("utf-8"))
+        except Exception:
+            payload = {}
+        raise RuntimeError(payu_error_message(payload, "PayU nie przyjęło danych logowania sklepu.")) from exc
+    except (urllib.error.URLError, TimeoutError) as exc:
+        raise RuntimeError("Nie udało się połączyć z PayU.") from exc
+    token = str(payload.get("access_token") or "")
+    if not token:
+        raise RuntimeError("PayU nie zwróciło tokena dostępu.")
+    expires = max(60, clean_number(payload.get("expires_in"), 86400))
+    with lock:
+        payu_token_cache.update({"token": token, "expires": now() + expires})
+    return token
+
+
+class _PayuNoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # type: ignore[override]
+        return None
+
+
+def payu_order_request(payload: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+    token = payu_oauth_token()
+    raw = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    request = urllib.request.Request(
+        PAYU_BASE_URL + "/api/v2_1/orders",
+        data=raw,
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json", "Accept": "application/json"},
+        method="POST",
+    )
+    opener = urllib.request.build_opener(_PayuNoRedirect())
+    try:
+        with opener.open(request, timeout=PAYU_HTTP_TIMEOUT) as response:
+            body = response.read().decode("utf-8")
+            return int(response.status), json.loads(body or "{}")
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", "replace")
+        try:
+            response_payload = json.loads(body or "{}")
+        except Exception:
+            response_payload = {}
+        if exc.code in {301, 302, 303, 307, 308} and response_payload:
+            return int(exc.code), response_payload
+        raise RuntimeError(payu_error_message(response_payload)) from exc
+    except (urllib.error.URLError, TimeoutError) as exc:
+        raise RuntimeError("Nie udało się połączyć z PayU.") from exc
+
+
+def payu_risk_browser(client_data: Any, request_ip: str, user_agent: str, accept_headers: str) -> dict[str, Any]:
+    source = client_data if isinstance(client_data, dict) else {}
+    return {
+        "acceptHeaders": clean_mode_text(accept_headers or "*/*", 512) or "*/*",
+        "requestIP": clean_mode_text(request_ip, 64) or "127.0.0.1",
+        "screenWidth": clamp_int(source.get("screenWidth"), 1, 20000, 1920),
+        "javaEnabled": bool(source.get("javaEnabled", False)),
+        "timezoneOffset": clamp_int(source.get("timezoneOffset"), -1440, 1440, 0),
+        "screenHeight": clamp_int(source.get("screenHeight"), 1, 20000, 1080),
+        "userAgent": clean_mode_text(source.get("userAgent") or user_agent, 512) or "Mozilla/5.0",
+        "colorDepth": clamp_int(source.get("colorDepth"), 1, 64, 24),
+        "language": clean_mode_text(source.get("language") or "pl_PL", 16).replace("-", "_") or "pl_PL",
+    }
+
+
+def create_payu_blik_payment(
+    account: dict[str, Any], payload: dict[str, Any], request_ip: str,
+    user_agent: str, accept_headers: str, public_base_url: str,
+) -> dict[str, Any]:
+    if not payu_configured():
+        raise RuntimeError("PayU nie jest jeszcze skonfigurowane w Renderze.")
+    account_id = clean_id(account.get("account_id"))
+    email = str(account.get("email") or "").strip()
+    if not account_id or not email:
+        raise ValueError("Konto musi mieć przypisany adres e-mail.")
+    product_id, product = payu_product(payload.get("productId"))
+    blik_code = re.sub(r"\D", "", str(payload.get("blikCode") or ""))
+    if not re.fullmatch(r"\d{6}", blik_code):
+        raise ValueError("Kod BLIK musi zawierać dokładnie 6 cyfr.")
+    with lock:
+        last_attempt = float(payu_payment_attempts.get(account_id, 0))
+        if now() - last_attempt < 3.0:
+            raise ValueError("Odczekaj chwilę przed następną próbą płatności.")
+        payu_payment_attempts[account_id] = now()
+    base_url = (APP_PUBLIC_URL or public_base_url or "").rstrip("/")
+    if not base_url.startswith("https://"):
+        raise RuntimeError("Ustaw APP_PUBLIC_URL na publiczny adres HTTPS gry.")
+    ext_order_id = "arena-" + uuid.uuid4().hex
+    amount_grosz = int(product["priceGrosz"])
+    with db_connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            """INSERT INTO payu_orders(ext_order_id,account_id,product_id,amount_grosz,currency,status,payu_payload)
+               VALUES (%s,%s,%s,%s,'PLN','CREATED','{}'::jsonb)""",
+            (ext_order_id, account_id, product_id, amount_grosz),
+        )
+    order_payload = {
+        "notifyUrl": base_url + "/api/payu/notify",
+        "continueUrl": base_url + "/?payu=return",
+        "customerIp": request_ip,
+        "merchantPosId": PAYU_POS_ID,
+        "description": str(product["name"]),
+        "visibleDescription": str(product["name"])[:80],
+        "extOrderId": ext_order_id,
+        "currencyCode": "PLN",
+        "totalAmount": str(amount_grosz),
+        "buyer": {
+            "extCustomerId": account_id,
+            "email": email,
+            "firstName": clean_name(account.get("username") or "Gracz")[:30],
+            "language": "pl",
+        },
+        "products": [{"name": str(product["name"]), "unitPrice": str(amount_grosz), "quantity": "1", "virtual": True}],
+        "payMethods": {"payMethod": {"type": "BLIK_AUTHORIZATION_CODE", "value": blik_code}},
+        "riskData": {"browser": payu_risk_browser(payload.get("riskData"), request_ip, user_agent, accept_headers)},
+    }
+    try:
+        http_status, response_payload = payu_order_request(order_payload)
+    except Exception as exc:
+        with db_connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                "UPDATE payu_orders SET status='ERROR',payu_payload=%s::jsonb,updated_at=NOW() WHERE ext_order_id=%s",
+                (json.dumps({"error": str(exc)[:240]}, ensure_ascii=False), ext_order_id),
+            )
+        raise
+    status_data = response_payload.get("status") if isinstance(response_payload.get("status"), dict) else {}
+    status_code = str(status_data.get("statusCode") or "")
+    payu_order_id = str(response_payload.get("orderId") or "").strip()
+    if status_code != "SUCCESS" or not payu_order_id:
+        with db_connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                "UPDATE payu_orders SET status=%s,payu_payload=%s::jsonb,updated_at=NOW() WHERE ext_order_id=%s",
+                (status_code or "ERROR", json.dumps(response_payload, ensure_ascii=False), ext_order_id),
+            )
+        raise RuntimeError(payu_error_message(response_payload))
+    with db_connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            """UPDATE payu_orders SET payu_order_id=COALESCE(payu_order_id,%s),
+               status=CASE WHEN fulfilled THEN status ELSE 'PENDING' END,
+               payu_payload=CASE WHEN fulfilled THEN payu_payload ELSE %s::jsonb END,updated_at=NOW()
+               WHERE ext_order_id=%s""",
+            (payu_order_id, json.dumps({"httpStatus": http_status, "status": status_data}, ensure_ascii=False), ext_order_id),
+        )
+    return {
+        "ok": True, "extOrderId": ext_order_id, "orderId": payu_order_id,
+        "status": "PENDING", "message": "Potwierdź płatność w aplikacji banku.",
+        "environment": "production" if PAYU_ENV == "production" else "sandbox",
+    }
+
+
+def payu_payment_status(account_id: str, ext_order_id: Any) -> dict[str, Any]:
+    account_id = clean_id(account_id)
+    ext_order_id = clean_mode_text(ext_order_id, 96)
+    if not ext_order_id:
+        raise ValueError("Brak identyfikatora płatności.")
+    with db_connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            """SELECT product_id,status,fulfilled,amount_grosz,created_at,updated_at
+               FROM payu_orders WHERE ext_order_id=%s AND account_id=%s""",
+            (ext_order_id, account_id),
+        )
+        row = cur.fetchone()
+    if not row:
+        raise ValueError("Nie znaleziono płatności.")
+    product_id, status, fulfilled, amount_grosz, created_at, updated_at = row
+    result: dict[str, Any] = {
+        "ok": True, "extOrderId": ext_order_id, "productId": product_id,
+        "status": status, "fulfilled": bool(fulfilled), "amountGrosz": int(amount_grosz),
+        "createdAt": created_at.isoformat() if created_at else "",
+        "updatedAt": updated_at.isoformat() if updated_at else "",
+    }
+    if fulfilled:
+        result["profile"] = db_get_profile(account_id)
+        if str(product_id).startswith("pass_"):
+            result["pass"] = arena_pass_status(account_id)
+    return result
+
+
+def verify_payu_notification_signature(raw_body: bytes, signature_header: str) -> bool:
+    parts: dict[str, str] = {}
+    for item in str(signature_header or "").split(";"):
+        key, _, value = item.strip().partition("=")
+        if key:
+            parts[key.lower()] = value.strip()
+    incoming = parts.get("signature", "").lower()
+    algorithm = parts.get("algorithm", "MD5").upper()
+    if not incoming or algorithm != "MD5" or not PAYU_SECOND_KEY:
+        return False
+    expected = hashlib.md5(raw_body + PAYU_SECOND_KEY.encode("utf-8")).hexdigest()
+    return hmac.compare_digest(incoming, expected)
+
+
+def fulfill_payu_order(ext_order_id: str, payu_order_id: str, notification: dict[str, Any]) -> bool:
+    with db_connect() as conn:
+        conn.autocommit = False
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT account_id,product_id,amount_grosz,currency,status,fulfilled,payu_order_id
+                   FROM payu_orders WHERE ext_order_id=%s FOR UPDATE""",
+                (ext_order_id,),
+            )
+            row = cur.fetchone()
+            if not row:
+                raise ValueError("Nieznane zamówienie PayU.")
+            account_id, product_id, amount_grosz, currency, old_status, fulfilled, stored_order_id = row
+            product_key, product = payu_product(product_id)
+            order = notification.get("order") if isinstance(notification.get("order"), dict) else {}
+            if str(order.get("currencyCode") or "") != str(currency):
+                raise ValueError("Waluta powiadomienia PayU nie zgadza się z zamówieniem.")
+            if int(str(order.get("totalAmount") or "0")) != int(amount_grosz) or int(product["priceGrosz"]) != int(amount_grosz):
+                raise ValueError("Kwota powiadomienia PayU nie zgadza się z zamówieniem.")
+            if stored_order_id and payu_order_id and str(stored_order_id) != payu_order_id:
+                raise ValueError("Identyfikator PayU nie zgadza się z zamówieniem.")
+            if fulfilled:
+                conn.commit()
+                return False
+            if product["kind"] == "coins":
+                cur.execute(
+                    "UPDATE players SET coins=coins+%s,revision=revision+1,updated_at=NOW() WHERE player_id=%s",
+                    (int(product["coins"]), account_id),
+                )
+            elif product["kind"] == "pass":
+                cur.execute("SELECT profile_data FROM players WHERE player_id=%s FOR UPDATE", (account_id,))
+                profile_row = cur.fetchone()
+                if not profile_row:
+                    raise ValueError("Nie znaleziono profilu kupującego.")
+                data = clean_profile_data(profile_row[0] or {})
+                current_tier = clean_pass_tier(data.get("arenaPassTier"))
+                wanted_tier = clean_pass_tier(product.get("tier"))
+                data["arenaPassTier"] = wanted_tier if pass_tier_rank(wanted_tier) > pass_tier_rank(current_tier) else current_tier
+                data["arenaPassSeason"] = ARENA_PASS_SEASON
+                data.setdefault("arenaPassClaims", [])
+                cur.execute(
+                    "UPDATE players SET profile_data=%s::jsonb,revision=revision+1,updated_at=NOW() WHERE player_id=%s",
+                    (json.dumps(data, ensure_ascii=False), account_id),
+                )
+            cur.execute(
+                """UPDATE payu_orders SET payu_order_id=COALESCE(payu_order_id,%s),status='COMPLETED',fulfilled=TRUE,
+                   fulfilled_at=NOW(),payu_payload=%s::jsonb,updated_at=NOW() WHERE ext_order_id=%s""",
+                (payu_order_id or None, json.dumps(notification, ensure_ascii=False), ext_order_id),
+            )
+            cur.execute(
+                "INSERT INTO data_audit(account_id,event_type,payload) VALUES (%s,'payu_purchase',%s::jsonb)",
+                (account_id, json.dumps({"extOrderId": ext_order_id, "orderId": payu_order_id, "productId": product_key, "amountGrosz": int(amount_grosz)}, ensure_ascii=False)),
+            )
+        conn.commit()
+    return True
+
+
+def process_payu_notification(raw_body: bytes, signature_header: str) -> dict[str, Any]:
+    if not payu_configured():
+        raise RuntimeError("PayU nie jest skonfigurowane.")
+    if not verify_payu_notification_signature(raw_body, signature_header):
+        raise PermissionError("Nieprawidłowy podpis powiadomienia PayU.")
+    try:
+        notification = json.loads(raw_body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("Nieprawidłowe powiadomienie PayU.") from exc
+    order = notification.get("order") if isinstance(notification.get("order"), dict) else {}
+    ext_order_id = clean_mode_text(order.get("extOrderId"), 96)
+    payu_order_id = clean_mode_text(order.get("orderId"), 96)
+    status = clean_mode_text(order.get("status"), 40).upper()
+    if not ext_order_id or not payu_order_id or not status:
+        raise ValueError("Powiadomienie PayU nie zawiera danych zamówienia.")
+    if status == "COMPLETED":
+        fulfill_payu_order(ext_order_id, payu_order_id, notification)
+    else:
+        with db_connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                """UPDATE payu_orders SET payu_order_id=COALESCE(payu_order_id,%s),status=%s,
+                   payu_payload=%s::jsonb,updated_at=NOW() WHERE ext_order_id=%s AND fulfilled=FALSE""",
+                (payu_order_id, status, json.dumps(notification, ensure_ascii=False), ext_order_id),
+            )
+    return {"ok": True, "status": status}
+
+
 def arena_pass_effective_tier(account_id: str, data: dict[str, Any]) -> str:
     if clean_id(account_id) == clean_id(ADMIN_PLAYER_ID):
         return "vip_plus"
@@ -2035,15 +2410,17 @@ def coin_shop_catalog() -> dict[str, Any]:
             "comparisonPricePln": int(comparison_price),
             "savingsPln": int(savings),
             "savingsPercent": int(savings_percent),
-            "paymentUrl": source["paymentUrl"],
-            "paymentConfigured": bool(source["paymentUrl"]),
+            "paymentUrl": "",
+            "paymentConfigured": payu_configured(),
+            "paymentMethod": "payu_blik_code",
         })
     return {
         "ok": True,
         "currency": "PLN",
         "baseline": {"coins": base_coins, "pricePln": base_price},
         "packages": packages,
-        "fulfillment": "admin-confirmed",
+        "fulfillment": "automatic-after-payu-completed",
+        "payu": payu_public_config(),
     }
 
 
@@ -2082,7 +2459,10 @@ def arena_pass_status(account_id: str) -> dict[str, Any]:
         "premiumLevel": min(ARENA_PASS_LEVELS, trophies // ARENA_PASS_TROPHY_STEP),
         "nextFree": next_trophy, "nextPremium": next_trophy,
         "prices": {"vip": ARENA_VIP_PRICE_PLN, "vip_plus": ARENA_VIP_PLUS_PRICE_PLN},
-        "paymentUrls": {"vip": ARENA_VIP_PAYMENT_URL, "vip_plus": ARENA_VIP_PLUS_PAYMENT_URL},
+        "paymentUrls": {"vip": "", "vip_plus": ""},
+        "paymentConfigured": payu_configured(),
+        "paymentMethod": "payu_blik_code",
+        "payu": payu_public_config(),
         "arenaSkinOwned": bool(data.get("arenaVipPlusSkinOwned", False)),
         "claimableCount": sum(1 for row in levels for track in ("free","vip","vip_plus") if row.get(track) and row[track].get("claimable")),
     }
@@ -2955,6 +3335,10 @@ ARENA_BALL_HYPER_DURATION = 9.0
 ARENA_BALL_HYPER_SPEED_MULTIPLIER = 1.05
 ARENA_BALL_HYPER_FIRE_MULTIPLIER = 1.04
 ARENA_BALL_HYPER_DAMAGE_TAKEN_MULTIPLIER = 0.93
+ARENA_BALL_COSMIC_DASH_MAX = 2
+ARENA_BALL_COSMIC_DASH_COOLDOWN = 10.0
+ARENA_BALL_COSMIC_DASH_DISTANCE = 5.4
+ARENA_BALL_NEON_DOUBLE_SUPER_COOLDOWN = 12.0
 
 # Symetryczna, gęsta mapa. W dogrywce wszystkie przeszkody i krzaki znikają.
 # V34: boisko większe o 25% względem v33. Pozycje przeszkód zostały
@@ -3053,6 +3437,8 @@ def create_arena_ball_player(payload: dict[str, Any], player_id: str, team: int,
         "hp": max_hp, "max_hp": max_hp,
         "speed": player_speed,
         "super": 0.0, "hyper": 0.0, "hyper_active_until": 0.0,
+        "dash_charges": 0, "dash_next_at": now() + ARENA_BALL_COSMIC_DASH_COOLDOWN,
+        "neon_double_ready_at": now() + ARENA_BALL_NEON_DOUBLE_SUPER_COOLDOWN,
         "fire_cooldown": max(.72, clean_float(payload.get("fireCooldown"), 0.08, 0.9, 0.25)) if is_bot else clean_float(payload.get("fireCooldown"), 0.08, 0.9, 0.25),
         "last_shot": 0.0, "last_seen": now(), "last_move": now(),
         "vx": 0.0, "vz": 0.0, "revealed_until": 0.0,
@@ -3207,6 +3593,62 @@ def spawn_arena_ball_bullet(match: dict[str, Any], owner: dict[str, Any], angle:
 
 
 
+def arena_ball_update_skin_power(player: dict[str, Any], current: float | None = None) -> None:
+    current = now() if current is None else current
+    skin = str(player.get("skin") or "classic")
+    if skin == "cosmic" and player.get("hp", 0) > 0 and current >= float(player.get("respawn_at", 0.0)):
+        charges = max(0, min(ARENA_BALL_COSMIC_DASH_MAX, int(player.get("dash_charges", 0))))
+        next_at = float(player.get("dash_next_at", current + ARENA_BALL_COSMIC_DASH_COOLDOWN))
+        if charges < ARENA_BALL_COSMIC_DASH_MAX and current >= next_at:
+            charges = ARENA_BALL_COSMIC_DASH_MAX
+            next_at = 0.0
+        player["dash_charges"] = charges
+        player["dash_next_at"] = next_at
+
+
+def arena_ball_use_cosmic_dash(match: dict[str, Any], player: dict[str, Any], current: float | None = None) -> bool:
+    current = now() if current is None else current
+    if player.get("skin") != "cosmic" or player.get("hp", 0) <= 0 or current < float(player.get("respawn_at", 0.0)):
+        return False
+    arena_ball_update_skin_power(player, current)
+    charges = int(player.get("dash_charges", 0))
+    if charges <= 0:
+        return False
+    angle = normalize_duel_angle(player.get("angle", 0.0), 0.0)
+    step_count = 18
+    step_distance = ARENA_BALL_COSMIC_DASH_DISTANCE / step_count
+    old_x, old_z = float(player["x"]), float(player["z"])
+    for _ in range(step_count):
+        player["x"], player["z"] = arena_ball_move_position(
+            match, float(player["x"]), float(player["z"]),
+            math.sin(angle) * step_distance, math.cos(angle) * step_distance,
+        )
+    player["dash_charges"] = charges - 1
+    if player["dash_charges"] < ARENA_BALL_COSMIC_DASH_MAX and float(player.get("dash_next_at", 0.0)) <= 0.0:
+        player["dash_next_at"] = current + ARENA_BALL_COSMIC_DASH_COOLDOWN
+    elapsed = max(.02, current - float(player.get("last_move", current)))
+    player["vx"] = (float(player["x"]) - old_x) / elapsed
+    player["vz"] = (float(player["z"]) - old_z) / elapsed
+    player["last_move"] = current
+    player["revealed_until"] = current + .65
+    return math.hypot(float(player["x"]) - old_x, float(player["z"]) - old_z) > .12
+
+
+def spawn_arena_ball_super_wave(match: dict[str, Any], owner: dict[str, Any], damage_scale: float = 1.0, angle_offset: float = 0.0) -> None:
+    ox, oz = float(owner["x"]), float(owner["z"])
+    for index in range(24):
+        angle = index / 24.0 * math.pi * 2.0 + angle_offset
+        match["bullet_seq"] += 1
+        match["bullets"].append({
+            "id": f'{match["id"]}-s{match["bullet_seq"]}', "owner_id": owner["id"], "team": owner["team"],
+            "x": ox + math.sin(angle) * 1.05, "z": oz + math.cos(angle) * 1.05,
+            "vx": math.sin(angle) * ARENA_BALL_SUPER_BULLET_SPEED,
+            "vz": math.cos(angle) * ARENA_BALL_SUPER_BULLET_SPEED,
+            "life": 2.7, "damage": ARENA_BALL_SUPER_BULLET_DAMAGE * damage_scale, "radius": DUEL_BULLET_RADIUS,
+            "super_shot": True,
+        })
+
+
 def spawn_arena_ball_super(match: dict[str, Any], owner: dict[str, Any]) -> bool:
     current = now()
     if owner.get("hp", 0) <= 0 or current < float(owner.get("respawn_at", 0.0)):
@@ -3215,18 +3657,12 @@ def spawn_arena_ball_super(match: dict[str, Any], owner: dict[str, Any]) -> bool
         return False
     owner["super"] = 0.0
     owner["revealed_until"] = current + 1.0
-    ox, oz = float(owner["x"]), float(owner["z"])
-    for index in range(24):
-        angle = index / 24.0 * math.pi * 2.0
-        match["bullet_seq"] += 1
-        match["bullets"].append({
-            "id": f'{match["id"]}-s{match["bullet_seq"]}', "owner_id": owner["id"], "team": owner["team"],
-            "x": ox + math.sin(angle) * 1.05, "z": oz + math.cos(angle) * 1.05,
-            "vx": math.sin(angle) * ARENA_BALL_SUPER_BULLET_SPEED,
-            "vz": math.cos(angle) * ARENA_BALL_SUPER_BULLET_SPEED,
-            "life": 2.7, "damage": ARENA_BALL_SUPER_BULLET_DAMAGE, "radius": DUEL_BULLET_RADIUS,
-            "super_shot": True,
-        })
+    double_neon = owner.get("skin") == "arena_vip_plus" and current >= float(owner.get("neon_double_ready_at", current + 1.0))
+    spawn_arena_ball_super_wave(match, owner, 1.0, 0.0)
+    if double_neon:
+        # Drugi pierścień jest lekko obrócony, żeby oba ataki były widoczne osobno.
+        spawn_arena_ball_super_wave(match, owner, .75, math.pi / 24.0)
+        owner["neon_double_ready_at"] = current + ARENA_BALL_NEON_DOUBLE_SUPER_COOLDOWN
     return True
 
 
@@ -3265,6 +3701,9 @@ def arena_ball_respawn_player(player: dict[str, Any]) -> None:
         "x": player["spawn_x"], "z": player["spawn_z"], "angle": player["spawn_angle"],
         "hp": player["max_hp"], "respawn_at": 0.0, "vx": 0.0, "vz": 0.0,
     })
+    if player.get("skin") == "cosmic":
+        player["dash_charges"] = 0
+        player["dash_next_at"] = now() + ARENA_BALL_COSMIC_DASH_COOLDOWN
 
 
 def arena_ball_bot_navigation_target(match: dict[str, Any], bot: dict[str, Any], target_x: float, target_z: float) -> tuple[float, float]:
@@ -3808,6 +4247,7 @@ def update_arena_ball_bots(match: dict[str, Any], step: float, current: float) -
                     spawn_arena_ball_bullet(match, bot, aim)
 
 def arena_ball_public_player(match: dict[str, Any], player: dict[str, Any], viewer: dict[str, Any]) -> dict[str, Any]:
+    arena_ball_update_skin_power(player)
     in_bush = arena_ball_point_in_bush(match, float(player["x"]), float(player["z"]))
     hidden = False
     if viewer["id"] != player["id"] and viewer["team"] != player["team"] and in_bush:
@@ -3823,6 +4263,9 @@ def arena_ball_public_player(match: dict[str, Any], player: dict[str, Any], view
         "super": round(max(0.0, min(100.0, float(player.get("super", 0.0)))), 2),
         "hyper": round(max(0.0, min(100.0, float(player.get("hyper", 0.0)))), 2),
         "hyperActive": round(max(0.0, float(player.get("hyper_active_until", 0.0)) - now()), 2),
+        "dashCharges": int(player.get("dash_charges", 0)),
+        "dashNextIn": round(max(0.0, float(player.get("dash_next_at", 0.0)) - now()), 2) if int(player.get("dash_charges", 0)) < ARENA_BALL_COSMIC_DASH_MAX else 0.0,
+        "neonDoubleReadyIn": round(max(0.0, float(player.get("neon_double_ready_at", 0.0)) - now()), 2),
     }
     if not hidden:
         row.update({
@@ -3881,6 +4324,7 @@ def advance_arena_ball(match: dict[str, Any]) -> None:
         return
 
     for player in match["players"].values():
+        arena_ball_update_skin_power(player, current)
         if not player.get("is_bot") and current - float(player.get("last_seen", current)) > ARENA_BALL_PLAYER_TIMEOUT:
             player["is_bot"] = True
             renumber_arena_ball_bots(match)
@@ -4094,6 +4538,8 @@ def arena_ball_action(payload: dict[str, Any]) -> dict[str, Any] | None:
             player["vx"] = (player["x"] - old_x) / elapsed; player["vz"] = (player["z"] - old_z) / elapsed
             player["last_move"] = current
             player["angle"] = normalize_duel_angle(payload.get("angle"), player["angle"])
+            if payload.get("skinPower"):
+                arena_ball_use_cosmic_dash(match, player, current)
             if payload.get("kick"):
                 if match["ball"].get("carrier_id") == player["id"]:
                     arena_ball_kick(match, player, player["angle"], bool(payload.get("superKick")))
@@ -4134,7 +4580,7 @@ def duel_tick_loop() -> None:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "ArenaStarsSQL/7.2-humanlike-arena-ball-bots-v58"
+    server_version = "ArenaStarsSQL/7.4-skin-powers-v60"
     protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt: str, *args: Any) -> None:
@@ -4309,6 +4755,19 @@ class Handler(BaseHTTPRequestHandler):
             if not account: return
             self.send_json(coin_shop_catalog())
             return
+        if parsed.path == "/api/payu/status":
+            account = self.require_account()
+            if not account: return
+            query = parse_qs(parsed.query)
+            ext_order_id = (query.get("extOrderId") or [""])[0]
+            try:
+                self.send_json(payu_payment_status(account["account_id"], ext_order_id))
+            except ValueError as exc:
+                self.send_json({"error":str(exc)}, HTTPStatus.NOT_FOUND)
+            except Exception as exc:
+                print(f"Błąd statusu PayU: {type(exc).__name__}: {exc}")
+                self.send_json({"error":"Nie udało się pobrać statusu płatności."}, HTTPStatus.SERVICE_UNAVAILABLE)
+            return
         if parsed.path == "/api/pass/status":
             account = self.require_account()
             if not account: return
@@ -4429,6 +4888,23 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path.startswith("/api/") and not self.require_persistent_storage():
             return
+        if parsed.path == "/api/payu/notify":
+            raw = self.read_bytes(MAX_BODY)
+            if raw is None:
+                self.send_json({"error":"Nieprawidłowe powiadomienie."}, HTTPStatus.BAD_REQUEST); return
+            try:
+                process_payu_notification(raw, self.headers.get("OpenPayu-Signature", ""))
+                self.send_json({"ok":True})
+            except PermissionError as exc:
+                print(f"Odrzucone powiadomienie PayU: {exc}")
+                self.send_json({"error":"Nieprawidłowy podpis."}, HTTPStatus.UNAUTHORIZED)
+            except ValueError as exc:
+                print(f"Błąd danych powiadomienia PayU: {exc}")
+                self.send_json({"error":str(exc)}, HTTPStatus.BAD_REQUEST)
+            except Exception as exc:
+                print(f"Błąd powiadomienia PayU: {type(exc).__name__}: {exc}")
+                self.send_json({"error":"Błąd obsługi powiadomienia PayU."}, HTTPStatus.SERVICE_UNAVAILABLE)
+            return
         if parsed.path == "/api/admin/deploy-zip":
             if not self.require_admin(): return
             raw = self.read_bytes(ADMIN_UPLOAD_MAX_RAW)
@@ -4451,6 +4927,24 @@ class Handler(BaseHTTPRequestHandler):
         payload = self.read_json(ADMIN_UPLOAD_MAX_BODY if parsed.path == "/api/admin/deploy" else MAX_BODY)
         if payload is None:
             self.send_json({"error": "Nieprawidłowe dane."}, HTTPStatus.BAD_REQUEST)
+            return
+        if parsed.path == "/api/payu/blik":
+            account = self.require_account()
+            if not account: return
+            try:
+                result = create_payu_blik_payment(
+                    account, payload, self.client_ip(),
+                    self.headers.get("User-Agent", ""), self.headers.get("Accept", ""),
+                    self.public_base_url(),
+                )
+                self.send_json(result)
+            except ValueError as exc:
+                self.send_json({"error":str(exc)}, HTTPStatus.BAD_REQUEST)
+            except RuntimeError as exc:
+                self.send_json({"error":str(exc)}, HTTPStatus.SERVICE_UNAVAILABLE)
+            except Exception as exc:
+                print(f"Błąd płatności PayU BLIK: {type(exc).__name__}: {exc}")
+                self.send_json({"error":"Nie udało się rozpocząć płatności BLIK."}, HTTPStatus.SERVICE_UNAVAILABLE)
             return
         if parsed.path == "/api/auth/password-reset/request":
             try:
