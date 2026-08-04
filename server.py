@@ -2999,9 +2999,6 @@ def advance_duel(match: dict[str, Any]) -> None:
         changed = changed or before != after
 
         kept: list[dict[str, Any]] = []
-        active_team_0 = [p for p in players if int(p.get("team", -1)) == 0 and p.get("hp", 0) > 0 and current >= float(p.get("respawn_at", 0.0))]
-        active_team_1 = [p for p in players if int(p.get("team", -1)) == 1 and p.get("hp", 0) > 0 and current >= float(p.get("respawn_at", 0.0))]
-        targets_by_shooter_team = {0: active_team_1, 1: active_team_0}
         for bullet in match["bullets"]:
             x0, z0 = float(bullet["x"]), float(bullet["z"])
             x1 = x0 + float(bullet["vx"]) * step
@@ -4408,6 +4405,22 @@ def advance_arena_ball(match: dict[str, Any]) -> None:
     remaining = min(.18, max(0.0, current - float(match.get("last_tick", current))))
     match["last_tick"] = current
     players = list(match["players"].values())
+    # Lista żywych przeciwników należy do aktualizacji Arena Ball. W v65
+    # została omyłkowo utworzona w kodzie pojedynku 1v1, przez co pierwszy
+    # pocisk w Arena Ball powodował NameError i przerywał odpowiedź serwera.
+    active_team_0 = [
+        p for p in players
+        if int(p.get("team", -1)) == 0
+        and p.get("hp", 0) > 0
+        and current >= float(p.get("respawn_at", 0.0))
+    ]
+    active_team_1 = [
+        p for p in players
+        if int(p.get("team", -1)) == 1
+        and p.get("hp", 0) > 0
+        and current >= float(p.get("respawn_at", 0.0))
+    ]
+    targets_by_shooter_team = {0: active_team_1, 1: active_team_0}
     changed = False
     bot_ai_elapsed = max(0.0, min(.16, float(match.get("bot_ai_elapsed", 0.0))))
     while remaining > 1e-7:
@@ -4662,7 +4675,7 @@ def duel_tick_loop() -> None:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "ArenaStarsSQL/8.0-mobile-countdown-v66"
+    server_version = "ArenaStarsSQL/8.1-arena-ball-server-fix-v67"
     protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt: str, *args: Any) -> None:
